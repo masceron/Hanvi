@@ -24,11 +24,7 @@
        <property name="orientation">
         <enum>Qt::Orientation::Vertical</enum>
        </property>
-       <widget class="QPlainTextEdit" name="cn_input">
-        <property name="readOnly">
-         <bool>true</bool>
-        </property>
-       </widget>
+       <widget class="QTextBrowser" name="cn_input"/>
        <widget class="QPlainTextEdit" name="vocab">
         <property name="readOnly">
          <bool>true</bool>

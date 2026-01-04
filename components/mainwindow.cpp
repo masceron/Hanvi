@@ -31,7 +31,7 @@ MainWindow::MainWindow(QWidget* parent) :
         load_from_clipboard();
         if (!input.isEmpty())
         {
-            ui->cn_input->setPlainText(input);
+            ui->cn_input->setHtml(input);
         }
     });
 

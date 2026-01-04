@@ -11,6 +11,7 @@ set(CMAKE_PREFIX_PATH "D:/Programs/Qt/6.10.1/msvc2022_64")
 find_package(Qt6 COMPONENTS
         Core
         Gui
+        Sql
         Widgets
         REQUIRED)
 
@@ -21,11 +22,15 @@ add_executable(Converter WIN32 main.cpp
         text/io.cpp
         text/include/io.h
         text/include/convert.h
-        text/convert.cpp)
+        text/convert.cpp
+        match/include/trie.h
+        match/trie.cpp
+)
 target_link_libraries(Converter
         Qt::Core
         Qt::Gui
         Qt::Widgets
+        Qt::Sql
 )
 
 if (WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
