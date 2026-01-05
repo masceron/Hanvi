@@ -2,7 +2,7 @@
 #include <qstring.h>
 
 inline auto input = QString();
-inline auto output = QString();
+inline std::pair output = {QString(), QString()};
 
 void convert();
 void tokenize();

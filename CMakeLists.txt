@@ -13,6 +13,7 @@ find_package(Qt6 COMPONENTS
         Gui
         Sql
         Widgets
+        Concurrent
         REQUIRED)
 
 add_executable(Converter WIN32 main.cpp
@@ -20,17 +21,27 @@ add_executable(Converter WIN32 main.cpp
         components/mainwindow.h
         components/mainwindow.ui
         text/io.cpp
-        text/include/io.h
-        text/include/convert.h
+        text/io.h
+        text/convert.h
         text/convert.cpp
-        match/include/trie.h
-        match/trie.cpp
+        convert/trie.h
+        convert/trie.cpp
+        text/dict.h
+        text/dict.cpp
+        app/app.cpp
+        app/app.h
+        components/dictpopup.cpp
+        components/dictpopup.h
+        components/dictpopup.ui
+        components/loader.h
+        resources.qrc
 )
 target_link_libraries(Converter
         Qt::Core
         Qt::Gui
         Qt::Widgets
         Qt::Sql
+        Qt::Concurrent
 )
 
 if (WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
@@ -54,7 +65,28 @@ if (WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
                 "${QT_INSTALL_PATH}/plugins/platforms/qwindows${DEBUG_SUFFIX}.dll"
                 "$<TARGET_FILE_DIR:${PROJECT_NAME}>/plugins/platforms/")
     endif ()
-    foreach (QT_LIB Core Gui Widgets)
+    if (EXISTS "${QT_INSTALL_PATH}/plugins/sqldrivers/qsqlite${DEBUG_SUFFIX}.dll")
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/sqldrivers/")
+
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy
+                "${QT_INSTALL_PATH}/plugins/sqldrivers/qsqlite${DEBUG_SUFFIX}.dll"
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/sqldrivers/")
+    endif ()
+
+    if (EXISTS "${QT_INSTALL_PATH}/plugins/imageformats/qgif${DEBUG_SUFFIX}.dll")
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/imageformats/")
+
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy
+                "${QT_INSTALL_PATH}/plugins/imageformats/qgif${DEBUG_SUFFIX}.dll"
+                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/imageformats/")
+    endif ()
+    foreach (QT_LIB Core Gui Widgets Sql)
         add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy
                 "${QT_INSTALL_PATH}/bin/Qt6${QT_LIB}${DEBUG_SUFFIX}.dll"

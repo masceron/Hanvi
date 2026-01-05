@@ -2,9 +2,9 @@
 #include <QClipboard>
 #include <QFile>
 
-#include "include/io.h"
+#include "io.h"
 
-#include "include/convert.h"
+#include "convert.h"
 
 void load_from_clipboard()
 {

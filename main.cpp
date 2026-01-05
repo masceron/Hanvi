@@ -1,12 +1,24 @@
-#include <QApplication>
+#include <QSplashScreen>
+
+#include "app/app.h"
+#include "components/loader.h"
 #include "components/MainWindow.h"
+#include "text/dict.h"
 
 int main(int argc, char* argv[])
 {
     QApplication a(argc, argv);
+    init_style(a);
 
-    MainWindow main_window{};
-    main_window.show();
+    Loader loading_screen;
+    loading_screen.show();
+
+    MainWindow w;
+
+    load_dict([&]() {
+        loading_screen.close();
+        w.show();
+    });
 
     return QApplication::exec();
 }
