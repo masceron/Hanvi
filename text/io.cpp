@@ -64,6 +64,25 @@ std::expected<QString, io_error> load_from_file(const QString& name)
     return std::unexpected(io_error::file_not_readable);
 }
 
+int save_to_file(const QString& name, const QString& text)
+{
+    if (!name.isEmpty())
+    {
+        if (QFile file(name); file.open(QIODevice::WriteOnly | QFile::Text))
+        {
+            QTextStream out(&file);
+            out << text;
+            out.flush();
+
+            file.close();
+
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 void io_insert(const QString& key, const QString& value, Priority priority)
 {
     dictionary.insert(key, value, priority);

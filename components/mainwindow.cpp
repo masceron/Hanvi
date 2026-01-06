@@ -1,6 +1,8 @@
 #include <QFileDialog>
 #include <QTextBlock>
 #include <QMessageBox>
+#include <QDesktopServices>
+#include <QUrl>
 
 #include "ui_MainWindow.h"
 #include "../text/io.h"
@@ -30,10 +32,7 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->left_right->setStretchFactor(0, 1);
     ui->left_right->setStretchFactor(1, 4);
 
-    ui->cn_vocab->setStretchFactor(0, 2);
-    ui->cn_vocab->setStretchFactor(1, 1);
-
-    connect(ui->actionFrom_clipboard, &QAction::triggered, this, [this]
+    connect(ui->read_from_clipboard, &QAction::triggered, this, [this]
     {
         if (const auto input = load_from_clipboard(); input.has_value())
         {
@@ -50,7 +49,7 @@ MainWindow::MainWindow(QWidget* parent) :
         }
     });
 
-    connect(ui->actionFrom_file, &QAction::triggered, this, [this]
+    connect(ui->read_from_file, &QAction::triggered, this, [this]
     {
         const auto name = QFileDialog::getOpenFileName(this, "Open file", "/", "Text files (*.txt)");
         if (name.isEmpty()) return;
@@ -80,6 +79,16 @@ MainWindow::MainWindow(QWidget* parent) :
     connect(ui->cn_input, &QTextBrowser::anchorClicked, this, &MainWindow::click_token);
 
     connect(&watcher, &QFutureWatcher<std::pair<QString, QString>>::finished, this, &MainWindow::update_display);
+    connect(&plain_watcher, &QFutureWatcher<QString>::finished, this, [this]
+    {
+        if (!save_to_file(file_name, plain_watcher.result()))
+        {
+            ui->statusbar->showMessage("File saved to " + file_name);
+            ui->progress_bar->setValue(100);
+            QDesktopServices::openUrl(QUrl("file:///" + file_name.left(file_name.lastIndexOf('/'))));
+        }
+        else ui->statusbar->showMessage("Some error occurred and the file were not saved.");
+    });
 
     connect(ui->previous_page, &QPushButton::clicked, this, [this]
     {
@@ -111,6 +120,16 @@ MainWindow::MainWindow(QWidget* parent) :
     connect(ui->cn_input, &QWidget::customContextMenuRequested, this, &MainWindow::open_popup);
     ui->vn_output->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->vn_output, &QWidget::customContextMenuRequested, this, &MainWindow::open_popup);
+
+    connect(ui->save_to_file, &QAction::triggered, this, [this]
+    {
+        if (input_text.isEmpty()) return;
+
+        file_name = QFileDialog::getSaveFileName(this, "Save to...", "/", "Text files (*.txt)");
+        if (file_name.isEmpty()) return;
+
+        convert_to_file(file_name);
+    });
 }
 
 void MainWindow::update_pagination_controls() const
@@ -160,6 +179,26 @@ void MainWindow::convert_and_display()
         const QFuture<std::pair<QString, QString>> future = QtConcurrent::run(
             convert, pages[current_page], reporter);
         watcher.setFuture(future);
+    }
+}
+
+void MainWindow::convert_to_file(const QString& name)
+{
+    if (!input_text.isEmpty())
+    {
+        ui->statusbar->showMessage("Saving to file...");
+
+        auto reporter = [this](int progress)
+        {
+            QMetaObject::invokeMethod(this, [this, progress]
+            {
+                ui->progress_bar->setValue(static_cast<int>((progress * 100) / input_text.length()));
+            });
+        };
+
+        const QFuture<QString> future = QtConcurrent::run(
+            convert_plain, input_text, reporter);
+        plain_watcher.setFuture(future);
     }
 }
 
