@@ -1,47 +1,125 @@
-#include "mainwindow.h"
-
 #include <QFileDialog>
 #include <QTextBlock>
+#include <QMessageBox>
 
 #include "ui_MainWindow.h"
-#include "../text/convert.h"
 #include "../text/io.h"
+#include "mainwindow.h"
+#include "../convert/converter.h"
 
 MainWindow::MainWindow(QWidget* parent) :
     QMainWindow(parent), ui(new Ui::MainWindow)
 {
+    current_page = 0;
     setWindowState(Qt::WindowMaximized);
     ui->setupUi(this);
 
     const auto clipboardAction = new QAction("Reload", this);
     connect(clipboardAction, &QAction::triggered, this, [this]
     {
-        convert_and_display();
+        if (!input_text.isEmpty())
+        {
+            convert_and_display();
+        }
     });
 
     ui->menubar->addAction(clipboardAction);
 
-    ui->main->setStretchFactor(0, 1);
-    ui->main->setStretchFactor(1, 4);
+    ui->left_right->setStretchFactor(0, 1);
+    ui->left_right->setStretchFactor(1, 4);
 
-    ui->left_col->setStretchFactor(0, 2);
-    ui->left_col->setStretchFactor(1, 1);
+    ui->cn_vocab->setStretchFactor(0, 2);
+    ui->cn_vocab->setStretchFactor(1, 1);
 
     connect(ui->actionFrom_clipboard, &QAction::triggered, this, [this]
     {
-        load_from_clipboard();
-        convert_and_display();
+        if (const auto input = load_from_clipboard(); input.has_value())
+        {
+            current_page = 0;
+            input_text = input.value();
+            pages = paginate(input_text, page_length);
+            convert_and_display();
+        }
+        else
+        {
+            QMessageBox msgBox;
+            msgBox.setText("Cannot read text from clipboard.");
+            msgBox.exec();
+        }
     });
 
     connect(ui->actionFrom_file, &QAction::triggered, this, [this]
     {
         const auto name = QFileDialog::getOpenFileName(this, "Open file", "/", "Text files (*.txt)");
-        load_from_file(name);
-        convert_and_display();
+        if (name.isEmpty()) return;
+
+        if (const auto input = load_from_file(name); input.has_value())
+        {
+            current_page = 0;
+            input_text = input.value();
+            pages = paginate(input_text, page_length);
+            convert_and_display();
+        }
+        else if (input.error() == io_error::file_not_readable)
+        {
+            QMessageBox msgBox;
+            msgBox.setText("Cannot open file.");
+            msgBox.exec();
+        }
+        else
+        {
+            QMessageBox msgBox;
+            msgBox.setText("Cannot read text. Make sure the file is a text file.");
+            msgBox.exec();
+        }
     });
 
     connect(ui->vn_output, &QTextBrowser::anchorClicked, this, &MainWindow::click_token);
     connect(ui->cn_input, &QTextBrowser::anchorClicked, this, &MainWindow::click_token);
+
+    connect(&watcher, &QFutureWatcher<std::pair<QString, QString>>::finished, this, &MainWindow::update_display);
+
+    connect(ui->previous_page, &QPushButton::clicked, this, [this]
+    {
+        if (current_page > 0)
+        {
+            current_page--;
+            convert_and_display();
+        }
+    });
+    connect(ui->next_page, &QPushButton::clicked, this, [this]
+    {
+        if (current_page < pages.size() - 1) {
+        current_page++;
+        convert_and_display();
+    }
+    });
+
+    ui->char_per_page->setValue(page_length);
+
+    connect(ui->char_per_page, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](const int val)
+    {
+        page_length = val;
+        pages = paginate(input_text, page_length);
+        convert_and_display();
+    });
+}
+
+void MainWindow::update_pagination_controls() const
+{
+    if (const int total = pages.size(); total == 0)
+    {
+        ui->current_page->setText("Page 0 / 0");
+        ui->previous_page->setEnabled(false);
+        ui->next_page->setEnabled(false);
+    }
+    else
+    {
+        ui->current_page->setText(QString("Page %1 / %2").arg(current_page + 1).arg(total));
+
+        ui->previous_page->setEnabled(current_page > 0);
+        ui->next_page->setEnabled(current_page < total - 1);
+    }
 }
 
 void MainWindow::click_token(const QUrl& link) const
@@ -57,13 +135,23 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::convert_and_display() const
+void MainWindow::convert_and_display()
 {
-    if (!input.isEmpty())
+    if (!pages[current_page].isEmpty())
     {
-        convert();
-        ui->cn_input->setHtml(output.first);
-        ui->vn_output->setHtml(output.second);
+        ui->statusbar->showMessage("Converting...");
+
+        auto reporter = [this](int progress)
+        {
+            QMetaObject::invokeMethod(this, [this, progress]
+            {
+                ui->progress_bar->setValue((progress * 100) / pages[current_page].length());
+            });
+        };
+
+        const QFuture<std::pair<QString, QString>> future = QtConcurrent::run(
+            convert, pages[current_page], reporter);
+        watcher.setFuture(future);
     }
 }
 
@@ -147,5 +235,15 @@ QTextCursor MainWindow::find_token(QTextDocument* document, const QString& token
 
         block = block.next();
     }
-    return QTextCursor();
+    return {};
+}
+
+void MainWindow::update_display() const
+{
+    update_pagination_controls();
+    ui->progress_bar->setValue(100);
+    const auto [cn_out, vn_out] = watcher.result();
+    ui->statusbar->showMessage("Conversion completed.");
+    ui->cn_input->setHtml(cn_out);
+    ui->vn_output->setHtml(vn_out);
 }

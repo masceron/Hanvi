@@ -22,8 +22,6 @@ add_executable(Converter WIN32 main.cpp
         components/mainwindow.ui
         text/io.cpp
         text/io.h
-        text/convert.h
-        text/convert.cpp
         convert/trie.h
         convert/trie.cpp
         text/dict.h
@@ -35,6 +33,8 @@ add_executable(Converter WIN32 main.cpp
         components/dictpopup.ui
         components/loader.h
         resources.qrc
+        convert/Converter.h
+        convert/Converter.cpp
 )
 target_link_libraries(Converter
         Qt::Core
@@ -86,6 +86,12 @@ if (WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
                 "${QT_INSTALL_PATH}/plugins/imageformats/qgif${DEBUG_SUFFIX}.dll"
                 "$<TARGET_FILE_DIR:${PROJECT_NAME}>/imageformats/")
     endif ()
+
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy
+            "${CMAKE_CURRENT_SOURCE_DIR}/dict.db"
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/dict.db")
+
     foreach (QT_LIB Core Gui Widgets Sql)
         add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy

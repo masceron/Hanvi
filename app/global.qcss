@@ -40,4 +40,19 @@ QScrollBar::handle:vertical {
     background: #555555;
     border-radius: 6px;
 }
+
+QProgressBar {
+    border: none;
+    background: transparent;
+    color: white;
+    text-align: right;
+    font-size: 11pt;
+}
+
+QProgressBar::chunk {
+    background-color: #6164f6;
+    border-radius: 6px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
 )"

@@ -1,25 +1,35 @@
-#include "convert.h"
+#include "converter.h"
 
-#include "../convert/trie.h"
+#include "trie.h"
 
-void convert()
+std::pair<QString, QString> convert(const QStringView& input, const std::function<void(int)>& progress_callback)
 {
-    tokenize();
-}
-
-void tokenize()
-{
+    std::pair<QString, QString> output;
     int i = 0;
     int tokenIndex = 0;
-    QString style = "text-decoration: none; color: white; font-size: 16px";
 
     output.first.clear();
     output.second.clear();
+
+    output.first.append(R"(
+    <style>
+        a { text-decoration: none; color: white; font-family: "Noto Sans SC"; font-size: 18px; }
+    </style>
+    )");
+    output.second.append(R"(
+    <style>
+        a { text-decoration: none; color: white; font-family: "Tahoma"; font-size: 16px; }
+    </style>
+    )");
 
     bool cap_next = true;
 
     while (i < input.length())
     {
+        if (progress_callback && i % 2000 == 0) {
+            progress_callback(i);
+        }
+
         QChar ch = input[i];
 
         if (ch == '\n')
@@ -38,7 +48,7 @@ void tokenize()
             continue;
         }
 
-        QString source_text;
+        QStringView source_text;
         QString translated_text;
         int step = 0;
         bool is_punctuation = false;
@@ -51,13 +61,13 @@ void tokenize()
         }
         else if (sv_readings.contains(ch))
         {
-            source_text = ch;
+            source_text = input.mid(i, 1);
             translated_text = sv_readings[ch];
             step = 1;
         }
         else
         {
-            source_text = ch;
+            source_text = input.mid(i, 1);
             const auto mapped_value = punctuations.value(ch);
             translated_text = !mapped_value.isNull() ? mapped_value : ch;
             step = 1;
@@ -80,11 +90,11 @@ void tokenize()
         }
 
         QString uid = QString("token_%1").arg(tokenIndex++);
-        QString safe_src = source_text.toHtmlEscaped();
+        QString safe_src = source_text.toString().toHtmlEscaped();
         QString safe_trans = translated_text.toHtmlEscaped();
 
-        output.first.append(QString("<a name='%1' href='%1' style='%2'>%3</a>")
-            .arg(uid, style, safe_src));
+        output.first.append(QString("<a name='%1' href='%1'>%2</a>")
+            .arg(uid, safe_src));
 
         bool no_space_after = false;
 
@@ -100,8 +110,8 @@ void tokenize()
             }
         }
 
-        output.second.append(QString("<a href='%1' style='%2'>%3</a>")
-            .arg(uid, style, safe_trans));
+        output.second.append(QString("<a href='%1'>%2</a>")
+            .arg(uid, safe_trans));
 
         if (!no_space_after)
         {
@@ -110,4 +120,6 @@ void tokenize()
 
         i += step;
     }
+
+    return output;
 }

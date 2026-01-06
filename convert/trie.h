@@ -43,7 +43,7 @@ public:
     void insert(const QString& key, const QString& value, Priority priority) const;
     void edit(const QString& key, Priority priority, const QString& value) const;
     void choose_meaning(const QString& key, Priority priority, const QString& value) const;
-    [[nodiscard]] Match find(const QString& text, int startPos) const;
+    [[nodiscard]] Match find(const QStringView& text, int startPos) const;
     void remove(const QString& key, Priority priority) const;
     void insert_bulk(const QString& key, Priority priority, const QString& value) const;
 private:

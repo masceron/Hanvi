@@ -35,7 +35,7 @@ void Dictionary::edit(const QString& key, const Priority priority, const QString
     }
 }
 
-void Dictionary::choose_meaning(const QString& key, Priority priority, const QString& value) const
+void Dictionary::choose_meaning(const QString& key, const Priority priority, const QString& value) const
 {
     TrieNode* node = walk_node(key);
     if (!node) return;
@@ -50,7 +50,7 @@ void Dictionary::choose_meaning(const QString& key, Priority priority, const QSt
     }
 }
 
-Match Dictionary::find(const QString& text, const int startPos) const
+Match Dictionary::find(const QStringView& text, const int startPos) const
 {
     TrieNode* node = root;
     int bestLen = 0;
