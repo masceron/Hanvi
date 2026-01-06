@@ -22,7 +22,7 @@ public:
     ~MainWindow() override;
 
 private slots:
-    void update_display() const;
+    void update_display();
     void open_popup();
 
 private:
@@ -34,6 +34,7 @@ private:
     Ui::MainWindow* ui;
     QFutureWatcher<std::pair<QString, QString>> watcher;
     QFutureWatcher<QString> plain_watcher;
+    int saved_cursor_pos = -1;
 
     void convert_and_display();
     void update_pagination_controls() const;

@@ -294,7 +294,7 @@ QString MainWindow::token_id_at(const QTextBrowser* browser, const int position)
     return format.anchorHref();
 }
 
-void MainWindow::update_display() const
+void MainWindow::update_display()
 {
     update_pagination_controls();
     ui->progress_bar->setValue(100);
@@ -302,6 +302,22 @@ void MainWindow::update_display() const
     ui->statusbar->showMessage("Conversion completed.");
     ui->cn_input->setHtml(cn_out);
     ui->vn_output->setHtml(vn_out);
+
+    if (saved_cursor_pos != -1)
+    {
+        QTextDocument* doc = ui->cn_input->document();
+        int target_pos = qMin(saved_cursor_pos, doc->characterCount() - 1);
+        if (target_pos < 0) target_pos = 0;
+
+        QTextCursor restoration_cursor(doc);
+        restoration_cursor.setPosition(target_pos);
+        if (const QString anchor_name = restoration_cursor.charFormat().anchorHref(); !anchor_name.isEmpty())
+        {
+            ui->cn_input->scrollToAnchor(anchor_name);
+            ui->vn_output->scrollToAnchor(anchor_name);
+        }
+        saved_cursor_pos = -1;
+    }
 }
 
 void MainWindow::snap_selection_to_token(QTextBrowser* browser)
@@ -354,6 +370,25 @@ void MainWindow::open_popup()
 {
     const auto sender_browser = qobject_cast<QTextBrowser*>(sender());
     if (!sender_browser) return;
+
+    if (sender_browser == ui->cn_input)
+    {
+        saved_cursor_pos = sender_browser->textCursor().selectionStart();
+    }
+    else if (sender_browser == ui->vn_output)
+    {
+        const QTextCursor vn_cursor = sender_browser->textCursor();
+        const int click_pos = vn_cursor.selectionStart();
+        QTextCursor hit_cursor = sender_browser->textCursor();
+        hit_cursor.setPosition(click_pos);
+
+        if (const QString token_id = hit_cursor.charFormat().anchorHref(); !token_id.isEmpty())
+        {
+            if (const QTextCursor cn_cursor = find_token(ui->cn_input->document(), token_id); !cn_cursor.isNull()) {
+                saved_cursor_pos = cn_cursor.selectionStart();
+            }
+        }
+    }
 
     QString selected_chinese_text;
 

@@ -7,25 +7,25 @@
     <x>0</x>
     <y>0</y>
     <width>451</width>
-    <height>560</height>
+    <height>540</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
     <width>412</width>
-    <height>560</height>
+    <height>540</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
     <width>451</width>
-    <height>560</height>
+    <height>540</height>
    </size>
   </property>
   <property name="windowTitle">
    <string>DictPopup</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout_2" stretch="1,2,3,3,0">
+  <layout class="QVBoxLayout" name="verticalLayout_2" stretch="1,2,3,3">
    <item>
     <widget class="QLineEdit" name="original">
      <property name="sizePolicy">
@@ -123,7 +123,7 @@ font-family: &quot;Tahoma&quot;</string>
     </layout>
    </item>
    <item>
-    <layout class="QVBoxLayout" name="nm" stretch="1,0,1,1,1,0">
+    <layout class="QVBoxLayout" name="nm" stretch="1,0,1,1,1">
      <property name="topMargin">
       <number>10</number>
      </property>
@@ -349,6 +349,20 @@ font-weight: bold;</string>
      <item>
       <layout class="QHBoxLayout" name="horizontalLayout_3">
        <item>
+        <widget class="QPushButton" name="delete_node_name">
+         <property name="styleSheet">
+          <string notr="true">font-size: 11pt;
+font-weight: bold;</string>
+         </property>
+         <property name="text">
+          <string>Delete name</string>
+         </property>
+         <property name="autoDefault">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QPushButton" name="use_sv_reading_name">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
@@ -392,20 +406,6 @@ font-weight: bold;</string>
         </widget>
        </item>
       </layout>
-     </item>
-     <item>
-      <widget class="QPushButton" name="delete_node_name">
-       <property name="styleSheet">
-        <string notr="true">font-size: 11pt;
-font-weight: bold;</string>
-       </property>
-       <property name="text">
-        <string>Delete name</string>
-       </property>
-       <property name="autoDefault">
-        <bool>false</bool>
-       </property>
-      </widget>
      </item>
     </layout>
    </item>
@@ -580,6 +580,20 @@ font-weight: bold;</string>
      <item>
       <layout class="QHBoxLayout" name="horizontalLayout_4">
        <item>
+        <widget class="QPushButton" name="delete_node_phrase">
+         <property name="styleSheet">
+          <string notr="true">font-size: 11pt;
+font-weight: bold;</string>
+         </property>
+         <property name="text">
+          <string>Delete phrase</string>
+         </property>
+         <property name="autoDefault">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QPushButton" name="use_sv_reading_phrase">
          <property name="focusPolicy">
           <enum>Qt::FocusPolicy::NoFocus</enum>
@@ -610,20 +624,6 @@ font-weight: bold;</string>
       </layout>
      </item>
     </layout>
-   </item>
-   <item>
-    <widget class="QPushButton" name="delete_node_phrase">
-     <property name="styleSheet">
-      <string notr="true">font-size: 11pt;
-font-weight: bold;</string>
-     </property>
-     <property name="text">
-      <string>Delete phrase</string>
-     </property>
-     <property name="autoDefault">
-      <bool>false</bool>
-     </property>
-    </widget>
    </item>
   </layout>
  </widget>
