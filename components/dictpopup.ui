@@ -7,25 +7,25 @@
     <x>0</x>
     <y>0</y>
     <width>451</width>
-    <height>512</height>
+    <height>560</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
-    <width>451</width>
-    <height>512</height>
+    <width>412</width>
+    <height>560</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
     <width>451</width>
-    <height>512</height>
+    <height>560</height>
    </size>
   </property>
   <property name="windowTitle">
    <string>DictPopup</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout" stretch="2,3,6,4">
+  <layout class="QVBoxLayout" name="verticalLayout_2" stretch="1,2,3,3,0">
    <item>
     <widget class="QLineEdit" name="original">
      <property name="sizePolicy">
@@ -36,15 +36,14 @@
      </property>
      <property name="font">
       <font>
-       <family>SimSun-ExtG</family>
+       <family>Noto Sans SC</family>
        <pointsize>18</pointsize>
-       <bold>true</bold>
+       <italic>false</italic>
+       <bold>false</bold>
       </font>
      </property>
      <property name="styleSheet">
-      <string notr="true">font-size: 18pt;
-font-weight: bold;
-font-family: &quot;SimSun-ExtG&quot;</string>
+      <string notr="true">font: 18pt &quot;Noto Sans SC&quot;;</string>
      </property>
      <property name="text">
       <string/>
@@ -110,6 +109,9 @@ font-family: &quot;SimSun-ExtG&quot;</string>
         <string notr="true">font-size: 12pt;
 font-family: &quot;Tahoma&quot;</string>
        </property>
+       <property name="text">
+        <string/>
+       </property>
        <property name="alignment">
         <set>Qt::AlignmentFlag::AlignCenter</set>
        </property>
@@ -121,7 +123,7 @@ font-family: &quot;Tahoma&quot;</string>
     </layout>
    </item>
    <item>
-    <layout class="QVBoxLayout" name="nm" stretch="1,2,1,1,1">
+    <layout class="QVBoxLayout" name="nm" stretch="1,0,1,1,1,0">
      <property name="topMargin">
       <number>10</number>
      </property>
@@ -150,25 +152,36 @@ font-family: &quot;Tahoma&quot;</string>
       </widget>
      </item>
      <item>
-      <widget class="QLineEdit" name="name">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="font">
-        <font>
-         <family>Tahoma</family>
-         <pointsize>12</pointsize>
-        </font>
+      <widget class="ChipList" name="list_names">
+       <property name="acceptDrops">
+        <bool>true</bool>
        </property>
        <property name="styleSheet">
-        <string notr="true">font-size: 12pt;
-font-family: &quot;Tahoma&quot;;</string>
+        <string notr="true">background-color: transparent</string>
        </property>
-       <property name="alignment">
-        <set>Qt::AlignmentFlag::AlignCenter</set>
+       <property name="verticalScrollBarPolicy">
+        <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+       </property>
+       <property name="horizontalScrollBarPolicy">
+        <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+       </property>
+       <property name="dragEnabled">
+        <bool>true</bool>
+       </property>
+       <property name="dragDropMode">
+        <enum>QAbstractItemView::DragDropMode::InternalMove</enum>
+       </property>
+       <property name="movement">
+        <enum>QListView::Movement::Snap</enum>
+       </property>
+       <property name="flow">
+        <enum>QListView::Flow::LeftToRight</enum>
+       </property>
+       <property name="spacing">
+        <number>5</number>
+       </property>
+       <property name="supportedDragActions">
+        <set>Qt::DropAction::MoveAction</set>
        </property>
       </widget>
      </item>
@@ -217,7 +230,7 @@ font-family: &quot;Tahoma&quot;;</string>
         <enum>QLayout::SizeConstraint::SetDefaultConstraint</enum>
        </property>
        <item>
-        <widget class="QPushButton" name="cap_none">
+        <widget class="QPushButton" name="cap_none_name">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
            <horstretch>0</horstretch>
@@ -229,6 +242,9 @@ font-family: &quot;Tahoma&quot;;</string>
            <pointsize>11</pointsize>
            <bold>true</bold>
           </font>
+         </property>
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
          </property>
          <property name="styleSheet">
           <string notr="true">font-size: 11pt;
@@ -243,7 +259,7 @@ font-weight: bold;</string>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="cap_1">
+        <widget class="QPushButton" name="cap_1_name">
          <property name="font">
           <font>
            <family>Segoe UI</family>
@@ -251,6 +267,9 @@ font-weight: bold;</string>
            <italic>false</italic>
            <bold>true</bold>
           </font>
+         </property>
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
          </property>
          <property name="styleSheet">
           <string notr="true">font: 700 11pt &quot;Segoe UI&quot;;</string>
@@ -264,7 +283,7 @@ font-weight: bold;</string>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="cap_2">
+        <widget class="QPushButton" name="cap_2_name">
          <property name="font">
           <font>
            <family>Segoe UI</family>
@@ -272,6 +291,9 @@ font-weight: bold;</string>
            <italic>false</italic>
            <bold>true</bold>
           </font>
+         </property>
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
          </property>
          <property name="styleSheet">
           <string notr="true">font: 700 11pt &quot;Segoe UI&quot;;</string>
@@ -285,12 +307,15 @@ font-weight: bold;</string>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="cap_3">
+        <widget class="QPushButton" name="cap_3_name">
          <property name="font">
           <font>
            <pointsize>11</pointsize>
            <bold>true</bold>
           </font>
+         </property>
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
          </property>
          <property name="text">
           <string>3</string>
@@ -301,12 +326,15 @@ font-weight: bold;</string>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="cap_all">
+        <widget class="QPushButton" name="cap_all_name">
          <property name="font">
           <font>
            <pointsize>11</pointsize>
            <bold>true</bold>
           </font>
+         </property>
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
          </property>
          <property name="text">
           <string>All</string>
@@ -321,7 +349,7 @@ font-weight: bold;</string>
      <item>
       <layout class="QHBoxLayout" name="horizontalLayout_3">
        <item>
-        <widget class="QPushButton" name="use_sv_reading">
+        <widget class="QPushButton" name="use_sv_reading_name">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
            <horstretch>0</horstretch>
@@ -333,6 +361,13 @@ font-weight: bold;</string>
            <pointsize>11</pointsize>
            <bold>true</bold>
           </font>
+         </property>
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">font-size: 11pt;
+font-weight: bold;</string>
          </property>
          <property name="text">
           <string>Use SV reading</string>
@@ -343,39 +378,39 @@ font-weight: bold;</string>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="save_name">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
+        <widget class="QPushButton" name="add_name">
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
          </property>
-         <property name="font">
-          <font>
-           <pointsize>11</pointsize>
-           <bold>true</bold>
-          </font>
+         <property name="styleSheet">
+          <string notr="true">font-size: 11pt;
+font-weight: bold;</string>
          </property>
          <property name="text">
-          <string>Save name</string>
-         </property>
-         <property name="autoDefault">
-          <bool>false</bool>
+          <string>Add new name</string>
          </property>
         </widget>
        </item>
       </layout>
      </item>
+     <item>
+      <widget class="QPushButton" name="delete_node_name">
+       <property name="styleSheet">
+        <string notr="true">font-size: 11pt;
+font-weight: bold;</string>
+       </property>
+       <property name="text">
+        <string>Delete name</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
     </layout>
    </item>
    <item>
-    <layout class="QVBoxLayout" name="ph" stretch="1,2,1">
-     <property name="topMargin">
-      <number>10</number>
-     </property>
-     <property name="bottomMargin">
-      <number>0</number>
-     </property>
+    <layout class="QVBoxLayout" name="verticalLayout">
      <item>
       <widget class="QLabel" name="label_3">
        <property name="font">
@@ -393,32 +428,40 @@ font-weight: bold;</string>
       </widget>
      </item>
      <item>
-      <widget class="QLineEdit" name="phrase">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="font">
-        <font>
-         <family>Tahoma</family>
-         <pointsize>12</pointsize>
-        </font>
+      <widget class="ChipList" name="list_phrases">
+       <property name="acceptDrops">
+        <bool>true</bool>
        </property>
        <property name="styleSheet">
-        <string notr="true">font-size: 12pt;
-font-family: &quot;Tahoma&quot;;</string>
+        <string notr="true">background-color: transparent</string>
        </property>
-       <property name="alignment">
-        <set>Qt::AlignmentFlag::AlignCenter</set>
+       <property name="verticalScrollBarPolicy">
+        <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+       </property>
+       <property name="horizontalScrollBarPolicy">
+        <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+       </property>
+       <property name="dragEnabled">
+        <bool>true</bool>
+       </property>
+       <property name="movement">
+        <enum>QListView::Movement::Snap</enum>
+       </property>
+       <property name="flow">
+        <enum>QListView::Flow::LeftToRight</enum>
+       </property>
+       <property name="spacing">
+        <number>5</number>
+       </property>
+       <property name="supportedDragActions">
+        <set>Qt::DropAction::MoveAction</set>
        </property>
       </widget>
      </item>
      <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_2">
+      <layout class="QHBoxLayout" name="horizontalLayout_5">
        <item>
-        <widget class="QPushButton" name="swap_meaning">
+        <widget class="QPushButton" name="cap_none_phrase">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
            <horstretch>0</horstretch>
@@ -431,8 +474,15 @@ font-family: &quot;Tahoma&quot;;</string>
            <bold>true</bold>
           </font>
          </property>
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">font-size: 11pt;
+font-weight: bold;</string>
+         </property>
          <property name="text">
-          <string>Swap meaning</string>
+          <string>None</string>
          </property>
          <property name="autoDefault">
           <bool>false</bool>
@@ -440,15 +490,23 @@ font-family: &quot;Tahoma&quot;;</string>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="use_sv_phrase">
+        <widget class="QPushButton" name="cap_1_phrase">
          <property name="font">
           <font>
+           <family>Segoe UI</family>
            <pointsize>11</pointsize>
+           <italic>false</italic>
            <bold>true</bold>
           </font>
          </property>
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">font: 700 11pt &quot;Segoe UI&quot;;</string>
+         </property>
          <property name="text">
-          <string>Use SV reading</string>
+          <string>1</string>
          </property>
          <property name="autoDefault">
           <bool>false</bool>
@@ -456,15 +514,61 @@ font-family: &quot;Tahoma&quot;;</string>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="save_phrase">
+        <widget class="QPushButton" name="cap_2_phrase">
+         <property name="font">
+          <font>
+           <family>Segoe UI</family>
+           <pointsize>11</pointsize>
+           <italic>false</italic>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">font: 700 11pt &quot;Segoe UI&quot;;</string>
+         </property>
+         <property name="text">
+          <string>2</string>
+         </property>
+         <property name="autoDefault">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="cap_3_phrase">
          <property name="font">
           <font>
            <pointsize>11</pointsize>
            <bold>true</bold>
           </font>
          </property>
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
+         </property>
          <property name="text">
-          <string>Save phrase</string>
+          <string>3</string>
+         </property>
+         <property name="autoDefault">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="cap_all_phrase">
+         <property name="font">
+          <font>
+           <pointsize>11</pointsize>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
+         </property>
+         <property name="text">
+          <string>All</string>
          </property>
          <property name="autoDefault">
           <bool>false</bool>
@@ -473,10 +577,63 @@ font-family: &quot;Tahoma&quot;;</string>
        </item>
       </layout>
      </item>
+     <item>
+      <layout class="QHBoxLayout" name="horizontalLayout_4">
+       <item>
+        <widget class="QPushButton" name="use_sv_reading_phrase">
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">font-size: 11pt;
+font-weight: bold;</string>
+         </property>
+         <property name="text">
+          <string>Use SV reading</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="add_phrase">
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">font-size: 11pt;
+font-weight: bold;</string>
+         </property>
+         <property name="text">
+          <string>Add new phrase</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
     </layout>
+   </item>
+   <item>
+    <widget class="QPushButton" name="delete_node_phrase">
+     <property name="styleSheet">
+      <string notr="true">font-size: 11pt;
+font-weight: bold;</string>
+     </property>
+     <property name="text">
+      <string>Delete phrase</string>
+     </property>
+     <property name="autoDefault">
+      <bool>false</bool>
+     </property>
+    </widget>
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ChipList</class>
+   <extends>QListWidget</extends>
+   <header>chiplist.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

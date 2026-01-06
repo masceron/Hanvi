@@ -35,6 +35,10 @@ add_executable(Converter WIN32 main.cpp
         resources.qrc
         convert/Converter.h
         convert/Converter.cpp
+        components/chipdelegate.h
+        components/chiplist.h
+        text/db.cpp
+        text/db.h
 )
 target_link_libraries(Converter
         Qt::Core

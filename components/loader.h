@@ -23,7 +23,7 @@ public:
         }
         const auto movie = new QMovie(":/resources/loader.gif");
         loadingLabel->setMovie(movie);
-        movie->setScaledSize(QSize(640, 360));
+        movie->setScaledSize(QSize(400, 225));
         movie->start();
 
         const auto textLabel = new QLabel("Loading...", this);

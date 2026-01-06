@@ -1,11 +1,9 @@
-//
-// Created by qphuc on 1/5/2026.
-//
-
-#ifndef CONVERTER_DICTPOPUP_H
-#define CONVERTER_DICTPOPUP_H
+#pragma once
 
 #include <QDialog>
+
+#include "chipdelegate.h"
+#include "mainwindow.h"
 
 
 QT_BEGIN_NAMESPACE
@@ -23,11 +21,16 @@ class DictPopup : public QDialog
 
 public:
     explicit DictPopup(QWidget* parent = nullptr);
-    ~DictPopup() override;
+    void load_data(const QString& selected_chinese_text) const;
 
 private:
+    void add_new_phrase() const;
+    void edit_finished_phrase() const;
+    void add_new_name() const;
+    void edit_finished_name() const;
+    ~DictPopup() override;
     Ui::DictPopup* ui;
+    ChipDelegate* phrase_chip_delegate;
+    ChipDelegate* name_chip_delegate;
+    void capitalize(int type, int mode) const;
 };
-
-
-#endif //CONVERTER_DICTPOPUP_H
