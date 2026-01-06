@@ -23,6 +23,7 @@ public:
 
 private slots:
     void update_display() const;
+    void open_popup();
 
 private:
     int current_page;
@@ -36,4 +37,7 @@ private:
     static void highlight_token(QTextBrowser* browser, const QString& token);
     static QTextCursor find_token(QTextDocument* document, const QString& token);
     QFutureWatcher<std::pair<QString, QString>> watcher;
+    static QString token_id_at(const QTextBrowser* browser, int position);
+    static void snap_selection_to_token(QTextBrowser* browser);
+    QString get_chinese_text_from_ids(const QStringList& ids) const;
 };

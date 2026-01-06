@@ -2,7 +2,6 @@ R"(
 QWidget {
     background-color: #1e1e1e;
     color: #ffffff;
-    font-family: "Segoe UI", sans-serif;
     font-size: 10pt;
 }
 

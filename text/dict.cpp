@@ -18,8 +18,7 @@ void init_db()
     }
 
     QSqlQuery query(db);
-
-    db.close();
+    query.exec("VACUUM;");
 }
 
 void load_data_on_startup(std::function<void()> on_finished)

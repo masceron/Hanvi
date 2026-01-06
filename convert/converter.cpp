@@ -26,7 +26,7 @@ std::pair<QString, QString> convert(const QStringView& input, const std::functio
 
     while (i < input.length())
     {
-        if (progress_callback && i % 2000 == 0) {
+        if (progress_callback && i % 2500 == 0) {
             progress_callback(i);
         }
 

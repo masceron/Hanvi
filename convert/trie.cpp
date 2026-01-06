@@ -1,6 +1,6 @@
 #include "trie.h"
 
-Dictionary::Dictionary(const QString& path) {
+Dictionary::Dictionary() {
     root = new TrieNode();
 }
 
@@ -8,71 +8,98 @@ Dictionary::~Dictionary() {
     delete root;
 }
 
+QStringList& Dictionary::get_list(TrieNode* node, const Priority priority) {
+    auto& ptr = (priority == NAME) ? node->name_translations : node->phrase_translations;
+    if (!ptr) {
+        ptr = std::make_unique<QStringList>();
+    }
+    return *ptr;
+}
+
+bool Dictionary::has_list(const TrieNode* node, const Priority priority) {
+    const auto& ptr = (priority == NAME) ? node->name_translations : node->phrase_translations;
+    return ptr && !ptr->isEmpty();
+}
+
 void Dictionary::insert(const QString& key, const QString& value, const Priority priority) const
 {
     TrieNode* node = root;
-    for (QChar ch : key) {
-        if (!node->children.contains(ch)) {
-            node->children[ch] = new TrieNode();
+    for (const QChar ch : key) {
+        TrieNode* next = node->find_child(ch);
+        if (!next) {
+            next = new TrieNode();
+            node->add_child(ch, next);
         }
-        node = node->children[ch];
+        node = next;
     }
 
-    QStringList* targetList = (priority == NAME) ? &node->name_translations : &node->phrase_translations;
-    targetList->removeAll(value);
-    targetList->prepend(value);
+    QStringList& list = get_list(node, priority);
+    list.removeAll(value);
+    list.prepend(value);
 }
 
-void Dictionary::edit(const QString& key, const Priority priority, const QString& value) const
+void Dictionary::insert_bulk(const QString& key, const Priority priority, const QString& value) const
+{
+    TrieNode* node = root;
+    for (const QChar ch : key) {
+        TrieNode* next = node->find_child(ch);
+        if (!next) {
+            next = new TrieNode();
+            node->add_child(ch, next);
+        }
+        node = next;
+    }
+
+    QStringList& list = get_list(node, priority);
+    for (const auto items = value.split('\x1F'); const auto& item : items) {
+        list.append(item);
+    }
+}
+
+std::pair<QStringList*, QStringList*> Dictionary::find_exact(const QString& key) const
+{
+    const TrieNode* node = walk_node(key);
+
+    if (!node) {
+        return {};
+    }
+
+    return {node->name_translations.get(), node->phrase_translations.get()};
+}
+
+void Dictionary::reorder(const QString& key, const QStringList& new_order, const Priority priority) const
 {
     TrieNode* node = walk_node(key);
     if (!node) return;
 
-    if (QStringList* list = (priority == NAME) ? &node->name_translations : &node->phrase_translations; !list->isEmpty()) {
-        (*list)[0] = value;
-    } else {
-        list->append(value);
-    }
-}
+    QStringList& list = get_list(node, priority);
 
-void Dictionary::choose_meaning(const QString& key, const Priority priority, const QString& value) const
-{
-    TrieNode* node = walk_node(key);
-    if (!node) return;
-
-    QStringList* list = (priority == NAME) ? &node->name_translations : &node->phrase_translations;
-
-    if (const auto idx = list->indexOf(value); idx != -1) {
-        list->removeAt(idx);
-        list->prepend(value);
-    } else {
-        list->prepend(value);
-    }
+    list.clear();
+    list.append(new_order);
 }
 
 Match Dictionary::find(const QStringView& text, const int startPos) const
 {
-    TrieNode* node = root;
+    const TrieNode* node = root;
     int bestLen = 0;
     QString translated;
     Priority priority = NONE;
 
     for (int i = startPos; i < text.length(); ++i) {
-        QChar ch = text[i];
-        if (!node->children.contains(ch)) break;
-        node = node->children[ch];
+        const QChar ch = text[i];
 
-        if (!node->name_translations.isEmpty()) {
+        node = node->find_child(ch);
+        if (!node) break;
+
+        if (has_list(node, NAME)) {
             bestLen = i - startPos + 1;
-            translated = node->name_translations.first();
+            translated = node->name_translations->first();
             priority = NAME;
-            continue;
         }
-
-        if (!node->phrase_translations.isEmpty()) {
+        else if (has_list(node, PHRASE)) {
             if ((i - startPos + 1) > bestLen) {
                 bestLen = i - startPos + 1;
-                translated = node->phrase_translations.first();
+                translated = node->phrase_translations->first();
                 priority = PHRASE;
             }
         }
@@ -81,63 +108,40 @@ Match Dictionary::find(const QStringView& text, const int startPos) const
     return {bestLen, priority, translated};
 }
 
-void Dictionary::remove(const QString& key, const Priority priority) const
-{
-    remover(root, key, 0, priority);
-}
-
-void Dictionary::insert_bulk(const QString& key, const Priority priority, const QString& value) const
-{
-    TrieNode* node = root;
-    for (const QChar &ch : key) {
-        if (!node->children.contains(ch)) {
-            node->children[ch] = new TrieNode();
-        }
-        node = node->children[ch];
-    }
-
-    if (priority == NAME) {
-        node->name_translations.append(value.split('\x1F'));
-    } else {
-        node->phrase_translations.append(value.split('\x1F'));
-    }
-}
-
-bool Dictionary::remover(TrieNode* node, const QString& key, const int depth, const Priority priority) {
-    if (depth == key.length()) {
-        if (priority == NAME) {
-            node->name_translations.clear();
-        } else {
-            node->phrase_translations.clear();
-        }
-
-        return node->isEmpty();
-    }
-
-    const QChar ch = key[depth];
-    if (!node->children.contains(ch)) return false;
-
-    if (TrieNode* child = node->children[ch]; remover(child, key, depth + 1, priority)) {
-        delete child;
-        node->children.remove(ch);
-
-        return node->isEmpty();
-    }
-
-    return false;
-}
-
 TrieNode* Dictionary::walk_node(const QString& key) const
 {
     TrieNode* node = root;
-
-    for (const QChar &ch : key) {
-        if (!node->children.contains(ch)) {
-            return nullptr; // Dead end: Key doesn't exist
-        }
-
-        node = node->children.value(ch);
+    for (const QChar ch : key) {
+        node = node->find_child(ch);
+        if (!node) return nullptr;
     }
-
     return node;
+}
+
+void Dictionary::remove(const QString& key, const Priority priority) const
+{
+    TrieNode* node = walk_node(key);
+    if (!node) return;
+
+    if (priority == NAME && node->name_translations) {
+        node->name_translations.reset();
+    } else if (priority == PHRASE && node->phrase_translations) {
+        node->phrase_translations.reset();
+    }
+}
+
+void Dictionary::remove_meaning(const QString& key, const QString& value, const Priority priority) const
+{
+    TrieNode* node = walk_node(key);
+    if (!node) return;
+
+    auto& ptr = priority == NAME ? node->name_translations : node->phrase_translations;
+
+    if (!ptr) return;
+
+    ptr->removeAll(value);
+
+    if (ptr->isEmpty()) {
+        ptr.reset();
+    }
 }

@@ -5,6 +5,8 @@
 #include "ui_MainWindow.h"
 #include "../text/io.h"
 #include "mainwindow.h"
+
+#include "dictpopup.h"
 #include "../convert/converter.h"
 
 MainWindow::MainWindow(QWidget* parent) :
@@ -99,15 +101,21 @@ MainWindow::MainWindow(QWidget* parent) :
 
     connect(ui->char_per_page, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](const int val)
     {
+        current_page = 0;
         page_length = val;
         pages = paginate(input_text, page_length);
         convert_and_display();
     });
+
+    ui->cn_input->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->cn_input, &QWidget::customContextMenuRequested, this, &MainWindow::open_popup);
+    ui->vn_output->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->vn_output, &QWidget::customContextMenuRequested, this, &MainWindow::open_popup);
 }
 
 void MainWindow::update_pagination_controls() const
 {
-    if (const int total = pages.size(); total == 0)
+    if (const int total = static_cast<int>(pages.size()); total == 0)
     {
         ui->current_page->setText("Page 0 / 0");
         ui->previous_page->setEnabled(false);
@@ -145,7 +153,7 @@ void MainWindow::convert_and_display()
         {
             QMetaObject::invokeMethod(this, [this, progress]
             {
-                ui->progress_bar->setValue((progress * 100) / pages[current_page].length());
+                ui->progress_bar->setValue(static_cast<int>((progress * 100) / pages[current_page].length()));
             });
         };
 
@@ -238,6 +246,15 @@ QTextCursor MainWindow::find_token(QTextDocument* document, const QString& token
     return {};
 }
 
+QString MainWindow::token_id_at(const QTextBrowser* browser, const int position)
+{
+    QTextCursor cursor = browser->textCursor();
+    cursor.setPosition(position);
+
+    const QTextCharFormat format = cursor.charFormat();
+    return format.anchorHref();
+}
+
 void MainWindow::update_display() const
 {
     update_pagination_controls();
@@ -246,4 +263,100 @@ void MainWindow::update_display() const
     ui->statusbar->showMessage("Conversion completed.");
     ui->cn_input->setHtml(cn_out);
     ui->vn_output->setHtml(vn_out);
+}
+
+void MainWindow::snap_selection_to_token(QTextBrowser* browser)
+{
+    QTextCursor cursor = browser->textCursor();
+    if (!cursor.hasSelection()) return;
+
+    const int start_pos = cursor.selectionStart();
+    const int end_pos = cursor.selectionEnd();
+
+    const QString start_id = token_id_at(browser, start_pos);
+
+    const QString end_id = token_id_at(browser, end_pos - 1);
+
+    int new_start = start_pos;
+    int new_end = end_pos;
+
+    if (!start_id.isEmpty()) {
+        if (const QTextCursor token_cursor = find_token(browser->document(), start_id); !token_cursor.isNull()) {
+            new_start = token_cursor.selectionStart();
+        }
+    }
+
+    if (!end_id.isEmpty()) {
+        if (const QTextCursor token_cursor = find_token(browser->document(), end_id); !token_cursor.isNull()) {
+            new_end = token_cursor.selectionEnd();
+        }
+    }
+
+    if (new_start != start_pos || new_end != end_pos) {
+        cursor.setPosition(new_start);
+        cursor.setPosition(new_end, QTextCursor::KeepAnchor);
+        browser->setTextCursor(cursor);
+    }
+}
+
+QString MainWindow::get_chinese_text_from_ids(const QStringList& ids) const
+{
+    QString result;
+
+    for (const QString& id : ids) {
+        if (QTextCursor cursor = find_token(ui->cn_input->document(), id); !cursor.isNull()) {
+            result.append(cursor.selectedText());
+        }
+    }
+    return result;
+}
+
+void MainWindow::open_popup()
+{
+    const auto sender_browser = qobject_cast<QTextBrowser*>(sender());
+    if (!sender_browser) return;
+
+    QString selected_chinese_text;
+
+    if (sender_browser == ui->vn_output)
+    {
+        snap_selection_to_token(sender_browser);
+
+        const QTextCursor cursor = sender_browser->textCursor();
+        const int start = cursor.selectionStart();
+        const int end = cursor.selectionEnd();
+
+        QStringList token_ids;
+
+        QTextBlock block = sender_browser->document()->findBlock(start);
+        while (block.isValid() && block.position() < end) {
+            for (auto it = block.begin(); !it.atEnd(); ++it) {
+                QTextFragment fragment = it.fragment();
+                const int frag_start = fragment.position();
+
+                if (const int frag_end = frag_start + fragment.length(); frag_end > start && frag_start < end) {
+                    if (QString id = fragment.charFormat().anchorHref(); !id.isEmpty() && !token_ids.contains(id)) {
+                        token_ids.append(id);
+                    }
+                }
+            }
+            block = block.next();
+        }
+
+        selected_chinese_text = get_chinese_text_from_ids(token_ids);
+    }
+    else
+    {
+        selected_chinese_text = sender_browser->textCursor().selectedText();
+    }
+
+    if (selected_chinese_text.isEmpty()) return;
+
+    auto *popup = new DictPopup(this);
+
+    popup->load_data(selected_chinese_text);
+
+    popup->setAttribute(Qt::WA_DeleteOnClose);
+    popup->exec();
+    convert_and_display();
 }
