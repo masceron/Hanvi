@@ -28,16 +28,20 @@ private slots:
 private:
     int current_page;
     int page_length = 5000;
+    QString file_name;
     QString input_text;
     QList<QStringView> pages;
     Ui::MainWindow* ui;
+    QFutureWatcher<std::pair<QString, QString>> watcher;
+    QFutureWatcher<QString> plain_watcher;
+
     void convert_and_display();
     void update_pagination_controls() const;
     void click_token(const QUrl &link) const;
     static void highlight_token(QTextBrowser* browser, const QString& token);
     static QTextCursor find_token(QTextDocument* document, const QString& token);
-    QFutureWatcher<std::pair<QString, QString>> watcher;
     static QString token_id_at(const QTextBrowser* browser, int position);
     static void snap_selection_to_token(QTextBrowser* browser);
     QString get_chinese_text_from_ids(const QStringList& ids) const;
+    void convert_to_file(const QString& name);
 };
