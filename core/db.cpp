@@ -1,6 +1,8 @@
-#include "db.h"
+#include "../core/db.h"
 
 #include <QSqlQuery>
+
+#include "trie.h"
 
 QString get_table_name(const Priority priority) {
     return (priority == NAME) ? "names" : "phrases";

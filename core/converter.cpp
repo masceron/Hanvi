@@ -1,5 +1,4 @@
 #include "converter.h"
-
 #include "trie.h"
 
 std::pair<QString, QString> convert(const QStringView& input, const std::function<void(int)>& progress_callback)
@@ -93,7 +92,7 @@ std::pair<QString, QString> convert(const QStringView& input, const std::functio
         QString safe_src = source_text.toString().toHtmlEscaped();
         QString safe_trans = translated_text.toHtmlEscaped();
 
-        output.first.append(QString("<a name='%1' href='%1'>%2</a>")
+        output.first.append(QString("<a href='%1'>%2</a>")
             .arg(uid, safe_src));
 
         bool no_space_after = false;
@@ -113,7 +112,7 @@ std::pair<QString, QString> convert(const QStringView& input, const std::functio
         output.second.append(QString("<a href='%1'>%2</a>")
             .arg(uid, safe_trans));
 
-        if (!no_space_after)
+        if (!no_space_after && !translated_text.isEmpty())
         {
             output.second.append(" ");
         }
@@ -134,7 +133,7 @@ QString convert_plain(const QStringView& input, const std::function<void(int)>& 
 
     while (i < input.length())
     {
-        if (i % 1000 == 0) progress_callback(i);
+        if (progress_callback && i % 1000 == 0) progress_callback(i);
 
         QChar ch = input[i];
         if (ch == '\n')
@@ -207,7 +206,7 @@ QString convert_plain(const QStringView& input, const std::function<void(int)>& 
 
         output.append(translated_text);
 
-        if (!no_space_after)
+        if (!no_space_after && !translated_text.isEmpty())
         {
             output.append(" ");
         }

@@ -5,7 +5,7 @@
 #include <QDebug>
 #include <QSqlError>
 
-#include "../convert/trie.h"
+#include "trie.h"
 
 void init_db()
 {

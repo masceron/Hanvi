@@ -1,7 +1,7 @@
 #pragma once
 #include <expected>
 
-#include "../convert/trie.h"
+#include "trie.h"
 
 enum class io_error
 {

@@ -3,7 +3,6 @@
 #include <QFile>
 
 #include "io.h"
-
 #include "db.h"
 
 QList<QStringView> paginate(const QString& input_text, const int min_length)

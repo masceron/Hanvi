@@ -5,11 +5,11 @@
 #include <QUrl>
 
 #include "ui_MainWindow.h"
-#include "../text/io.h"
+#include "../core/io.h"
 #include "mainwindow.h"
 
 #include "dictpopup.h"
-#include "../convert/converter.h"
+#include "../core/converter.h"
 
 MainWindow::MainWindow(QWidget* parent) :
     QMainWindow(parent), ui(new Ui::MainWindow)
@@ -311,10 +311,12 @@ void MainWindow::update_display()
 
         QTextCursor restoration_cursor(doc);
         restoration_cursor.setPosition(target_pos);
+        restoration_cursor.movePosition(QTextCursor::NextCharacter);
+
         if (const QString anchor_name = restoration_cursor.charFormat().anchorHref(); !anchor_name.isEmpty())
         {
-            ui->cn_input->scrollToAnchor(anchor_name);
-            ui->vn_output->scrollToAnchor(anchor_name);
+            highlight_token(ui->cn_input, anchor_name);
+            highlight_token(ui->vn_output, anchor_name);
         }
         saved_cursor_pos = -1;
     }

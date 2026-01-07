@@ -1,9 +1,7 @@
-#include <QSplashScreen>
-
 #include "app/app.h"
 #include "components/loader.h"
 #include "components/MainWindow.h"
-#include "text/dict.h"
+#include "core/dict.h"
 
 int main(int argc, char* argv[])
 {
@@ -15,7 +13,8 @@ int main(int argc, char* argv[])
 
     MainWindow w;
 
-    load_dict([&]() {
+    load_dict([&]
+    {
         loading_screen.close();
         w.show();
     });
