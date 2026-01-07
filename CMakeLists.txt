@@ -2,11 +2,23 @@ cmake_minimum_required(VERSION 4.1)
 project(Converter)
 
 set(CMAKE_CXX_STANDARD 26)
+
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
 set(CMAKE_PREFIX_PATH "D:/Programs/Qt/6.10.1/msvc2022_64")
+
+if(CMAKE_BUILD_TYPE MATCHES "Release")
+    string(REPLACE "/EHsc" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    string(REPLACE "/EHsc" "" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+
+    string(REPLACE "/Ob2" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+    string(REPLACE "/Ob2" "" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+
+    add_compile_options(/O2 /Oi /Ot /Ob3 /GL /GF /GA /Gy /Gw /Qpar /fp:fast /EHs-c- /D_HAS_EXCEPTIONS=0 /arch:AVX512)
+    add_link_options(/LTCG /OPT:REF /OPT:ICF)
+endif()
 
 find_package(Qt6 COMPONENTS
         Core
@@ -16,16 +28,26 @@ find_package(Qt6 COMPONENTS
         Concurrent
         REQUIRED)
 
+set(CORE
+        core/converter.h
+        core/converter.cpp
+        core/db.h
+        core/db.cpp
+        core/dict.h
+        core/dict.cpp
+        core/io.h
+        core/io.cpp
+        core/trie.h
+        core/trie.cpp
+)
+
+add_library(CoreLogic STATIC ${CORE})
+target_link_libraries(CoreLogic PRIVATE Qt::Core Qt::Widgets Qt::Sql Qt::Concurrent)
+
 add_executable(Converter WIN32 main.cpp
         components/mainwindow.cpp
         components/mainwindow.h
         components/mainwindow.ui
-        text/io.cpp
-        text/io.h
-        convert/trie.h
-        convert/trie.cpp
-        text/dict.h
-        text/dict.cpp
         app/app.cpp
         app/app.h
         components/dictpopup.cpp
@@ -33,20 +55,13 @@ add_executable(Converter WIN32 main.cpp
         components/dictpopup.ui
         components/loader.h
         resources.qrc
-        convert/Converter.h
-        convert/Converter.cpp
         components/chipdelegate.h
         components/chiplist.h
-        text/db.cpp
-        text/db.h
 )
-target_link_libraries(Converter
-        Qt::Core
-        Qt::Gui
-        Qt::Widgets
-        Qt::Sql
-        Qt::Concurrent
-)
+target_link_libraries(Converter PRIVATE CoreLogic Qt::Core Qt::Sql Qt::Gui Qt::Widgets Qt::Concurrent)
+
+add_executable(ConverterCLI main_cli.cpp)
+target_link_libraries(ConverterCLI PRIVATE CoreLogic Qt::Core Qt::Sql)
 
 if (WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     set(DEBUG_SUFFIX)

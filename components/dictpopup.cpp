@@ -4,8 +4,8 @@
 
 #include "chiplist.h"
 #include "ui_DictPopup.h"
-#include "../convert/trie.h"
-#include "../text/io.h"
+#include "../core/trie.h"
+#include "../core/io.h"
 
 
 DictPopup::DictPopup(QWidget* parent) :
