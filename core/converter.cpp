@@ -113,9 +113,15 @@ std::tuple<QString, QString, QString> convert(const QStringView& input, const st
             }
         }
 
-        if (!is_punctuation && cap_next && !translated_text.isEmpty())
+        QString sv = get_sv(source_text);
+
+        if (!is_punctuation && cap_next)
         {
-            translated_text[0] = translated_text[0].toUpper();
+            if (!translated_text.isEmpty())
+            {
+                translated_text[0] = translated_text[0].toUpper();
+            }
+            sv[0] = sv[0].toUpper();
             cap_next = false;
         }
 
@@ -140,15 +146,18 @@ std::tuple<QString, QString, QString> convert(const QStringView& input, const st
         }
 
         sv_output.append(QString("<a href='%1'>%2</a>")
-            .arg(uid, get_sv(source_text).toHtmlEscaped()));
+            .arg(uid, sv.toHtmlEscaped()));
 
         vn_output.append(QString("<a href='%1'>%2</a>")
             .arg(uid, translated_text.toHtmlEscaped()));
 
-        if (!no_space_after && !translated_text.isEmpty())
+        if (!no_space_after)
         {
             sv_output.append(" ");
-            vn_output.append(" ");
+            if (!translated_text.isEmpty())
+            {
+                vn_output.append(" ");
+            }
         }
 
         i += step;
