@@ -6,26 +6,26 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>451</width>
-    <height>540</height>
+    <width>470</width>
+    <height>570</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
-    <width>412</width>
-    <height>540</height>
+    <width>470</width>
+    <height>570</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
-    <width>451</width>
-    <height>540</height>
+    <width>470</width>
+    <height>570</height>
    </size>
   </property>
   <property name="windowTitle">
    <string>DictPopup</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout_2" stretch="1,2,3,3">
+  <layout class="QVBoxLayout" name="verticalLayout_3" stretch="1,2,4,4,1">
    <item>
     <widget class="QLineEdit" name="original">
      <property name="sizePolicy">
@@ -123,13 +123,7 @@ font-family: &quot;Tahoma&quot;</string>
     </layout>
    </item>
    <item>
-    <layout class="QVBoxLayout" name="nm" stretch="1,0,1,1,1">
-     <property name="topMargin">
-      <number>10</number>
-     </property>
-     <property name="bottomMargin">
-      <number>0</number>
-     </property>
+    <layout class="QVBoxLayout" name="nm">
      <item>
       <widget class="QLabel" name="label_2">
        <property name="font">
@@ -152,38 +146,64 @@ font-family: &quot;Tahoma&quot;</string>
       </widget>
      </item>
      <item>
-      <widget class="ChipList" name="list_names">
-       <property name="acceptDrops">
-        <bool>true</bool>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">background-color: transparent</string>
-       </property>
-       <property name="verticalScrollBarPolicy">
-        <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
-       </property>
-       <property name="horizontalScrollBarPolicy">
-        <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
-       </property>
-       <property name="dragEnabled">
-        <bool>true</bool>
-       </property>
-       <property name="dragDropMode">
-        <enum>QAbstractItemView::DragDropMode::InternalMove</enum>
-       </property>
-       <property name="movement">
-        <enum>QListView::Movement::Snap</enum>
-       </property>
-       <property name="flow">
-        <enum>QListView::Flow::LeftToRight</enum>
-       </property>
-       <property name="spacing">
-        <number>5</number>
-       </property>
-       <property name="supportedDragActions">
-        <set>Qt::DropAction::MoveAction</set>
-       </property>
-      </widget>
+      <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="1,0">
+       <item>
+        <widget class="ChipList" name="list_names">
+         <property name="acceptDrops">
+          <bool>true</bool>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: transparent</string>
+         </property>
+         <property name="verticalScrollBarPolicy">
+          <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+         </property>
+         <property name="horizontalScrollBarPolicy">
+          <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+         </property>
+         <property name="dragEnabled">
+          <bool>true</bool>
+         </property>
+         <property name="dragDropMode">
+          <enum>QAbstractItemView::DragDropMode::InternalMove</enum>
+         </property>
+         <property name="horizontalScrollMode">
+          <enum>QAbstractItemView::ScrollMode::ScrollPerPixel</enum>
+         </property>
+         <property name="movement">
+          <enum>QListView::Movement::Snap</enum>
+         </property>
+         <property name="flow">
+          <enum>QListView::Flow::LeftToRight</enum>
+         </property>
+         <property name="spacing">
+          <number>5</number>
+         </property>
+         <property name="supportedDragActions">
+          <set>Qt::DropAction::MoveAction</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="add_name">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
+         </property>
+         <property name="styleSheet">
+          <string notr="true"/>
+         </property>
+         <property name="text">
+          <string>Add</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </item>
      <item>
       <widget class="QLabel" name="label">
@@ -349,20 +369,6 @@ font-weight: bold;</string>
      <item>
       <layout class="QHBoxLayout" name="horizontalLayout_3">
        <item>
-        <widget class="QPushButton" name="delete_node_name">
-         <property name="styleSheet">
-          <string notr="true">font-size: 11pt;
-font-weight: bold;</string>
-         </property>
-         <property name="text">
-          <string>Delete name</string>
-         </property>
-         <property name="autoDefault">
-          <bool>false</bool>
-         </property>
-        </widget>
-       </item>
-       <item>
         <widget class="QPushButton" name="use_sv_reading_name">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
@@ -392,16 +398,16 @@ font-weight: bold;</string>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="add_name">
-         <property name="focusPolicy">
-          <enum>Qt::FocusPolicy::NoFocus</enum>
-         </property>
+        <widget class="QPushButton" name="delete_node_name">
          <property name="styleSheet">
           <string notr="true">font-size: 11pt;
 font-weight: bold;</string>
          </property>
          <property name="text">
-          <string>Add new name</string>
+          <string>Delete name</string>
+         </property>
+         <property name="autoDefault">
+          <bool>false</bool>
          </property>
         </widget>
        </item>
@@ -410,7 +416,7 @@ font-weight: bold;</string>
     </layout>
    </item>
    <item>
-    <layout class="QVBoxLayout" name="verticalLayout">
+    <layout class="QVBoxLayout" name="ph">
      <item>
       <widget class="QLabel" name="label_3">
        <property name="font">
@@ -428,33 +434,66 @@ font-weight: bold;</string>
       </widget>
      </item>
      <item>
-      <widget class="ChipList" name="list_phrases">
-       <property name="acceptDrops">
-        <bool>true</bool>
-       </property>
+      <layout class="QHBoxLayout" name="horizontalLayout_6" stretch="1,0">
+       <item>
+        <widget class="ChipList" name="list_phrases">
+         <property name="acceptDrops">
+          <bool>true</bool>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: transparent</string>
+         </property>
+         <property name="verticalScrollBarPolicy">
+          <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+         </property>
+         <property name="horizontalScrollBarPolicy">
+          <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+         </property>
+         <property name="dragEnabled">
+          <bool>true</bool>
+         </property>
+         <property name="horizontalScrollMode">
+          <enum>QAbstractItemView::ScrollMode::ScrollPerPixel</enum>
+         </property>
+         <property name="movement">
+          <enum>QListView::Movement::Snap</enum>
+         </property>
+         <property name="flow">
+          <enum>QListView::Flow::LeftToRight</enum>
+         </property>
+         <property name="spacing">
+          <number>5</number>
+         </property>
+         <property name="supportedDragActions">
+          <set>Qt::DropAction::MoveAction</set>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="add_phrase">
+         <property name="focusPolicy">
+          <enum>Qt::FocusPolicy::NoFocus</enum>
+         </property>
+         <property name="styleSheet">
+          <string notr="true"/>
+         </property>
+         <property name="text">
+          <string>Add</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <widget class="QLabel" name="label_5">
        <property name="styleSheet">
-        <string notr="true">background-color: transparent</string>
+        <string notr="true">font: 11pt &quot;Segoe UI&quot;;</string>
        </property>
-       <property name="verticalScrollBarPolicy">
-        <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+       <property name="text">
+        <string>Capitalize</string>
        </property>
-       <property name="horizontalScrollBarPolicy">
-        <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
-       </property>
-       <property name="dragEnabled">
-        <bool>true</bool>
-       </property>
-       <property name="movement">
-        <enum>QListView::Movement::Snap</enum>
-       </property>
-       <property name="flow">
-        <enum>QListView::Flow::LeftToRight</enum>
-       </property>
-       <property name="spacing">
-        <number>5</number>
-       </property>
-       <property name="supportedDragActions">
-        <set>Qt::DropAction::MoveAction</set>
+       <property name="alignment">
+        <set>Qt::AlignmentFlag::AlignCenter</set>
        </property>
       </widget>
      </item>
@@ -580,20 +619,6 @@ font-weight: bold;</string>
      <item>
       <layout class="QHBoxLayout" name="horizontalLayout_4">
        <item>
-        <widget class="QPushButton" name="delete_node_phrase">
-         <property name="styleSheet">
-          <string notr="true">font-size: 11pt;
-font-weight: bold;</string>
-         </property>
-         <property name="text">
-          <string>Delete phrase</string>
-         </property>
-         <property name="autoDefault">
-          <bool>false</bool>
-         </property>
-        </widget>
-       </item>
-       <item>
         <widget class="QPushButton" name="use_sv_reading_phrase">
          <property name="focusPolicy">
           <enum>Qt::FocusPolicy::NoFocus</enum>
@@ -608,22 +633,42 @@ font-weight: bold;</string>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="add_phrase">
-         <property name="focusPolicy">
-          <enum>Qt::FocusPolicy::NoFocus</enum>
-         </property>
+        <widget class="QPushButton" name="delete_node_phrase">
          <property name="styleSheet">
           <string notr="true">font-size: 11pt;
 font-weight: bold;</string>
          </property>
          <property name="text">
-          <string>Add new phrase</string>
+          <string>Delete phrase</string>
+         </property>
+         <property name="autoDefault">
+          <bool>false</bool>
          </property>
         </widget>
        </item>
       </layout>
      </item>
     </layout>
+   </item>
+   <item>
+    <widget class="QPushButton" name="close_popup">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">font-size: 11pt;
+font-weight: bold;</string>
+     </property>
+     <property name="text">
+      <string>Close</string>
+     </property>
+     <property name="autoDefault">
+      <bool>false</bool>
+     </property>
+    </widget>
    </item>
   </layout>
  </widget>

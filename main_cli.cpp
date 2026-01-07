@@ -30,7 +30,7 @@ int main(int argc, char* argv[])
     QCoreApplication::setApplicationName("Converter-CLI");
     QCoreApplication::setApplicationVersion("1.0");
     QCommandLineParser parser;
-    parser.setApplicationDescription("Convert Chinese text to Vietnamese/Pinyin via CLI.");
+    parser.setApplicationDescription("Convert Chinese text to Vietnamese via CLI.");
     parser.addHelpOption();
     parser.addVersionOption();
 
@@ -124,7 +124,7 @@ int main(int argc, char* argv[])
                 out_file.close();
 
                 successCount++;
-                qInfo() << "Converted:" << file_info.absoluteFilePath() << "->" << out_path << ". " << successCount << " / " << files.size();
+                qInfo() << "Converted:" << file_info.absoluteFilePath() << "->" << out_path << "." << successCount << "/" << files.size();
             }
 
             qInfo() << "Batch completed." << successCount << "/" << files.size() << "files processed.";

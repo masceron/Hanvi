@@ -13,6 +13,14 @@ DictPopup::DictPopup(QWidget* parent) :
 {
     ui->setupUi(this);
 
+    setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
+    setWindowTitle("Change name/phrase");
+
+    connect(ui->close_popup, &QPushButton::clicked, this, [this]
+    {
+       close();
+    });
+
     connect(ui->delete_node_name, &QPushButton::clicked, this, [this]
     {
         io_remove(ui->original->text(), NAME);
@@ -267,7 +275,7 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
     ui->sv_reading->setText(sv_reading);
 
     const auto [names, phrases] = dictionary.find_exact(selected_chinese_text);
-    if (names != nullptr && names->size())
+    if (names != nullptr && !names->empty())
     {
         for (const auto& name : *names)
         {
@@ -277,7 +285,7 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
         }
     }
 
-    if (phrases != nullptr && phrases->size())
+    if (phrases != nullptr && !phrases->empty())
     {
         for (const auto& name : *phrases)
         {

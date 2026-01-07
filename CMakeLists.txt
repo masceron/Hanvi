@@ -63,58 +63,50 @@ target_link_libraries(Converter PRIVATE CoreLogic Qt::Core Qt::Sql Qt::Gui Qt::W
 add_executable(ConverterCLI main_cli.cpp)
 target_link_libraries(ConverterCLI PRIVATE CoreLogic Qt::Core Qt::Sql)
 
-if (WIN32 AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-    set(DEBUG_SUFFIX)
-    if (MSVC AND CMAKE_BUILD_TYPE MATCHES "Debug")
-        set(DEBUG_SUFFIX "d")
-    endif ()
-    set(QT_INSTALL_PATH "${CMAKE_PREFIX_PATH}")
-    if (NOT EXISTS "${QT_INSTALL_PATH}/bin")
-        set(QT_INSTALL_PATH "${QT_INSTALL_PATH}/..")
-        if (NOT EXISTS "${QT_INSTALL_PATH}/bin")
-            set(QT_INSTALL_PATH "${QT_INSTALL_PATH}/..")
-        endif ()
-    endif ()
-    if (EXISTS "${QT_INSTALL_PATH}/plugins/platforms/qwindows${DEBUG_SUFFIX}.dll")
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E make_directory
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/plugins/platforms/")
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy
-                "${QT_INSTALL_PATH}/plugins/platforms/qwindows${DEBUG_SUFFIX}.dll"
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/plugins/platforms/")
-    endif ()
-    if (EXISTS "${QT_INSTALL_PATH}/plugins/sqldrivers/qsqlite${DEBUG_SUFFIX}.dll")
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E make_directory
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/sqldrivers/")
+if(WIN32)
+    find_program(WINDEPLOYQT_EXE windeployqt HINTS "${Qt6_DIR}/../../../bin")
 
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy
-                "${QT_INSTALL_PATH}/plugins/sqldrivers/qsqlite${DEBUG_SUFFIX}.dll"
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/sqldrivers/")
-    endif ()
+    if(WINDEPLOYQT_EXE)
+        add_custom_command(TARGET Converter POST_BUILD
+                COMMAND "${WINDEPLOYQT_EXE}"
+                --verbose 0
+                --no-translations
+                --no-compiler-runtime
+                --dir "$<TARGET_FILE_DIR:Converter>"
+                "$<TARGET_FILE:Converter>"
+        )
 
-    if (EXISTS "${QT_INSTALL_PATH}/plugins/imageformats/qgif${DEBUG_SUFFIX}.dll")
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E make_directory
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/imageformats/")
+        add_custom_command(TARGET Converter POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/dict.db"
+                "$<TARGET_FILE_DIR:Converter>/dict.db"
+        )
+    endif()
+endif()
 
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy
-                "${QT_INSTALL_PATH}/plugins/imageformats/qgif${DEBUG_SUFFIX}.dll"
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>/imageformats/")
-    endif ()
+if(WIN32 AND WINDEPLOYQT_EXE)
+    set(DIST_DIR "${CMAKE_BINARY_DIR}/Converter")
+    set(ZIP_NAME "Converter.zip")
 
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-            "${CMAKE_CURRENT_SOURCE_DIR}/dict.db"
-            "$<TARGET_FILE_DIR:${PROJECT_NAME}>/dict.db")
+    add_custom_target(MakePortableZip ALL
+            DEPENDS Converter ConverterCLI
+    )
 
-    foreach (QT_LIB Core Gui Widgets Sql)
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy
-                "${QT_INSTALL_PATH}/bin/Qt6${QT_LIB}${DEBUG_SUFFIX}.dll"
-                "$<TARGET_FILE_DIR:${PROJECT_NAME}>")
-    endforeach (QT_LIB)
-endif ()
+    add_custom_command(TARGET MakePortableZip POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E remove_directory "${DIST_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${DIST_DIR}"
+
+            COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:Converter>" "${DIST_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:ConverterCLI>" "${DIST_DIR}"
+
+            COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/dict.db" "${DIST_DIR}"
+
+            COMMAND "${WINDEPLOYQT_EXE}"
+            --dir "${DIST_DIR}"
+            --no-translations
+            --no-compiler-runtime
+            "${DIST_DIR}/$<TARGET_FILE_NAME:Converter>"
+
+            COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/${ZIP_NAME}" --format=zip "${DIST_DIR}"
+    )
+endif()
