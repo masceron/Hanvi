@@ -1,21 +1,50 @@
 #include "converter.h"
 #include "trie.h"
 
-std::pair<QString, QString> convert(const QStringView& input, const std::function<void(int)>& progress_callback)
+QString get_sv(const QStringView& cn)
 {
-    std::pair<QString, QString> output;
+    QString out;
+    QString sv_reading;
+    for (const auto& ch : cn)
+    {
+        if (sv_readings.contains(ch))
+        {
+            sv_reading.append(sv_readings[ch]);
+        }
+        else
+        {
+            if (punctuations.contains(ch))
+            {
+                sv_reading.append(punctuations[ch]);
+            }
+            else sv_reading.append(ch);
+        }
+        sv_reading.append(" ");
+    }
+    sv_reading.resize(sv_reading.size() - 1);
+
+    return sv_reading;
+}
+
+std::tuple<QString, QString, QString> convert(const QStringView& input, const std::function<void(int)>& progress_callback)
+{
+    QString cn_output;
+    QString sv_output;
+    QString vn_output;
     int i = 0;
     int token_index = 0;
 
-    output.first.clear();
-    output.second.clear();
-
-    output.first.append(R"(
+    cn_output.append(R"(
     <style>
         a { text-decoration: none; color: white; font-family: "Noto Sans SC"; font-size: 18px; }
     </style>
     )");
-    output.second.append(R"(
+    sv_output.append(R"(
+    <style>
+        a { text-decoration: none; color: white; font-family: "Tahoma"; font-size: 16px; }
+    </style>
+    )");
+    vn_output.append(R"(
     <style>
         a { text-decoration: none; color: white; font-family: "Tahoma"; font-size: 16px; }
     </style>
@@ -33,16 +62,18 @@ std::pair<QString, QString> convert(const QStringView& input, const std::functio
 
         if (ch == '\n')
         {
-            output.first.append("<br>");
-            output.second.append("<br>");
+            cn_output.append("<br>");
+            sv_output.append("<br>");
+            vn_output.append("<br>");
             cap_next = true;
             i++;
             continue;
         }
         if (ch.isSpace())
         {
-            output.first.append("&nbsp;");
-            output.second.append("&nbsp;");
+            cn_output.append("&nbsp;");
+            sv_output.append("&nbsp;");
+            vn_output.append("&nbsp;");
             i++;
             continue;
         }
@@ -90,9 +121,8 @@ std::pair<QString, QString> convert(const QStringView& input, const std::functio
 
         QString uid = QString("token_%1").arg(token_index++);
         QString safe_src = source_text.toString().toHtmlEscaped();
-        QString safe_trans = translated_text.toHtmlEscaped();
 
-        output.first.append(QString("<a href='%1'>%2</a>")
+        cn_output.append(QString("<a href='%1'>%2</a>")
             .arg(uid, safe_src));
 
         bool no_space_after = false;
@@ -109,18 +139,22 @@ std::pair<QString, QString> convert(const QStringView& input, const std::functio
             }
         }
 
-        output.second.append(QString("<a href='%1'>%2</a>")
-            .arg(uid, safe_trans));
+        sv_output.append(QString("<a href='%1'>%2</a>")
+            .arg(uid, get_sv(source_text).toHtmlEscaped()));
+
+        vn_output.append(QString("<a href='%1'>%2</a>")
+            .arg(uid, translated_text.toHtmlEscaped()));
 
         if (!no_space_after && !translated_text.isEmpty())
         {
-            output.second.append(" ");
+            sv_output.append(" ");
+            vn_output.append(" ");
         }
 
         i += step;
     }
 
-    return output;
+    return {cn_output, sv_output, vn_output};
 }
 
 QString convert_plain(const QStringView& input, const std::function<void(int)>& progress_callback)

@@ -24,10 +24,12 @@ public:
     void load_data(const QString& selected_chinese_text) const;
 
 private:
+    void close_popup();
+    bool changed = false;
     void add_new_phrase() const;
-    void edit_finished_phrase() const;
+    void edit_finished_phrase();
     void add_new_name() const;
-    void edit_finished_name() const;
+    void edit_finished_name();
     ~DictPopup() override;
     Ui::DictPopup* ui;
     ChipDelegate* phrase_chip_delegate;
