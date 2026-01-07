@@ -18,19 +18,19 @@ DictPopup::DictPopup(QWidget* parent) :
 
     connect(ui->close_popup, &QPushButton::clicked, this, [this]
     {
-       close();
+       close_popup();
     });
 
     connect(ui->delete_node_name, &QPushButton::clicked, this, [this]
     {
         io_remove(ui->original->text(), NAME);
-        close();
+        accept();
     });
 
     connect(ui->delete_node_phrase, &QPushButton::clicked, this, [this]
     {
         io_remove(ui->original->text(), PHRASE);
-        close();
+        accept();
     });
 
     phrase_chip_delegate = new ChipDelegate(this);
@@ -40,6 +40,7 @@ DictPopup::DictPopup(QWidget* parent) :
         const auto item = ui->list_phrases->takeItem(index.row());
         io_remove_meaning(ui->original->text(), item->text(), PHRASE);
         delete item;
+        changed = true;
     });
 
     name_chip_delegate = new ChipDelegate(this);
@@ -49,6 +50,7 @@ DictPopup::DictPopup(QWidget* parent) :
         const auto item = ui->list_names->takeItem(index.row());
         io_remove_meaning(ui->original->text(), item->text(), NAME);
         delete item;
+        changed = true;
     });
 
     connect(ui->add_phrase, &QPushButton::clicked, this, &DictPopup::add_new_phrase);
@@ -148,6 +150,7 @@ DictPopup::DictPopup(QWidget* parent) :
                 list.append(ui->list_names->item(i)->text());
             }
             io_reorder(ui->original->text(), list, NAME);
+            changed = true;
         }
     });
 
@@ -161,6 +164,7 @@ DictPopup::DictPopup(QWidget* parent) :
                 list.append(ui->list_phrases->item(i)->text());
             }
             io_reorder(ui->original->text(), list, PHRASE);
+            changed = true;
         }
     });
 }
@@ -175,7 +179,7 @@ void DictPopup::add_new_phrase() const
     ui->list_phrases->scrollToItem(item);
 }
 
-void DictPopup::edit_finished_phrase() const
+void DictPopup::edit_finished_phrase()
 {
     QListWidgetItem* item = ui->list_phrases->item(0);
     if (!item) return;
@@ -188,6 +192,7 @@ void DictPopup::edit_finished_phrase() const
     item->setFlags(item->flags() & ~Qt::ItemIsEditable);
 
     io_insert(ui->original->text(), item->text(), PHRASE);
+    changed = true;
 }
 
 void DictPopup::add_new_name() const
@@ -200,7 +205,7 @@ void DictPopup::add_new_name() const
     ui->list_names->scrollToItem(item);
 }
 
-void DictPopup::edit_finished_name() const
+void DictPopup::edit_finished_name()
 {
     QListWidgetItem* item = ui->list_names->item(0);
     if (!item) return;
@@ -212,6 +217,7 @@ void DictPopup::edit_finished_name() const
     }
     item->setFlags(item->flags() & ~Qt::ItemIsEditable);
     io_insert(ui->original->text(), item->text(), NAME);
+    changed = true;
 }
 
 DictPopup::~DictPopup()
@@ -294,4 +300,10 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
             ui->list_phrases->addItem(item);
         }
     }
+}
+
+void DictPopup::close_popup()
+{
+    if (changed) accept();
+    else close();
 }

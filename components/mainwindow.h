@@ -32,7 +32,7 @@ private:
     QString input_text;
     QList<QStringView> pages;
     Ui::MainWindow* ui;
-    QFutureWatcher<std::pair<QString, QString>> watcher;
+    QFutureWatcher<std::tuple<QString, QString, QString>> watcher;
     QFutureWatcher<QString> plain_watcher;
     int saved_cursor_pos = -1;
 
@@ -43,6 +43,7 @@ private:
     static QTextCursor find_token(QTextDocument* document, const QString& token);
     static QString token_id_at(const QTextBrowser* browser, int position);
     static void snap_selection_to_token(QTextBrowser* browser);
+    static void snap_selection_to_word(QTextBrowser* browser);
     QString get_chinese_text_from_ids(const QStringList& ids) const;
-    void convert_to_file(const QString& name);
+    void convert_to_file();
 };

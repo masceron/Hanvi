@@ -97,6 +97,10 @@ QLineEdit, QTextEdit, QPlainTextEdit {
     padding: 4px;
 }
 
+QTextBrowser {
+    selection-background-color: #214283;
+}
+
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
     border-color: #61ccff;
 }
