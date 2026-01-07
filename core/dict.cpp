@@ -9,7 +9,7 @@
 
 void init_db()
 {
-    db = QSqlDatabase::addDatabase("QSQLITE");
+    auto db = QSqlDatabase::addDatabase("QSQLITE");
     db.setDatabaseName("dict.db");
 
     if (!db.open()) {
@@ -18,10 +18,11 @@ void init_db()
     }
 
     QSqlQuery query(db);
+    query.exec("PRAGMA foreign_keys = ON;");
     query.exec("VACUUM;");
 }
 
-void load_data_on_startup(std::function<void()> on_finished)
+void load_data_on_startup(const std::function<void()>& on_finished)
 {
     QFuture<void> future_sv = QtConcurrent::run([]
     {
@@ -104,8 +105,54 @@ void load_data_on_startup(std::function<void()> on_finished)
     watcher->setFuture(master_future);
 }
 
+void load_name_sets_data()
+{
+    QSqlQuery query;
+    query.prepare("SELECT id, title FROM name_sets");
+    query.exec();
+    while (query.next())
+    {
+        int id = query.value(0).toInt();
+        QString title = query.value(1).toString();
+        name_sets.emplace_back(id, title);
+    }
+}
+
 void load_dict(const std::function<void()>& on_finished)
 {
     init_db();
+    load_name_sets_data();
     load_data_on_startup(on_finished);
+}
+
+void load_name_set(const int id)
+{
+    name_set_dictionary = Dictionary();
+
+    if (id == -1) return;
+
+    QSqlQuery query;
+    query.prepare("SELECT source, target FROM name_set_entries WHERE set_id = :id");
+    query.bindValue(":id", id);
+
+    if (query.exec()) {
+        while (query.next()) {
+            QString key = query.value(0).toString();
+            QString val = query.value(1).toString();
+            name_set_dictionary.insert_bulk(key, NAME, val);
+        }
+    }
+}
+
+void delete_name_set(const int id)
+{
+    QSqlQuery query;
+    query.prepare("DELETE FROM name_sets WHERE id = :id");
+    query.bindValue(":id", id);
+    query.exec();
+
+    if (current_name_set_id == id) {
+        name_set_dictionary = Dictionary();
+        current_name_set_id = -1;
+    }
 }

@@ -83,7 +83,13 @@ std::tuple<QString, QString, QString> convert(const QStringView& input, const st
         int step = 0;
         bool is_punctuation = false;
 
-        if (const Match result = dictionary.find(input, i); result.length > 0)
+        if (Match result = name_set_dictionary.find(input, i); result.length > 0)
+        {
+            source_text = input.mid(i, result.length);
+            translated_text = result.translation;
+            step = result.length;
+        }
+        else if (result = dictionary.find(input, i); result.length > 0)
         {
             source_text = input.mid(i, result.length);
             translated_text = result.translation;
@@ -198,7 +204,12 @@ QString convert_plain(const QStringView& input, const std::function<void(int)>& 
         int step = 0;
         bool is_punctuation = false;
 
-        if (const Match result = dictionary.find(input, i); result.length > 0)
+        if (Match result = name_set_dictionary.find(input, i); result.length > 0)
+        {
+            translated_text = result.translation;
+            step = result.length;
+        }
+        else if (result = dictionary.find(input, i); result.length > 0)
         {
             translated_text = result.translation;
             step = result.length;

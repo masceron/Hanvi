@@ -65,3 +65,13 @@ private:
 };
 
 inline Dictionary dictionary;
+inline Dictionary name_set_dictionary;
+inline int current_name_set_id = -1;
+
+struct NameSet
+{
+    int index;
+    QString title;
+};
+
+inline std::vector<NameSet> name_sets;

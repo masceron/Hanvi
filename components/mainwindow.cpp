@@ -10,6 +10,7 @@
 
 #include "dictpopup.h"
 #include "../core/converter.h"
+#include "core/dict.h"
 
 MainWindow::MainWindow(QWidget* parent) :
     QMainWindow(parent), ui(new Ui::MainWindow)
@@ -125,7 +126,6 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->vn_output->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->vn_output, &QWidget::customContextMenuRequested, this, &MainWindow::open_popup);
 
-
     connect(ui->save_to_file, &QAction::triggered, this, [this]
     {
         if (input_text.isEmpty()) return;
@@ -135,6 +135,20 @@ MainWindow::MainWindow(QWidget* parent) :
 
         convert_to_file();
     });
+
+    connect(ui->current_name_set, &QComboBox::activated, this, [](const int index)
+    {
+        if (const int change_to = name_sets[index].index; change_to != current_name_set_id)
+        {
+            current_name_set_id = change_to;
+            load_name_set(change_to);
+        }
+    });
+
+    for (const auto& [index, title]: name_sets)
+    {
+        ui->current_name_set->addItem(title);
+    }
 }
 
 void MainWindow::update_pagination_controls() const

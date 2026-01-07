@@ -121,6 +121,19 @@
          </widget>
         </item>
         <item>
+         <widget class="QComboBox" name="current_name_set">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="editable">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QSpinBox" name="char_per_page">
           <property name="minimum">
            <number>1000</number>
