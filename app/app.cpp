@@ -1,15 +1,12 @@
 #include <QStyleFactory>
+#include <QIcon>
 
 #include "app.h"
 
-void init_app()
-{
-
-}
-
 void init_style(QApplication& app)
 {
-    app.setStyle(QStyleFactory::create("Fusion"));
+    QApplication::setWindowIcon(QIcon(":/resources/icon.ico"));
+    QApplication::setStyle(QStyleFactory::create("Fusion"));
 
     const QString css =
     #include "global.qcss"

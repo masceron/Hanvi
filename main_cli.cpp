@@ -1,12 +1,15 @@
+#include <iostream>
 #include <QCoreApplication>
-#include <QCommandLineParser>
-#include <qdir.h>
+#include <QtConcurrent>
+#include <QElapsedTimer>
 
 #include "core/converter.h"
 #include "core/dict.h"
-#include "core/trie.h"
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
-void writeStdOut(const QString& text)
+void write_std_out(const QString& text)
 {
     QTextStream out(stdout);
 #if defined(Q_OS_WIN)
@@ -15,17 +18,12 @@ void writeStdOut(const QString& text)
     out << text;
 }
 
-QString readStdIn()
-{
-    QTextStream in(stdin);
-#if defined(Q_OS_WIN)
-    in.setEncoding(QStringConverter::Utf8);
-#endif
-    return in.readAll();
-}
-
 int main(int argc, char* argv[])
 {
+#ifdef Q_OS_WIN
+    SetConsoleOutputCP(65001);
+#endif
+
     const QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName("Converter-CLI");
     QCoreApplication::setApplicationVersion("1.0");
@@ -44,10 +42,15 @@ int main(int argc, char* argv[])
 
     parser.process(app);
 
-    qInfo() << "Loading dictionaries...";
+    QElapsedTimer timer_dict;
+    timer_dict.start();
+
+    std::cout << "Loading dictionaries..." << std::flush;
 
     load_dict([&]
     {
+        std::cout << " " << static_cast<double>(timer_dict.elapsed()) / 1000 << "s." << std::endl;
+        std::flush(std::cout);
         QString input_text;
 
         if (parser.isSet(input_option_folder) || parser.isSet(output_option_folder))
@@ -87,35 +90,36 @@ int main(int argc, char* argv[])
                 QCoreApplication::exit();
             }
 
-            qInfo() << "Processing" << files.size() << "file(s)...";
+            std::cout << "Processing " << files.size() << " file(s)..." << std::endl;
 
-            int successCount = 0;
+            QMutex console_mutex;
 
-            for (const QFileInfo& file_info : files)
+            auto process_file = [&](const QFileInfo& file_info)
             {
+                QElapsedTimer timer;
+                timer.start();
+
                 QFile in_file(file_info.absoluteFilePath());
                 if (!in_file.open(QIODevice::ReadOnly | QIODevice::Text))
                 {
                     qWarning() << "Skipping: Cannot open" << file_info.fileName();
-                    continue;
+                    return;
                 }
 
                 QTextStream in(&in_file);
                 in.setEncoding(QStringConverter::Utf8);
-                QString content = in.readAll();
+                const QString content = in.readAll();
                 in_file.close();
 
-                QString result = convert_plain(content);
-
-                QString out_name = file_info.baseName() + "_translated.txt";
-
-                QString out_path = out_dir.filePath(out_name);
+                const QString result = convert_plain(content);
+                const QString out_name = file_info.baseName() + "_converted.txt";
+                const QString out_path = out_dir.filePath(out_name);
 
                 QFile out_file(out_path);
                 if (!out_file.open(QIODevice::WriteOnly | QIODevice::Text))
                 {
                     qWarning() << "Skipping: Cannot write to" << out_name;
-                    continue;
+                    return;
                 }
 
                 QTextStream out(&out_file);
@@ -123,15 +127,27 @@ int main(int argc, char* argv[])
                 out << result;
                 out_file.close();
 
-                successCount++;
-                qInfo() << "Converted:" << file_info.absoluteFilePath() << "->" << out_path << "." << successCount << "/" << files.size();
-            }
+                QMutexLocker locker(&console_mutex);
 
-            qInfo() << "Batch completed." << successCount << "/" << files.size() << "files processed.";
-            QCoreApplication::exit();
+                QString logMsg;
+                QTextStream ts(&logMsg);
+
+                ts << "Converted "
+                    << file_info.absoluteFilePath()
+                    << " -> "
+                    << out_path
+                    << ": "
+                    << QString::number(static_cast<double>(timer.elapsed()) / 1000.0, 'f', 3)
+                    << "s.\n";
+
+                write_std_out(logMsg);
+            };
+
+            QtConcurrent::blockingMap(files, process_file);
+
+            QCoreApplication::exit(0);
         }
-        QCoreApplication::exit();
     });
 
-    return app.exec();
+    return QCoreApplication::exec();
 }

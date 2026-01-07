@@ -1,6 +1,6 @@
 #include "app/app.h"
 #include "components/loader.h"
-#include "components/MainWindow.h"
+#include "components/mainwindow.h"
 #include "core/dict.h"
 
 int main(int argc, char* argv[])
