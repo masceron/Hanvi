@@ -73,6 +73,9 @@ add_executable(Converter WIN32 main.cpp
         components/chipdelegate.h
         components/chiplist.h
         resources/icon.rc
+        components/namesetsmanager.cpp
+        components/namesetsmanager.h
+        components/namesetsmanager.ui
 )
 
 target_include_directories(Converter PRIVATE

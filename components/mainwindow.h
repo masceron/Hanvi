@@ -19,6 +19,7 @@ class MainWindow : public QMainWindow
 
 public:
     explicit MainWindow(QWidget* parent = nullptr);
+    void load_data();
     ~MainWindow() override;
 
 private slots:

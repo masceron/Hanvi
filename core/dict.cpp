@@ -127,12 +127,13 @@ void load_dict(const std::function<void()>& on_finished)
 
 void load_name_set(const int id)
 {
+    current_name_set_id = id;
     name_set_dictionary = Dictionary();
 
     if (id == -1) return;
 
     QSqlQuery query;
-    query.prepare("SELECT source, target FROM name_set_entries WHERE set_id = :id");
+    query.prepare("SELECT original, translated FROM name_set_entries WHERE set_id = :id");
     query.bindValue(":id", id);
 
     if (query.exec()) {
@@ -141,18 +142,5 @@ void load_name_set(const int id)
             QString val = query.value(1).toString();
             name_set_dictionary.insert_bulk(key, NAME, val);
         }
-    }
-}
-
-void delete_name_set(const int id)
-{
-    QSqlQuery query;
-    query.prepare("DELETE FROM name_sets WHERE id = :id");
-    query.bindValue(":id", id);
-    query.exec();
-
-    if (current_name_set_id == id) {
-        name_set_dictionary = Dictionary();
-        current_name_set_id = -1;
     }
 }

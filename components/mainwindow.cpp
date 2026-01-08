@@ -9,6 +9,7 @@
 #include "mainwindow.h"
 
 #include "dictpopup.h"
+#include "namesetsmanager.h"
 #include "../core/converter.h"
 #include "core/dict.h"
 
@@ -136,18 +137,45 @@ MainWindow::MainWindow(QWidget* parent) :
         convert_to_file();
     });
 
-    connect(ui->current_name_set, &QComboBox::activated, this, [](const int index)
+    connect(ui->current_name_set, &QComboBox::currentIndexChanged, this, [this]
     {
-        if (const int change_to = name_sets[index].index; change_to != current_name_set_id)
+        if (const int change_to = ui->current_name_set->currentData().toInt(); change_to != current_name_set_id)
         {
-            current_name_set_id = change_to;
             load_name_set(change_to);
+            convert_and_display();
         }
     });
 
+    connect(ui->namesets_manage, &QAction::triggered, this, [this]
+    {
+        auto* manager = new NamesetsManager(this);
+        manager->setAttribute(Qt::WA_DeleteOnClose);
+        manager->exec();
+        load_data();
+    });
+}
+
+void MainWindow::load_data()
+{
+    const QVariant current_data = ui->current_name_set->currentData();
+    const int target_id = current_data.isValid() ? current_data.toInt() : -1;
+    const QSignalBlocker blocker(ui->current_name_set);
+    ui->current_name_set->clear();
+    ui->current_name_set->addItem("None", -1);
     for (const auto& [index, title]: name_sets)
     {
-        ui->current_name_set->addItem(title);
+        ui->current_name_set->addItem(title, index);
+    }
+    if (const int index_to_restore = ui->current_name_set->findData(target_id); index_to_restore != -1)
+    {
+        ui->current_name_set->setCurrentIndex(index_to_restore);
+    }
+    else
+    {
+        ui->current_name_set->setCurrentIndex(0);
+
+        load_name_set(-1);
+        convert_and_display();
     }
 }
 

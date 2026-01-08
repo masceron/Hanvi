@@ -21,15 +21,15 @@ DictPopup::DictPopup(QWidget* parent) :
        close_popup();
     });
 
-    connect(ui->delete_node_name, &QPushButton::clicked, this, [this]
+    connect(ui->delete_name, &QPushButton::clicked, this, [this]
     {
-        io_remove(ui->original->text(), NAME);
+        io_remove(ui->use_current_nameset->isChecked() ? current_name_set_id : -1, ui->original->text(), NAME);
         accept();
     });
 
     connect(ui->delete_node_phrase, &QPushButton::clicked, this, [this]
     {
-        io_remove(ui->original->text(), PHRASE);
+        io_remove(-1, ui->original->text(), PHRASE);
         accept();
     });
 
@@ -38,17 +38,7 @@ DictPopup::DictPopup(QWidget* parent) :
     connect(phrase_chip_delegate, &ChipDelegate::request_delete, this, [this](const QModelIndex& index)
     {
         const auto item = ui->list_phrases->takeItem(index.row());
-        io_remove_meaning(ui->original->text(), item->text(), PHRASE);
-        delete item;
-        changed = true;
-    });
-
-    name_chip_delegate = new ChipDelegate(this);
-    ui->list_names->setItemDelegate(name_chip_delegate);
-    connect(name_chip_delegate, &ChipDelegate::request_delete, this, [this](const QModelIndex& index)
-    {
-        const auto item = ui->list_names->takeItem(index.row());
-        io_remove_meaning(ui->original->text(), item->text(), NAME);
+        io_remove_meaning(ui->original->text(), item->text());
         delete item;
         changed = true;
     });
@@ -56,79 +46,89 @@ DictPopup::DictPopup(QWidget* parent) :
     connect(ui->add_phrase, &QPushButton::clicked, this, &DictPopup::add_new_phrase);
     connect(ui->add_name, &QPushButton::clicked, this, &DictPopup::add_new_name);
 
+    connect(ui->current_name, &QLineEdit::editingFinished, this, &DictPopup::edit_finished_name);
+
     connect(phrase_chip_delegate, &QAbstractItemDelegate::closeEditor, this, &DictPopup::edit_finished_phrase);
-    connect(name_chip_delegate, &QAbstractItemDelegate::closeEditor, this, &DictPopup::edit_finished_name);
 
     connect(phrase_chip_delegate, &ChipDelegate::editing_started, this, [this]() { ui->add_phrase->setEnabled(false); });
     connect(phrase_chip_delegate, &ChipDelegate::editing_finished, this, [this]() { ui->add_phrase->setEnabled(true); });
 
-    connect(name_chip_delegate, &ChipDelegate::editing_started, this, [this]() { ui->add_name->setEnabled(false); });
-    connect(name_chip_delegate, &ChipDelegate::editing_finished, this, [this]() { ui->add_name->setEnabled(true); });
+    connect(ui->use_sv_reading_name, &QPushButton::clicked, this, [this]
+    {
+        if (!ui->current_name->isReadOnly())
+        {
+            ui->current_name->setText(ui->sv_reading->text());
+        }
+    });
 
-    connect(ui->use_sv_reading_phrase, &QPushButton::clicked, this, [this]()
+    connect(ui->use_sv_reading_phrase, &QPushButton::clicked, this, [this]
     {
         if (phrase_chip_delegate->get_current_editor())
         {
             phrase_chip_delegate->set_editor_text(ui->sv_reading->text());
         }
     });
-    connect(ui->use_sv_reading_name, &QPushButton::clicked, this, [this]()
-    {
-        if (name_chip_delegate->get_current_editor())
-        {
-            name_chip_delegate->set_editor_text(ui->sv_reading->text());
-        }
-    });
 
     connect(ui->cap_none_name, &QPushButton::clicked, this, [this]
     {
-        capitalize(0, 0);
+        if (!ui->current_name->isReadOnly())
+        {
+            ui->current_name->setText(capitalize(ui->current_name->text(), 0));
+        }
     });
     connect(ui->cap_1_name, &QPushButton::clicked, this, [this]
     {
-        capitalize(0, 1);
+        if (!ui->current_name->isReadOnly())
+        {
+            ui->current_name->setText(capitalize(ui->current_name->text(), 1));
+        }
     });
     connect(ui->cap_2_name, &QPushButton::clicked, this, [this]
     {
-        capitalize(0, 2);
+        if (!ui->current_name->isReadOnly())
+        {
+            ui->current_name->setText(capitalize(ui->current_name->text(), 2));
+        }
     });
     connect(ui->cap_3_name, &QPushButton::clicked, this, [this]
     {
-        capitalize(0, 3);
+        if (!ui->current_name->isReadOnly())
+        {
+            ui->current_name->setText(capitalize(ui->current_name->text(), 3));
+        }
     });
     connect(ui->cap_all_name, &QPushButton::clicked, this, [this]
     {
-        capitalize(0, 4);
+        if (!ui->current_name->isReadOnly())
+        {
+            ui->current_name->setText(capitalize(ui->current_name->text(), 4));
+        }
     });
 
     connect(ui->cap_none_phrase, &QPushButton::clicked, this, [this]
     {
-        capitalize(1, 0);
+        const QLineEdit* editor = phrase_chip_delegate->get_current_editor();
+        phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 0));
     });
     connect(ui->cap_1_phrase, &QPushButton::clicked, this, [this]
     {
-        capitalize(1, 1);
+        const QLineEdit* editor = phrase_chip_delegate->get_current_editor();
+        phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 1));
     });
     connect(ui->cap_2_phrase, &QPushButton::clicked, this, [this]
     {
-        capitalize(1, 2);
+        const QLineEdit* editor = phrase_chip_delegate->get_current_editor();
+        phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 2));
     });
     connect(ui->cap_3_phrase, &QPushButton::clicked, this, [this]
     {
-        capitalize(1, 3);
+        const QLineEdit* editor = phrase_chip_delegate->get_current_editor();
+        phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 3));
     });
     connect(ui->cap_all_phrase, &QPushButton::clicked, this, [this]
     {
-        capitalize(1, 4);
-    });
-
-    connect(name_chip_delegate, &ChipDelegate::editing_started, this, [this]
-    {
-        ui->list_names->setDragEnabled(false);
-    });
-    connect(name_chip_delegate, &ChipDelegate::editing_finished, this, [this]
-    {
-        ui->list_names->setDragEnabled(true);
+        const QLineEdit* editor = phrase_chip_delegate->get_current_editor();
+        phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 4));
     });
 
     connect(phrase_chip_delegate, &ChipDelegate::editing_started, this, [this]
@@ -140,20 +140,6 @@ DictPopup::DictPopup(QWidget* parent) :
         ui->list_phrases->setDragEnabled(true);
     });
 
-    connect(ui->list_names, &ChipList::order_changed, this, [this]
-    {
-        if (ui->list_names->count() > 0)
-        {
-            QStringList list;
-            for(int i = 0; i < ui->list_names->count(); ++i)
-            {
-                list.append(ui->list_names->item(i)->text());
-            }
-            io_reorder(ui->original->text(), list, NAME);
-            changed = true;
-        }
-    });
-
     connect(ui->list_phrases, &ChipList::order_changed, this, [this]
     {
         if (ui->list_phrases->count() > 0)
@@ -163,10 +149,15 @@ DictPopup::DictPopup(QWidget* parent) :
             {
                 list.append(ui->list_phrases->item(i)->text());
             }
-            io_reorder(ui->original->text(), list, PHRASE);
+            io_reorder(ui->original->text(), list);
             changed = true;
         }
     });
+
+    if (current_name_set_id != -1)
+    {
+        ui->use_current_nameset->setEnabled(true);
+    }
 }
 
 void DictPopup::add_new_phrase() const
@@ -177,6 +168,33 @@ void DictPopup::add_new_phrase() const
     item->setFlags(item->flags() | Qt::ItemIsEditable);
     ui->list_phrases->editItem(item);
     ui->list_phrases->scrollToItem(item);
+}
+
+void DictPopup::add_new_name()
+{
+    original_name = ui->current_name->text();
+    ui->current_name->clear();
+    ui->current_name->setReadOnly(false);
+    ui->current_name->setFocus();
+}
+
+void DictPopup::edit_finished_name()
+{
+    if (ui->current_name->isReadOnly()) return;
+
+    if (const QString new_text = ui->current_name->text().trimmed(); new_text.isEmpty())
+    {
+        ui->current_name->setText(original_name);
+    }
+    else
+    {
+        io_insert(ui->use_current_nameset->isChecked() ? current_name_set_id : -1, ui->original->text(), new_text, NAME);
+
+        original_name = new_text;
+        changed = true;
+    }
+
+    ui->current_name->setReadOnly(true);
 }
 
 void DictPopup::edit_finished_phrase()
@@ -191,32 +209,7 @@ void DictPopup::edit_finished_phrase()
     }
     item->setFlags(item->flags() & ~Qt::ItemIsEditable);
 
-    io_insert(ui->original->text(), item->text(), PHRASE);
-    changed = true;
-}
-
-void DictPopup::add_new_name() const
-{
-    auto* item = new QListWidgetItem("");
-
-    ui->list_names->insertItem(0, item);
-    item->setFlags(item->flags() | Qt::ItemIsEditable);
-    ui->list_names->editItem(item);
-    ui->list_names->scrollToItem(item);
-}
-
-void DictPopup::edit_finished_name()
-{
-    QListWidgetItem* item = ui->list_names->item(0);
-    if (!item) return;
-
-    if (item->text().trimmed().isEmpty())
-    {
-        delete ui->list_names->takeItem(0);
-        return;
-    }
-    item->setFlags(item->flags() & ~Qt::ItemIsEditable);
-    io_insert(ui->original->text(), item->text(), NAME);
+    io_insert(-1, ui->original->text(), item->text(), PHRASE);
     changed = true;
 }
 
@@ -225,15 +218,8 @@ DictPopup::~DictPopup()
     delete ui;
 }
 
-void DictPopup::capitalize(const int type, const int mode) const
+QString DictPopup::capitalize(const QString& text, const int mode)
 {
-    const auto delegate = type ? phrase_chip_delegate : name_chip_delegate;
-    const QLineEdit* editor = delegate->get_current_editor();
-    if (!editor) return;
-
-    const QString text = editor->text();
-    if (text.isEmpty()) return;
-
     QStringList words = text.split(' ');
 
     for (int i = 0; i < words.size(); ++i)
@@ -258,7 +244,7 @@ void DictPopup::capitalize(const int type, const int mode) const
             }
         }
     }
-    delegate->set_editor_text(words.join(' '));
+    return words.join(' ');
 }
 
 void DictPopup::load_data(const QString& selected_chinese_text) const
@@ -280,15 +266,22 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
     sv_reading.resize(sv_reading.size() - 1);
     ui->sv_reading->setText(sv_reading);
 
-    const auto [names, phrases] = dictionary.find_exact(selected_chinese_text);
-    if (names != nullptr && !names->empty())
+    bool set_name_found = false;
+
+    if (current_name_set_id != -1)
     {
-        for (const auto& name : *names)
+        if (const auto [set_name, _] = name_set_dictionary.find_exact(selected_chinese_text); set_name != nullptr)
         {
-            auto* item = new QListWidgetItem(name);
-            item->setFlags(item->flags() & ~Qt::ItemIsEditable);
-            ui->list_names->addItem(item);
+            set_name_found = true;
+            ui->use_current_nameset->setCheckState(Qt::CheckState::Checked);
+            ui->current_name->setText(*set_name);
         }
+    }
+
+    const auto [global_name, phrases] = dictionary.find_exact(selected_chinese_text);
+    if (!set_name_found && global_name != nullptr)
+    {
+        ui->current_name->setText(*global_name);
     }
 
     if (phrases != nullptr && !phrases->empty())
@@ -300,6 +293,8 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
             ui->list_phrases->addItem(item);
         }
     }
+
+    if (current_name_set_id != -1) ui->use_current_nameset->setChecked(true);
 }
 
 void DictPopup::close_popup()

@@ -26,12 +26,12 @@ private:
     void close_popup();
     bool changed = false;
     void add_new_phrase() const;
-    void edit_finished_phrase();
-    void add_new_name() const;
+    void add_new_name();
     void edit_finished_name();
+    void edit_finished_phrase();
     ~DictPopup() override;
     Ui::DictPopup* ui;
     ChipDelegate* phrase_chip_delegate;
-    ChipDelegate* name_chip_delegate;
-    void capitalize(int type, int mode) const;
+    static QString capitalize(const QString& text, int mode);
+    QString original_name;
 };

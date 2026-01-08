@@ -16,7 +16,7 @@ std::expected<QString, io_error> load_from_file(const QString& name);
 int save_to_file(const QString& name, const QString& text);
 void save_to_clipboard();
 
-void io_insert(const QString& key, const QString& value, Priority priority);
-void io_reorder(const QString& key, const QStringList& new_order, Priority priority);
-void io_remove(const QString& key, Priority priority);
-void io_remove_meaning(const QString& key, const QString& value, Priority priority);
+void io_insert(int id, const QString& key, const QString& value, Priority priority);
+void io_reorder(const QString& key, const QStringList& new_order);
+void io_remove(int id, const QString& key, Priority priority);
+void io_remove_meaning(const QString& key, const QString& value);

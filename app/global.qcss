@@ -54,24 +54,38 @@ QPushButton#delete_node_phrase {
 QPushButton:hover#delete_node_phrase {
     background-color: #D22B2B;
 }
-QPushButton#delete_node_name {
+QPushButton#delete_name {
     background-color: #2b2b2b;
     border: 0.5px solid #D22B2B;
     border-radius: 6px;
     padding: 6px 12px;
     font-size: 12px;
 }
-QPushButton:hover#delete_node_name {
+QPushButton:hover#delete_name {
+    background-color: #D22B2B;
+}
+
+QPushButton#edit_set {
+    background-color: #2b2b2b;
+    border: 0.5px solid #6164f6;
+    font-weight: bold;
+}
+QPushButton:hover#edit_set {
+    background-color: #6164f6;
+}
+
+QPushButton#delete_set {
+    background-color: #2b2b2b;
+    border: 0.5px solid #D22B2B;
+    font-weight: bold;
+}
+QPushButton:hover#delete_set {
     background-color: #D22B2B;
 }
 
 QPushButton#add_name {
     background-color: #2b2b2b;
     border: 0.5px solid #6164f6;
-    font-size: 14px;
-    font-weight: bold;
-    padding: 4px;
-    margin-x: 0 5px;
 }
 QPushButton:hover#add_name {
     background-color: #6164f6;
@@ -79,9 +93,6 @@ QPushButton:hover#add_name {
 QPushButton#add_phrase {
     background-color: #2b2b2b;
     border: 0.5px solid #6164f6;
-    font-size: 14px;
-    font-weight: bold;
-    padding: 4px;
 }
 QPushButton:hover#add_phrase {
     background-color: #6164f6;
@@ -99,6 +110,10 @@ QLineEdit, QTextEdit, QPlainTextEdit {
 
 QTextBrowser {
     selection-background-color: #214283;
+}
+
+QCheckBox:disabled {
+    color: #b2beb5;
 }
 
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {

@@ -13,17 +13,22 @@ QList<QStringView> paginate(const QString& input_text, const int min_length)
     int cursor = 0;
     const int length = static_cast<int>(full_view.length());
 
-    while (cursor < length) {
+    while (cursor < length)
+    {
         const int target_end = cursor + min_length;
 
-        if (target_end >= length) {
+        if (target_end >= length)
+        {
             pages.append(full_view.mid(cursor));
             break;
         }
-        if (const int cutoff = static_cast<int>(full_view.indexOf('\n', target_end)); cutoff == -1) {
+        if (const int cutoff = static_cast<int>(full_view.indexOf('\n', target_end)); cutoff == -1)
+        {
             pages.append(full_view.mid(cursor));
             break;
-        } else {
+        }
+        else
+        {
             const int chunk_len = (cutoff + 1) - cursor;
             pages.append(full_view.mid(cursor, chunk_len));
 
@@ -82,23 +87,42 @@ int save_to_file(const QString& name, const QString& text)
     return 1;
 }
 
-void io_insert(const QString& key, const QString& value, Priority priority)
+void io_insert(const int id, const QString& key, const QString& value, const Priority priority)
 {
-    dictionary.insert(key, value, priority);
-    db_insert(key, value, priority);
+    if (id == -1)
+    {
+        dictionary.insert(key, value, priority);
+        db_insert(key, value, priority);
+    }
+    else
+    {
+        name_set_dictionary.insert(key, value, priority);
+        nameset_db_insert(key, value);
+    }
 }
-void io_reorder(const QString& key, const QStringList& new_order, Priority priority)
+
+void io_reorder(const QString& key, const QStringList& new_order)
 {
-    dictionary.reorder(key, new_order, priority);
-    db_reorder(key, new_order, priority);
+    dictionary.reorder(key, new_order);
+    db_reorder(key, new_order);
 }
-void io_remove(const QString& key, Priority priority)
+
+void io_remove(const int id, const QString& key, const Priority priority)
 {
-    dictionary.remove(key, priority);
-    db_remove(key, priority);
+    if (id == -1)
+    {
+        dictionary.remove(key, priority);
+        db_remove(key, priority);
+    }
+    else
+    {
+        name_set_dictionary.remove(key, priority);
+        nameset_db_remove(key);
+    }
 }
-void io_remove_meaning(const QString& key, const QString& value, Priority priority)
+
+void io_remove_meaning(const QString& key, const QString& value)
 {
-    dictionary.remove_meaning(key, value, priority);
-    db_remove_meaning(key, value, priority);
+    dictionary.remove_meaning(key, value);
+    db_remove_meaning(key, value);
 }

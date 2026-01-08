@@ -15,8 +15,12 @@ int main(int argc, char* argv[])
 
     load_dict([&]
     {
-        loading_screen.close();
-        w.show();
+        QMetaObject::invokeMethod(&w, [&]()
+        {
+            loading_screen.close();
+            w.load_data();
+            w.show();
+        }, Qt::QueuedConnection);
     });
 
     return QApplication::exec();

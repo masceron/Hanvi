@@ -177,8 +177,17 @@
     </property>
     <addaction name="save_to_file"/>
    </widget>
+   <widget class="QMenu" name="menuNamesets">
+    <property name="title">
+     <string>Namesets</string>
+    </property>
+    <addaction name="namesets_manage"/>
+    <addaction name="namesets_dump"/>
+    <addaction name="namesets_read"/>
+   </widget>
    <addaction name="menuLoad"/>
    <addaction name="menuSave"/>
+   <addaction name="menuNamesets"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionOpen">
@@ -214,6 +223,21 @@
   <action name="save_to_clipboard">
    <property name="text">
     <string>To clipboard</string>
+   </property>
+  </action>
+  <action name="namesets_manage">
+   <property name="text">
+    <string>Manage...</string>
+   </property>
+  </action>
+  <action name="namesets_dump">
+   <property name="text">
+    <string>Dump to...</string>
+   </property>
+  </action>
+  <action name="namesets_read">
+   <property name="text">
+    <string>Read from...</string>
    </property>
   </action>
  </widget>
