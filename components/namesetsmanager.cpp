@@ -31,6 +31,7 @@ NamesetsManager::~NamesetsManager()
 
 void NamesetsManager::load_data()
 {
+    ui->name_sets_list->setRowCount(0);
     QMap<int, int> counts;
     QSqlQuery query("SELECT set_id, COUNT(*) FROM name_set_entries GROUP BY set_id");
     while (query.next()) {
@@ -94,6 +95,10 @@ QWidget* NamesetsManager::create_action_widget(int id, const QString& current_ti
             q.prepare("DELETE FROM name_sets WHERE id = :id");
             q.bindValue(":id", id);
             q.exec();
+            std::erase_if(name_sets, [id](const NameSet& name_set)
+            {
+                return name_set.index == id;
+            });
             load_data();
         }
     });
@@ -115,7 +120,7 @@ void NamesetsManager::add_new_name_set()
 
         if (q.exec()) {
             const int new_id = q.lastInsertId().toInt();
-            name_sets.push_back({new_id, text});
+            name_sets.emplace_back(new_id, text);
             load_data();
         } else {
             QMessageBox::warning(this, "Error", "Could not create nameset (Duplicate name?).");

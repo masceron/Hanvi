@@ -5,6 +5,7 @@
 
 #include "core/converter.h"
 #include "core/dict.h"
+#include "core/trie.h"
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
@@ -35,6 +36,10 @@ int main(int argc, char* argv[])
     const QCommandLineOption input_option_folder(QStringList() << "i" << "input",
                                                  "Read all files from <folder>.", "folder");
     parser.addOption(input_option_folder);
+
+    const QCommandLineOption name_set_used(QStringList() << "n" << "nameset",
+                                            "Use the specified nameset if exists.", "nameset");
+    parser.addOption(name_set_used);
 
     const QCommandLineOption output_option_folder(QStringList() << "o" << "output",
                                                   "Write all files to <folder>.", "folder");
@@ -76,6 +81,23 @@ int main(int argc, char* argv[])
                 {
                     qCritical() << "Error: Could not create output folder:" << out_dir.absolutePath();
                     QCoreApplication::exit();
+                }
+            }
+
+            if (const auto set_specified = parser.value(name_set_used); !set_specified.isEmpty())
+            {
+                const auto set_chosen = std::ranges::find_if(name_sets, [&](const NameSet& name_set)
+                {
+                    return name_set.title.compare(set_specified, Qt::CaseInsensitive) == 0;
+                });
+                if (set_chosen == name_sets.end())
+                {
+                    qWarning().nospace() << "Cannot find the specified nameset: " << set_specified << ". Ignoring...";
+                }
+                else
+                {
+                    const auto& [index, title] = *set_chosen;
+                    load_name_set(index);
                 }
             }
 

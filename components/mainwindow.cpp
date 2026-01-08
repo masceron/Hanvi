@@ -212,7 +212,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::convert_and_display()
 {
-    if (!pages[current_page].isEmpty())
+    if (!input_text.isEmpty() && !pages[current_page].isEmpty())
     {
         ui->statusbar->showMessage("Converting...");
 

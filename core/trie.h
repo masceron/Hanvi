@@ -5,6 +5,7 @@
 #include <QStringList>
 #include <QHash>
 #include <memory>
+#include <vector>
 
 inline QHash<QChar, QString> sv_readings;
 inline QHash<QChar, QChar> punctuations;

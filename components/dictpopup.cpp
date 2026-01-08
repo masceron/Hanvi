@@ -270,6 +270,7 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
 
     if (current_name_set_id != -1)
     {
+        ui->use_current_nameset->setChecked(true);
         if (const auto [set_name, _] = name_set_dictionary.find_exact(selected_chinese_text); set_name != nullptr)
         {
             set_name_found = true;
@@ -282,6 +283,7 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
     if (!set_name_found && global_name != nullptr)
     {
         ui->current_name->setText(*global_name);
+        ui->use_current_nameset->setChecked(false);
     }
 
     if (phrases != nullptr && !phrases->empty())
@@ -293,8 +295,6 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
             ui->list_phrases->addItem(item);
         }
     }
-
-    if (current_name_set_id != -1) ui->use_current_nameset->setChecked(true);
 }
 
 void DictPopup::close_popup()
