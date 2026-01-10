@@ -7,16 +7,22 @@
 #include <memory>
 #include <vector>
 
-inline QHash<QChar, QString> sv_readings;
-inline QHash<QChar, QChar> punctuations;
-
 enum Priority { NONE, PHRASE, NAME };
+
+struct Rule
+{
+    QString original_start;
+    QString original_end;
+    QString translation_start;
+    QString translation_end;
+};
 
 struct TrieNode {
     QVector<std::pair<QChar, TrieNode*>> children;
 
     std::unique_ptr<QStringList> phrase_translations;
     std::unique_ptr<QString> name_translation;
+    std::unique_ptr<std::vector<Rule>> rules;
 
     ~TrieNode() {
         for (const auto& val : children | std::views::values) {
@@ -39,7 +45,8 @@ struct TrieNode {
 struct Match {
     int length;
     Priority priority;
-    QString translation;
+    std::vector<Rule>* rules;
+    const QString* translation;
 };
 
 class Dictionary {
@@ -62,19 +69,19 @@ public:
     void remove_meaning(const QString& key, const QString& value) const;
 
     void reorder(const QString& key, const QStringList& new_order) const;
+
+    void insert_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end) const;
+    const Rule* find_exact_rule(const QString& start, const QString& end) const;
+    void edit_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end) const;
+    void remove_rule(const QString& start, const QString& end) const;
+
 private:
     TrieNode* root;
     [[nodiscard]] TrieNode* walk_node(const QString& key) const;
 };
-
-inline Dictionary dictionary;
-inline Dictionary name_set_dictionary;
-inline int current_name_set_id = -1;
 
 struct NameSet
 {
     int index;
     QString title;
 };
-
-inline std::vector<NameSet> name_sets;

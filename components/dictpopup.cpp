@@ -1,11 +1,11 @@
 #include <QListWidgetItem>
 
 #include "dictpopup.h"
-
 #include "chiplist.h"
 #include "ui_DictPopup.h"
-#include "../core/trie.h"
+#include "../core/structures.h"
 #include "../core/io.h"
+#include "../core/dict.h"
 
 
 DictPopup::DictPopup(QWidget* parent) :

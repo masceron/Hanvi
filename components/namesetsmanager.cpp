@@ -4,7 +4,8 @@
 
 #include "namesetsmanager.h"
 #include "ui_NamesetsManager.h"
-#include "core/trie.h"
+#include "core/dict.h"
+#include "core/structures.h"
 
 NamesetsManager::NamesetsManager(QWidget* parent) :
     QDialog(parent), ui(new Ui::NamesetsManager)

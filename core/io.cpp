@@ -4,6 +4,7 @@
 
 #include "io.h"
 #include "db.h"
+#include "dict.h"
 
 QList<QStringView> paginate(const QString& input_text, const int min_length)
 {

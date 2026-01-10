@@ -7,7 +7,7 @@
 #include "ui_MainWindow.h"
 #include "../core/io.h"
 #include "mainwindow.h"
-
+#include "rulepopup.h"
 #include "dictpopup.h"
 #include "namesetsmanager.h"
 #include "../core/converter.h"
@@ -81,7 +81,8 @@ MainWindow::MainWindow(QWidget* parent) :
     connect(ui->sv_output, &QTextBrowser::anchorClicked, this, &MainWindow::click_token);
     connect(ui->vn_output, &QTextBrowser::anchorClicked, this, &MainWindow::click_token);
 
-    connect(&watcher, &QFutureWatcher<std::pair<QString, QString>>::finished, this, &MainWindow::update_display);
+    connect(&watcher, &QFutureWatcher<std::tuple<QString, QString, QString>>::finished, this,
+            &MainWindow::update_display);
     connect(&plain_watcher, &QFutureWatcher<QString>::finished, this, [this]
     {
         if (!save_to_file(file_name, plain_watcher.result()))
@@ -162,7 +163,7 @@ void MainWindow::load_data()
     const QSignalBlocker blocker(ui->current_name_set);
     ui->current_name_set->clear();
     ui->current_name_set->addItem("None", -1);
-    for (const auto& [index, title]: name_sets)
+    for (const auto& [index, title] : name_sets)
     {
         ui->current_name_set->addItem(title, index);
     }
@@ -258,27 +259,56 @@ void MainWindow::highlight_token(QTextBrowser* browser, const QString& token)
     clear_cursor.clearSelection();
     browser->setTextCursor(clear_cursor);
 
-    const QTextCursor cursor = find_token(browser->document(), token);
-
-    if (cursor.isNull())
+    if (token.isEmpty())
     {
         browser->setExtraSelections({});
         return;
     }
 
-    QTextEdit::ExtraSelection selection;
+    QList<QTextEdit::ExtraSelection> selections;
+    QTextDocument* doc = browser->document();
+    bool first_match_found = false;
+    int first_match_pos = 0;
 
-    selection.format.setForeground(Qt::red);
-    selection.format.setFontWeight(QFont::Bold);
+    QTextBlock block = doc->begin();
+    while (block.isValid())
+    {
+        for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it)
+        {
+            QTextFragment fragment = it.fragment();
+            if (!fragment.isValid()) continue;
 
-    selection.format.setBackground(Qt::transparent);
-    selection.cursor = cursor;
+            if (fragment.charFormat().anchorHref() == token)
+            {
+                QTextEdit::ExtraSelection sel;
+                sel.cursor = QTextCursor(doc);
+                sel.cursor.setPosition(fragment.position());
+                sel.cursor.setPosition(fragment.position() + fragment.length(), QTextCursor::KeepAnchor);
 
-    browser->setExtraSelections({selection});
+                sel.format.setForeground(Qt::red);
+                sel.format.setFontWeight(QFont::Bold);
+                sel.format.setBackground(Qt::transparent);
 
-    auto pan = QTextCursor(browser->document());
-    pan.setPosition(cursor.position());
-    browser->setTextCursor(pan);
+                selections.append(sel);
+
+                if (!first_match_found)
+                {
+                    first_match_pos = fragment.position();
+                    first_match_found = true;
+                }
+            }
+        }
+        block = block.next();
+    }
+
+    browser->setExtraSelections(selections);
+
+    if (first_match_found)
+    {
+        auto pan = QTextCursor(doc);
+        pan.setPosition(first_match_pos);
+        browser->setTextCursor(pan);
+    }
 }
 
 QTextCursor MainWindow::find_token(QTextDocument* document, const QString& token)
@@ -422,7 +452,8 @@ void MainWindow::snap_selection_to_word(QTextBrowser* browser)
         const QString text = block.text();
         int block_pos = pos - block.position();
 
-        while (block_pos > 0 && !text[block_pos - 1].isSpace()) {
+        while (block_pos > 0 && !text[block_pos - 1].isSpace())
+        {
             block_pos--;
         }
         cursor.setPosition(block.position() + block_pos);
@@ -434,7 +465,8 @@ void MainWindow::snap_selection_to_word(QTextBrowser* browser)
         const QString text = block.text();
         int block_pos = pos - block.position();
 
-        while (block_pos < text.length() && !text[block_pos].isSpace()) {
+        while (block_pos < text.length() && !text[block_pos].isSpace())
+        {
             block_pos++;
         }
         cursor.setPosition(block.position() + block_pos, QTextCursor::KeepAnchor);
@@ -478,6 +510,80 @@ void MainWindow::open_popup()
             if (const QTextCursor cn_cursor = find_token(ui->cn_input->document(), token_id); !cn_cursor.isNull())
             {
                 saved_cursor_pos = cn_cursor.selectionStart();
+            }
+        }
+    }
+
+    if (sender_browser == ui->vn_output)
+    {
+        if (QTextCursor cursor = sender_browser->textCursor(); cursor.hasSelection())
+        {
+            int start = cursor.selectionStart();
+            int end = cursor.selectionEnd();
+
+            QString first_rule_id;
+
+            QTextBlock block = sender_browser->document()->findBlock(start);
+            while (block.isValid() && block.position() < end)
+            {
+                for (auto it = block.begin(); !it.atEnd(); ++it)
+                {
+                    QTextFragment fragment = it.fragment();
+
+                    if (int frag_pos = fragment.position(); frag_pos + fragment.length() > start && frag_pos < end)
+                    {
+                        if (QString id = fragment.charFormat().anchorHref(); id.startsWith("r"))
+                        {
+                            first_rule_id = id;
+                            goto rule_found;
+                        }
+                    }
+                }
+                block = block.next();
+            }
+
+        rule_found:
+            if (!first_rule_id.isEmpty())
+            {
+                highlight_token(ui->cn_input, first_rule_id);
+                highlight_token(ui->sv_output, first_rule_id);
+                highlight_token(ui->vn_output, first_rule_id);
+
+                QString start_rule;
+                QString end_rule;
+                int found_count = 0;
+
+                QTextBlock search_block = ui->cn_input->document()->begin();
+
+                while (search_block.isValid() && found_count < 2)
+                {
+                    for (auto it = search_block.begin(); !it.atEnd(); ++it)
+                    {
+                        if (QTextFragment frag = it.fragment(); frag.charFormat().anchorHref() == first_rule_id)
+                        {
+                            if (found_count == 0)
+                            {
+                                start_rule = frag.text();
+                                found_count++;
+                            }
+                            else if (found_count == 1)
+                            {
+                                end_rule = frag.text();
+                                found_count++;
+                                break;
+                            }
+                        }
+                    }
+                    search_block = search_block.next();
+                }
+
+                auto* popup = new RulePopup(this);
+
+                popup->load_data(dictionary.find_exact_rule(start_rule, end_rule));
+                popup->setAttribute(Qt::WA_DeleteOnClose);
+                popup->exec();
+
+                return;
             }
         }
     }
@@ -542,10 +648,13 @@ void MainWindow::open_popup()
                     QString full_chinese_token = cn_cursor.selectedText();
 
                     int words_before_fragment = 0;
-                    for (auto pre_it = block.begin(); pre_it != it; ++pre_it) {
-                        if (pre_it.fragment().charFormat().anchorHref() == id) {
+                    for (auto pre_it = block.begin(); pre_it != it; ++pre_it)
+                    {
+                        if (pre_it.fragment().charFormat().anchorHref() == id)
+                        {
                             QString pre_text = pre_it.fragment().text();
-                            words_before_fragment += static_cast<int>(pre_text.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size());
+                            words_before_fragment += static_cast<int>(pre_text.split(
+                                QRegularExpression("\\s+"), Qt::SkipEmptyParts).size());
                         }
                     }
 
@@ -555,15 +664,19 @@ void MainWindow::open_popup()
                     QString fragment_text = fragment.text();
 
                     QString text_pre_selection = fragment_text.left(intersect_start - frag_start);
-                    int words_pre_selection = static_cast<int>(text_pre_selection.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size());
+                    int words_pre_selection = static_cast<int>(text_pre_selection.split(
+                        QRegularExpression("\\s+"), Qt::SkipEmptyParts).size());
 
-                    QString text_selected = fragment_text.mid(intersect_start - frag_start, intersect_end - intersect_start);
-                    int words_in_selection = static_cast<int>(text_selected.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size());
+                    QString text_selected = fragment_text.mid(intersect_start - frag_start,
+                                                              intersect_end - intersect_start);
+                    int words_in_selection = static_cast<int>(text_selected.split(
+                        QRegularExpression("\\s+"), Qt::SkipEmptyParts).size());
 
                     int cn_start_index = words_before_fragment + words_pre_selection;
                     int cn_length = words_in_selection;
 
-                    if (cn_start_index < full_chinese_token.length()) {
+                    if (cn_start_index < full_chinese_token.length())
+                    {
                         selected_chinese_text.append(full_chinese_token.mid(cn_start_index, cn_length));
                     }
                 }
