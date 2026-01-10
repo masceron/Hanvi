@@ -1,7 +1,7 @@
 #pragma once
 #include <expected>
 
-#include "trie.h"
+#include "structures.h"
 
 enum class io_error
 {

@@ -16,11 +16,7 @@ public:
         const auto layout = new QVBoxLayout(this);
 
         const auto loadingLabel = new QLabel(this);
-        qDebug() << "Listing embedded resources:";
         QDirIterator it(":", QDirIterator::Subdirectories);
-        while (it.hasNext()) {
-            qDebug() << it.next();
-        }
         const auto movie = new QMovie(":/resources/loader.gif");
         loadingLabel->setMovie(movie);
         movie->setScaledSize(QSize(400, 225));

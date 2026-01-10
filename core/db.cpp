@@ -2,7 +2,8 @@
 
 #include <QSqlQuery>
 
-#include "trie.h"
+#include "dict.h"
+#include "structures.h"
 
 QString get_table_name(const Priority priority)
 {

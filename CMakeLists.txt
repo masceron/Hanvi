@@ -52,8 +52,8 @@ set(CORE
         core/dict.cpp
         core/io.h
         core/io.cpp
-        core/trie.h
-        core/trie.cpp
+        core/structures.h
+        core/structures.cpp
 )
 
 add_library(CoreLogic STATIC ${CORE})
@@ -76,6 +76,9 @@ add_executable(Converter WIN32 main.cpp
         components/namesetsmanager.cpp
         components/namesetsmanager.h
         components/namesetsmanager.ui
+        components/rulepopup.cpp
+        components/rulepopup.h
+        components/rulepopup.ui
 )
 
 target_include_directories(Converter PRIVATE

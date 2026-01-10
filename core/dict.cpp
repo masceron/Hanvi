@@ -1,19 +1,16 @@
-#include "dict.h"
-
 #include <QSqlQuery>
 #include <QtConcurrent>
-#include <QDebug>
-#include <QSqlError>
 
-#include "trie.h"
+#include "dict.h"
+#include "structures.h"
 
 void init_db()
 {
     auto db = QSqlDatabase::addDatabase("QSQLITE");
     db.setDatabaseName("dict.db");
 
-    if (!db.open()) {
-        qDebug() << db.lastError().text();
+    if (!db.open())
+    {
         exit(1);
     }
 
@@ -29,11 +26,13 @@ void load_data_on_startup(const std::function<void()>& on_finished)
         {
             QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "SV_thread");
             db.setDatabaseName("dict.db");
-            if (db.open()) {
+            if (db.open())
+            {
                 QSqlQuery query(db);
                 query.setForwardOnly(true);
                 query.exec("SELECT original, translated FROM sv_readings");
-                while (query.next()) {
+                while (query.next())
+                {
                     QChar key = query.value(0).toString().at(0);
                     QString val = query.value(1).toString();
                     sv_readings.insert(key, val);
@@ -49,11 +48,13 @@ void load_data_on_startup(const std::function<void()>& on_finished)
         {
             QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "P_thread");
             db.setDatabaseName("dict.db");
-            if (db.open()) {
+            if (db.open())
+            {
                 QSqlQuery query(db);
                 query.setForwardOnly(true);
                 query.exec("SELECT original, normalized FROM punctuations");
-                while (query.next()) {
+                while (query.next())
+                {
                     const QChar key = query.value(0).toString().at(0);
                     const QChar val = query.value(1).toString().at(0);
                     punctuations.insert(key, val);
@@ -69,18 +70,28 @@ void load_data_on_startup(const std::function<void()>& on_finished)
         {
             QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "NP_thread");
             db.setDatabaseName("dict.db");
-            if (db.open()) {
+            if (db.open())
+            {
                 QSqlQuery query(db);
                 query.setForwardOnly(true);
 
                 query.exec("SELECT original, translated FROM names");
-                while (query.next()) {
+                while (query.next())
+                {
                     dictionary.insert_bulk(query.value(0).toString(), NAME, query.value(1).toString());
                 }
 
                 query.exec("SELECT original, translated FROM phrases");
-                while (query.next()) {
+                while (query.next())
+                {
                     dictionary.insert_bulk(query.value(0).toString(), PHRASE, query.value(1).toString());
+                }
+
+                query.exec("SELECT original_start, original_end, translated_start, translated_end FROM grammar_rules");
+                while (query.next())
+                {
+                    dictionary.insert_rule(query.value(0).toString(), query.value(1).toString(),
+                                           query.value(2).toString(), query.value(3).toString());
                 }
                 db.close();
             }
@@ -88,7 +99,8 @@ void load_data_on_startup(const std::function<void()>& on_finished)
         QSqlDatabase::removeDatabase("NP_thread");
     });
 
-    const QFuture<void> master_future = QtConcurrent::run([future_sv, future_punc, future_trie]() mutable {
+    const QFuture<void> master_future = QtConcurrent::run([future_sv, future_punc, future_trie]() mutable
+    {
         future_sv.waitForFinished();
         future_punc.waitForFinished();
         future_trie.waitForFinished();
@@ -96,7 +108,8 @@ void load_data_on_startup(const std::function<void()>& on_finished)
 
     auto* watcher = new QFutureWatcher<void>();
 
-    QObject::connect(watcher, &QFutureWatcher<void>::finished, [watcher, on_finished]() {
+    QObject::connect(watcher, &QFutureWatcher<void>::finished, [watcher, on_finished]()
+    {
         if (on_finished) on_finished();
 
         watcher->deleteLater();
@@ -136,8 +149,10 @@ void load_name_set(const int id)
     query.prepare("SELECT original, translated FROM name_set_entries WHERE set_id = :id");
     query.bindValue(":id", id);
 
-    if (query.exec()) {
-        while (query.next()) {
+    if (query.exec())
+    {
+        while (query.next())
+        {
             QString key = query.value(0).toString();
             QString val = query.value(1).toString();
             name_set_dictionary.insert_bulk(key, NAME, val);

@@ -5,7 +5,7 @@
 
 #include "core/converter.h"
 #include "core/dict.h"
-#include "core/trie.h"
+#include "core/structures.h"
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
