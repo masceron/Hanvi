@@ -20,8 +20,20 @@ MainWindow::MainWindow(QWidget* parent) :
     setWindowState(Qt::WindowMaximized);
     ui->setupUi(this);
 
-    const auto clipboardAction = new QAction("Reload", this);
-    connect(clipboardAction, &QAction::triggered, this, [this]
+    const auto name_set_manager = new QAction("Namesets", this);
+
+    connect(name_set_manager, &QAction::triggered, this, [this]
+    {
+        auto* manager = new NamesetsManager(this);
+        manager->setAttribute(Qt::WA_DeleteOnClose);
+        manager->exec();
+        load_data();
+    });
+
+    ui->menubar->addAction(name_set_manager);
+
+    const auto clipboard_action = new QAction("Reload", this);
+    connect(clipboard_action, &QAction::triggered, this, [this]
     {
         if (!input_text.isEmpty())
         {
@@ -29,7 +41,7 @@ MainWindow::MainWindow(QWidget* parent) :
         }
     });
 
-    ui->menubar->addAction(clipboardAction);
+    ui->menubar->addAction(clipboard_action);
 
     ui->left_right->setStretchFactor(0, 1);
     ui->left_right->setStretchFactor(1, 4);
@@ -145,14 +157,6 @@ MainWindow::MainWindow(QWidget* parent) :
             load_name_set(change_to);
             convert_and_display();
         }
-    });
-
-    connect(ui->namesets_manage, &QAction::triggered, this, [this]
-    {
-        auto* manager = new NamesetsManager(this);
-        manager->setAttribute(Qt::WA_DeleteOnClose);
-        manager->exec();
-        load_data();
     });
 }
 

@@ -26,6 +26,7 @@ private:
     void load_data();
     QWidget* create_action_widget(int id, const QString& current_title);
     void add_new_name_set();
+    void import_set();
 };
 
 

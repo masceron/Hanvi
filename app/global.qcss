@@ -65,12 +65,12 @@ QPushButton:hover#delete_name {
     background-color: #D22B2B;
 }
 
-QPushButton#edit_set {
+QPushButton#edit_set,dump_set {
     background-color: #2b2b2b;
     border: 0.5px solid #6164f6;
     font-weight: bold;
 }
-QPushButton:hover#edit_set {
+QPushButton:hover#edit_set,dump_set {
     background-color: #6164f6;
 }
 

@@ -1,6 +1,8 @@
 #include <QSqlQuery>
 #include <QInputDialog>
 #include <QMessageBox>
+#include <QFileDialog>
+#include <QDesktopServices>
 
 #include "namesetsmanager.h"
 #include "ui_NamesetsManager.h"
@@ -18,9 +20,10 @@ NamesetsManager::NamesetsManager(QWidget* parent) :
     ui->name_sets_list->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     ui->name_sets_list->setColumnWidth(1, 80);
     ui->name_sets_list->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
-    ui->name_sets_list->setColumnWidth(2, 150);
+    ui->name_sets_list->setColumnWidth(2, 240);
 
     connect(ui->add_new, &QPushButton::clicked, this, &NamesetsManager::add_new_name_set);
+    connect(ui->import_set, &QPushButton::clicked, this, &NamesetsManager::import_set);
 
     load_data();
 }
@@ -104,8 +107,45 @@ QWidget* NamesetsManager::create_action_widget(int id, const QString& current_ti
         }
     });
 
+    const auto dump_button = new QPushButton("Save");
+    dump_button->setObjectName("dump_set");
+    connect(dump_button, &QPushButton::clicked, this, [this, id]
+    {
+        const auto file_name = QFileDialog::getSaveFileName(this, "Save to...", "/", "Text files (*.txt)");
+        if (file_name.isEmpty()) return;
+
+        QFile file(file_name);
+
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            return;
+        }
+
+        QTextStream out(&file);
+
+        QSqlQuery q;
+        q.prepare("SELECT original, translated FROM name_set_entries WHERE set_id = :id");
+        q.bindValue(":id", id);
+        if (!q.exec())
+        {
+            return;
+        }
+
+        while (q.next())
+        {
+            const QString original = q.value(0).toString();
+            const QString translated = q.value(1).toString();
+
+            out << original << "=" << translated << "\n";
+        }
+
+        file.close();
+
+        QDesktopServices::openUrl(QUrl("file:///" + file_name.left(file_name.lastIndexOf('/'))));
+    });
+
     layout->addWidget(edit);
     layout->addWidget(delete_button);
+    layout->addWidget(dump_button);
 
     return container;
 }
@@ -127,4 +167,109 @@ void NamesetsManager::add_new_name_set()
             QMessageBox::warning(this, "Error", "Could not create nameset (Duplicate name?).");
         }
     }
+}
+
+void NamesetsManager::import_set()
+{
+    bool ok;
+    const QString text = QInputDialog::getText(this, "New Nameset", "Name:", QLineEdit::Normal, "", &ok);
+
+    if (!ok || text.isEmpty()) return;
+
+    const QString file_name = QFileDialog::getOpenFileName(this, "Import Nameset", "/", "Text files (*.txt)");
+    if (file_name.isEmpty()) return;
+
+    QFile file(file_name);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        QMessageBox::warning(this, "Error", "Could not open the selected file.");
+        return;
+    }
+
+    QSqlDatabase::database().transaction();
+
+    bool success = true;
+    QString error_message;
+
+    QSqlQuery q;
+    q.prepare("INSERT INTO name_sets (title) VALUES (:title)");
+    q.bindValue(":title", text);
+
+    if (!q.exec())
+    {
+        success = false;
+        error_message = "Could not create nameset. The name might already exist.";
+    }
+
+    int new_set_id;
+
+    if (success)
+    {
+        new_set_id = q.lastInsertId().toInt();
+        QTextStream in(&file);
+        QSqlQuery insert_q;
+        insert_q.prepare("INSERT INTO name_set_entries (original, translated, set_id) VALUES (:orig, :trans, :id)");
+
+        int line_number = 0;
+
+        while (!in.atEnd())
+        {
+            QString line = in.readLine();
+            line_number++;
+
+            if (line.trimmed().isEmpty()) continue;
+
+            const int separator_index = static_cast<int>(line.indexOf('='));
+
+            if (separator_index == -1)
+            {
+                success = false;
+                error_message = QString("Format error at line %1: Missing '=' separator.").arg(line_number);
+                break;
+            }
+
+            const QString original = line.left(separator_index); // Keep spaces inside the phrase if any
+            const QString translated = line.mid(separator_index + 1);
+
+            if (original.isEmpty() || translated.isEmpty())
+            {
+                success = false;
+                error_message = QString("Format error at line %1: Original or translated text is empty.").arg(line_number);
+                break;
+            }
+
+            insert_q.bindValue(":orig", original);
+            insert_q.bindValue(":trans", translated);
+            insert_q.bindValue(":id", new_set_id);
+
+            if (!insert_q.exec())
+            {
+                success = false;
+                error_message = QString("Database error at line %1: Could not insert entry.").arg(line_number);
+                break;
+            }
+        }
+    }
+
+    if (success)
+    {
+        if (QSqlDatabase::database().commit())
+        {
+            name_sets.emplace_back(new_set_id, text);
+            load_data();
+            QMessageBox::information(this, "Success", "Nameset imported successfully.");
+        }
+        else
+        {
+            QSqlDatabase::database().rollback();
+            QMessageBox::warning(this, "Error", "Transaction commit failed.");
+        }
+    }
+    else
+    {
+        QSqlDatabase::database().rollback();
+        QMessageBox::critical(this, "Import Failed", error_message + "\n\nNo changes were made to the database.");
+    }
+
+    file.close();
 }
