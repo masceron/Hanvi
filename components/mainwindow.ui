@@ -28,7 +28,7 @@
          </property>
          <widget class="QTextBrowser" name="cn_input">
           <property name="focusPolicy">
-           <enum>Qt::FocusPolicy::NoFocus</enum>
+           <enum>Qt::FocusPolicy::ClickFocus</enum>
           </property>
           <property name="styleSheet">
            <string notr="true"/>
@@ -39,7 +39,7 @@
          </widget>
          <widget class="QTextBrowser" name="sv_output">
           <property name="focusPolicy">
-           <enum>Qt::FocusPolicy::NoFocus</enum>
+           <enum>Qt::FocusPolicy::ClickFocus</enum>
           </property>
           <property name="openLinks">
            <bool>false</bool>
@@ -51,7 +51,7 @@
           <item>
            <widget class="QTextBrowser" name="vn_output">
             <property name="focusPolicy">
-             <enum>Qt::FocusPolicy::NoFocus</enum>
+             <enum>Qt::FocusPolicy::ClickFocus</enum>
             </property>
             <property name="openLinks">
              <bool>false</bool>
@@ -67,6 +67,9 @@
                 <pointsize>10</pointsize>
                 <bold>true</bold>
                </font>
+              </property>
+              <property name="focusPolicy">
+               <enum>Qt::FocusPolicy::NoFocus</enum>
               </property>
               <property name="text">
                <string>Previous</string>
@@ -96,6 +99,9 @@
                 <pointsize>10</pointsize>
                 <bold>true</bold>
                </font>
+              </property>
+              <property name="focusPolicy">
+               <enum>Qt::FocusPolicy::NoFocus</enum>
               </property>
               <property name="text">
                <string>Next</string>
@@ -181,54 +187,28 @@
    <addaction name="menuSave"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
-  <action name="actionOpen">
-   <property name="text">
-    <string>Open</string>
-   </property>
-  </action>
-  <action name="actionSave">
-   <property name="text">
-    <string>Save...</string>
-   </property>
-  </action>
-  <action name="actionClose">
-   <property name="text">
-    <string>Close</string>
-   </property>
-  </action>
   <action name="read_from_clipboard">
    <property name="text">
     <string>From clipboard</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Q</string>
    </property>
   </action>
   <action name="read_from_file">
    <property name="text">
     <string>From file</string>
    </property>
+   <property name="shortcut">
+    <string>Ctrl+O</string>
+   </property>
   </action>
   <action name="save_to_file">
    <property name="text">
     <string>To file</string>
    </property>
-  </action>
-  <action name="save_to_clipboard">
-   <property name="text">
-    <string>To clipboard</string>
-   </property>
-  </action>
-  <action name="namesets_manage">
-   <property name="text">
-    <string>Manage...</string>
-   </property>
-  </action>
-  <action name="action">
-   <property name="text">
-    <string>Dump to...</string>
-   </property>
-  </action>
-  <action name="namesets_read">
-   <property name="text">
-    <string>Read from...</string>
+   <property name="shortcut">
+    <string>Ctrl+S</string>
    </property>
   </action>
  </widget>

@@ -19,6 +19,7 @@ MainWindow::MainWindow(QWidget* parent) :
     current_page = 0;
     setWindowState(Qt::WindowMaximized);
     ui->setupUi(this);
+    setWindowTitle("Converter");
 
     const auto name_set_manager = new QAction("Namesets", this);
 
@@ -32,8 +33,9 @@ MainWindow::MainWindow(QWidget* parent) :
 
     ui->menubar->addAction(name_set_manager);
 
-    const auto clipboard_action = new QAction("Reload", this);
-    connect(clipboard_action, &QAction::triggered, this, [this]
+    const auto reload_action = new QAction("Reload", this);
+    reload_action->setShortcut(QKeySequence("Ctrl+R"));
+    connect(reload_action, &QAction::triggered, this, [this]
     {
         if (!input_text.isEmpty())
         {
@@ -41,7 +43,7 @@ MainWindow::MainWindow(QWidget* parent) :
         }
     });
 
-    ui->menubar->addAction(clipboard_action);
+    ui->menubar->addAction(reload_action);
 
     ui->left_right->setStretchFactor(0, 1);
     ui->left_right->setStretchFactor(1, 4);
