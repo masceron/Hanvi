@@ -84,9 +84,19 @@ struct RuleMatch
 std::optional<RuleMatch> find_matching_rule(const QStringView& text, const int current_pos,
                                             const std::vector<Rule>& rules)
 {
-    const int limit = std::min(static_cast<int>(text.length()), current_pos + 50);
-    const QStringView search_area = text.mid(current_pos, limit - current_pos);
+    int limit = std::min(static_cast<int>(text.length()), current_pos + 50);
 
+    for (int i = current_pos; i < limit; ++i)
+    {
+        if (const QChar ch = text[i]; ch == u'。' || ch == u'！' || ch == u'？' ||
+            ch == u'\n' || ch == u'!' || ch == u'?')
+        {
+            limit = i;
+            break;
+        }
+    }
+
+    const QStringView search_area = text.mid(current_pos, limit - current_pos);
     std::optional<RuleMatch> best_match = std::nullopt;
 
     for (const auto& rule : rules)
@@ -124,7 +134,8 @@ std::optional<RuleMatch> find_matching_rule(const QStringView& text, const int c
     return best_match;
 }
 
-ConversionResult convert_recursive(const QStringView& input, int start_offset, int& token_counter, bool& cap_next, Progress& progress)
+ConversionResult convert_recursive(const QStringView& input, int start_offset, int& token_counter, bool& cap_next,
+                                   Progress& progress)
 {
     ConversionResult out;
     int i = 0;
@@ -573,7 +584,8 @@ PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Pr
     return out;
 }
 
-std::tuple<QString, QString, QString> convert(const QStringView& input, const std::function<void(int)>& progress_callback)
+std::tuple<QString, QString, QString> convert(const QStringView& input,
+                                              const std::function<void(int)>& progress_callback)
 {
     QString cn_output;
     QString sv_output;
