@@ -1,9 +1,6 @@
 #pragma once
 
-#include <QVector>
-#include <QString>
 #include <QStringList>
-#include <QHash>
 #include <memory>
 #include <vector>
 
@@ -18,8 +15,7 @@ struct Rule
 };
 
 struct TrieNode {
-    QVector<std::pair<QChar, TrieNode*>> children;
-
+    std::vector<std::pair<QChar, TrieNode*>> children;
     std::unique_ptr<QStringList> phrase_translations;
     std::unique_ptr<QString> name_translation;
     std::unique_ptr<std::vector<Rule>> rules;
@@ -31,14 +27,24 @@ struct TrieNode {
     }
 
     [[nodiscard]] TrieNode* find_child(const QChar ch) const {
-        for (const auto& [chr, node] : children) {
-            if (chr == ch) return node;
+        const auto it = std::lower_bound(children.begin(), children.end(), ch,
+            [](const std::pair<QChar, TrieNode*>& p, const QChar val) {
+                return p.first < val;
+            });
+
+        if (it != children.end() && it->first == ch) {
+            return it->second;
         }
         return nullptr;
     }
 
     void add_child(QChar ch, TrieNode* node) {
-        children.append({ch, node});
+        const auto it = std::lower_bound(children.begin(), children.end(), ch,
+            [](const std::pair<QChar, TrieNode*>& p, const QChar val) {
+                return p.first < val;
+            });
+
+        children.insert(it, {ch, node});
     }
 };
 
@@ -71,7 +77,7 @@ public:
     void reorder(const QString& key, const QStringList& new_order) const;
 
     void insert_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end) const;
-    const Rule* find_exact_rule(const QString& start, const QString& end) const;
+    [[nodiscard]] const Rule* find_exact_rule(const QString& start, const QString& end) const;
     void edit_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end) const;
     void remove_rule(const QString& start, const QString& end) const;
 
