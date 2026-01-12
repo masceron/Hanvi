@@ -45,7 +45,7 @@ private:
     int saved_cursor_pos = -1;
     SavedScroll saved_scroll;
 
-    void convert_and_display();
+    void convert_and_display(bool scroll_back);
     void update_pagination_controls() const;
     void click_token(const QUrl &link) const;
     static void highlight_token(QTextBrowser* browser, const QString& token, bool scroll = true);
