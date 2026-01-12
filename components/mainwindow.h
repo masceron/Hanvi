@@ -13,6 +13,13 @@ namespace Ui
 
 QT_END_NAMESPACE
 
+struct SavedScroll
+{
+    int cn = 0;
+    int sv = 0;
+    int vn = 0;
+};
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -36,11 +43,12 @@ private:
     QFutureWatcher<std::tuple<QString, QString, QString>> watcher;
     QFutureWatcher<QString> plain_watcher;
     int saved_cursor_pos = -1;
+    SavedScroll saved_scroll;
 
     void convert_and_display();
     void update_pagination_controls() const;
     void click_token(const QUrl &link) const;
-    static void highlight_token(QTextBrowser* browser, const QString& token);
+    static void highlight_token(QTextBrowser* browser, const QString& token, bool scroll = true);
     static QTextCursor find_token(QTextDocument* document, const QString& token);
     static QString token_id_at(const QTextBrowser* browser, int position);
     static void snap_selection_to_token(QTextBrowser* browser);
