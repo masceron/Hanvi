@@ -241,60 +241,67 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
             {
                 const Rule* rule = rule_match->rule;
                 int rule_start_len = static_cast<int>(rule->original_start.length());
-                int inner_start_idx = i + rule_start_len;
-                int inner_len = rule_match->abs_start_of_end_token - inner_start_idx;
-                int rule_end_len = static_cast<int>(rule->original_end.length());
 
-                progress.update(rule_start_len);
+                bool phrase_overrides_rule = (length > 0 && priority == PHRASE &&
+                                              length > rule_start_len);
 
-                QString uid = QString("r%1").arg(token_counter++);
+                if (!phrase_overrides_rule) {
 
-                QString t_start = rule->translation_start;
-                if (cap_next && !t_start.isEmpty())
-                {
-                    if (t_start[0].isLower()) t_start[0] = t_start[0].toUpper();
-                    cap_next = false;
+                    int inner_start_idx = i + rule_start_len;
+                    int inner_len = rule_match->abs_start_of_end_token - inner_start_idx;
+                    int rule_end_len = static_cast<int>(rule->original_end.length());
+
+                    progress.update(rule_start_len);
+
+                    QString uid = QString("r%1").arg(token_counter++);
+
+                    QString t_start = rule->translation_start;
+                    if (cap_next && !t_start.isEmpty())
+                    {
+                        if (t_start[0].isLower()) t_start[0] = t_start[0].toUpper();
+                        cap_next = false;
+                    }
+
+                    ConversionResult inner = convert_recursive(input.mid(inner_start_idx, inner_len),
+                                                               start_offset + inner_start_idx,
+                                                               token_counter,
+                                                               cap_next, progress);
+
+                    progress.update(rule_end_len);
+
+                    out.cn += QString("<a href='%1'>%2</a>").arg(uid, rule->original_start.toHtmlEscaped());
+                    out.cn += inner.cn;
+                    out.cn += QString("<a href='%1'>%2</a>").arg(uid, rule->original_end.toHtmlEscaped());
+
+                    QString sv_start = get_sv(rule->original_start);
+                    QString sv_end = get_sv(rule->original_end);
+
+                    out.sv += QString("<a href='%1'>%2</a> ").arg(uid, sv_start.toHtmlEscaped());
+                    out.sv += inner.sv;
+                    out.sv += QString("<a href='%1'>%2</a> ").arg(uid, sv_end.toHtmlEscaped());
+
+                    if (!t_start.isEmpty())
+                    {
+                        out.vn += QString("<a href='%1'>%2</a> ").arg(uid, t_start.toHtmlEscaped());
+                    }
+
+                    out.vn += inner.vn;
+
+                    if (!rule->translation_end.isEmpty())
+                    {
+                        out.vn += QString(" <a href='%1'>%2</a>").arg(uid, rule->translation_end.toHtmlEscaped());
+                    }
+
+                    i += rule_start_len + inner_len + rule_end_len;
+                    out.length_consumed += rule_start_len + inner_len + rule_end_len;
+
+                    if (should_append_space(input, i) && !out.vn.endsWith(' '))
+                    {
+                        out.vn += " ";
+                        out.sv += " ";
+                    }
+                    continue;
                 }
-
-                ConversionResult inner = convert_recursive(input.mid(inner_start_idx, inner_len),
-                                                           start_offset + inner_start_idx,
-                                                           token_counter,
-                                                           cap_next, progress);
-
-                progress.update(rule_end_len);
-
-                out.cn += QString("<a href='%1'>%2</a>").arg(uid, rule->original_start.toHtmlEscaped());
-                out.cn += inner.cn;
-                out.cn += QString("<a href='%1'>%2</a>").arg(uid, rule->original_end.toHtmlEscaped());
-
-                QString sv_start = get_sv(rule->original_start);
-                QString sv_end = get_sv(rule->original_end);
-
-                out.sv += QString("<a href='%1'>%2</a> ").arg(uid, sv_start.toHtmlEscaped());
-                out.sv += inner.sv;
-                out.sv += QString("<a href='%1'>%2</a> ").arg(uid, sv_end.toHtmlEscaped());
-
-                if (!t_start.isEmpty())
-                {
-                    out.vn += QString("<a href='%1'>%2</a> ").arg(uid, t_start.toHtmlEscaped());
-                }
-
-                out.vn += inner.vn;
-
-                if (!rule->translation_end.isEmpty())
-                {
-                    out.vn += QString(" <a href='%1'>%2</a>").arg(uid, rule->translation_end.toHtmlEscaped());
-                }
-
-                i += rule_start_len + inner_len + rule_end_len;
-                out.length_consumed += rule_start_len + inner_len + rule_end_len;
-
-                if (should_append_space(input, i) && !out.vn.endsWith(' '))
-                {
-                    out.vn += " ";
-                    out.sv += " ";
-                }
-                continue;
             }
         }
 
@@ -476,44 +483,51 @@ PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Pr
             {
                 const Rule* rule = rule_match->rule;
                 int start_len = static_cast<int>(rule->original_start.length());
-                int inner_start_idx = i + start_len;
-                int inner_len = rule_match->abs_start_of_end_token - inner_start_idx;
-                int end_len = static_cast<int>(rule->original_end.length());
 
-                progress.update(start_len);
+                bool phrase_overrides_rule = (length > 0 && priority == PHRASE &&
+                                              length > start_len);
 
-                QString t_start = rule->translation_start;
-                if (cap_next && !t_start.isEmpty())
-                {
-                    if (t_start[0].isLower()) t_start[0] = t_start[0].toUpper();
-                    cap_next = false;
+                if (!phrase_overrides_rule) {
+
+                    int inner_start_idx = i + start_len;
+                    int inner_len = rule_match->abs_start_of_end_token - inner_start_idx;
+                    int end_len = static_cast<int>(rule->original_end.length());
+
+                    progress.update(start_len);
+
+                    QString t_start = rule->translation_start;
+                    if (cap_next && !t_start.isEmpty())
+                    {
+                        if (t_start[0].isLower()) t_start[0] = t_start[0].toUpper();
+                        cap_next = false;
+                    }
+
+                    auto [text, _] = convert_recursive_plain(input.mid(inner_start_idx, inner_len), cap_next, progress);
+
+                    progress.update(end_len);
+
+                    if (!t_start.isEmpty())
+                    {
+                        out.text += t_start + " ";
+                    }
+
+                    out.text += text;
+
+                    if (!rule->translation_end.isEmpty())
+                    {
+                        if (!out.text.endsWith(' ')) out.text += " ";
+                        out.text += rule->translation_end;
+                    }
+
+                    i += start_len + inner_len + end_len;
+                    out.length_consumed += start_len + inner_len + end_len;
+
+                    if (should_append_space(input, i) && !out.text.endsWith(' '))
+                    {
+                        out.text += " ";
+                    }
+                    continue;
                 }
-
-                auto [text, _] = convert_recursive_plain(input.mid(inner_start_idx, inner_len), cap_next, progress);
-
-                progress.update(end_len);
-
-                if (!t_start.isEmpty())
-                {
-                    out.text += t_start + " ";
-                }
-
-                out.text += text;
-
-                if (!rule->translation_end.isEmpty())
-                {
-                    if (!out.text.endsWith(' ')) out.text += " ";
-                    out.text += rule->translation_end;
-                }
-
-                i += start_len + inner_len + end_len;
-                out.length_consumed += start_len + inner_len + end_len;
-
-                if (should_append_space(input, i) && !out.text.endsWith(' '))
-                {
-                    out.text += " ";
-                }
-                continue;
             }
         }
 
