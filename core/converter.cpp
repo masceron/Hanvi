@@ -297,9 +297,9 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
                     QString sv_start = get_sv(rule->original_start);
                     QString sv_end = get_sv(rule->original_end);
 
-                    out.sv += u"<a href='" % uid % u"'>" % sv_start.toHtmlEscaped() % u"</a>";
+                    out.sv += u"<a href='" % uid % u"'>" % sv_start.toHtmlEscaped() % u" </a>";
                     out.sv += inner.sv;
-                    out.sv += u"<a href='" % uid % u"'>" % sv_end.toHtmlEscaped() % u"</a>";
+                    out.sv += u"<a href='" % uid % u"'>" % sv_end.toHtmlEscaped() % u"</a> ";
 
                     if (!t_start.isEmpty())
                     {
@@ -319,7 +319,6 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
                     if (should_append_space(input, i) && !out.vn.endsWith(' '))
                     {
                         out.vn += u" ";
-                        out.sv += u" ";
                     }
                     continue;
                 }
