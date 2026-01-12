@@ -3,6 +3,7 @@
 #include <QMessageBox>
 #include <QDesktopServices>
 #include <QUrl>
+#include <QScrollBar>
 
 #include "ui_MainWindow.h"
 #include "../core/io.h"
@@ -223,6 +224,12 @@ void MainWindow::convert_and_display()
     {
         ui->statusbar->showMessage("Converting...");
 
+        saved_scroll = {
+            ui->cn_input->verticalScrollBar()->value(),
+            ui->sv_output->verticalScrollBar()->value(),
+            ui->vn_output->verticalScrollBar()->value()
+        };
+
         auto reporter = [this](int progress)
         {
             QMetaObject::invokeMethod(this, [this, progress]
@@ -257,7 +264,7 @@ void MainWindow::convert_to_file()
     }
 }
 
-void MainWindow::highlight_token(QTextBrowser* browser, const QString& token)
+void MainWindow::highlight_token(QTextBrowser* browser, const QString& token, const bool scroll)
 {
     browser->setCursorWidth(0);
 
@@ -309,7 +316,7 @@ void MainWindow::highlight_token(QTextBrowser* browser, const QString& token)
 
     browser->setExtraSelections(selections);
 
-    if (first_match_found)
+    if (scroll && first_match_found)
     {
         auto pan = QTextCursor(doc);
         pan.setPosition(first_match_pos);
@@ -384,6 +391,7 @@ void MainWindow::update_display()
     ui->progress_bar->setValue(100);
     const auto [cn_out, sv_out, vn_out] = watcher.result();
     ui->statusbar->showMessage("Conversion completed.");
+
     ui->cn_input->setHtml(cn_out);
     ui->sv_output->setHtml(sv_out);
     ui->vn_output->setHtml(vn_out);
@@ -400,12 +408,18 @@ void MainWindow::update_display()
 
         if (const QString anchor_name = restoration_cursor.charFormat().anchorHref(); !anchor_name.isEmpty())
         {
-            highlight_token(ui->cn_input, anchor_name);
-            highlight_token(ui->sv_output, anchor_name);
-            highlight_token(ui->vn_output, anchor_name);
+            highlight_token(ui->cn_input, anchor_name, false);
+            highlight_token(ui->sv_output, anchor_name, false);
+            highlight_token(ui->vn_output, anchor_name, false);
         }
         saved_cursor_pos = -1;
     }
+
+    QTimer::singleShot(0, this, [this] {
+        ui->cn_input->verticalScrollBar()->setValue(saved_scroll.cn);
+        ui->sv_output->verticalScrollBar()->setValue(saved_scroll.sv);
+        ui->vn_output->verticalScrollBar()->setValue(saved_scroll.vn);
+    });
 }
 
 void MainWindow::snap_selection_to_token(QTextBrowser* browser)
@@ -508,16 +522,15 @@ void MainWindow::open_popup()
     {
         const QTextCursor vn_cursor = sender_browser->textCursor();
         const int click_pos = vn_cursor.selectionStart();
-        QTextCursor hit_cursor = sender_browser->textCursor();
-        hit_cursor.setPosition(click_pos);
 
-        if (const QString token_id = hit_cursor.charFormat().anchorHref(); !token_id.isEmpty())
+        if (QString token_id = token_id_at(sender_browser, click_pos); !token_id.isEmpty())
         {
             if (const QTextCursor cn_cursor = find_token(ui->cn_input->document(), token_id); !cn_cursor.isNull())
             {
                 saved_cursor_pos = cn_cursor.selectionStart();
             }
         }
+        else return;
     }
 
     if (sender_browser == ui->vn_output)
