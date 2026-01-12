@@ -40,7 +40,7 @@ MainWindow::MainWindow(QWidget* parent) :
     {
         if (!input_text.isEmpty())
         {
-            convert_and_display();
+            convert_and_display(true);
         }
     });
 
@@ -56,7 +56,7 @@ MainWindow::MainWindow(QWidget* parent) :
             current_page = 0;
             input_text = input.value();
             pages = paginate(input_text, page_length);
-            convert_and_display();
+            convert_and_display(false);
         }
         else
         {
@@ -76,7 +76,7 @@ MainWindow::MainWindow(QWidget* parent) :
             current_page = 0;
             input_text = input.value();
             pages = paginate(input_text, page_length);
-            convert_and_display();
+            convert_and_display(false);
         }
         else if (input.error() == io_error::file_not_readable)
         {
@@ -114,7 +114,7 @@ MainWindow::MainWindow(QWidget* parent) :
         if (current_page > 0)
         {
             current_page--;
-            convert_and_display();
+            convert_and_display(false);
         }
     });
     connect(ui->next_page, &QPushButton::clicked, this, [this]
@@ -122,7 +122,7 @@ MainWindow::MainWindow(QWidget* parent) :
         if (current_page < pages.size() - 1)
         {
             current_page++;
-            convert_and_display();
+            convert_and_display(false);
         }
     });
 
@@ -133,7 +133,7 @@ MainWindow::MainWindow(QWidget* parent) :
         current_page = 0;
         page_length = val;
         pages = paginate(input_text, page_length);
-        convert_and_display();
+        convert_and_display(false);
     });
 
     ui->cn_input->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -158,7 +158,7 @@ MainWindow::MainWindow(QWidget* parent) :
         if (const int change_to = ui->current_name_set->currentData().toInt(); change_to != current_name_set_id)
         {
             load_name_set(change_to);
-            convert_and_display();
+            convert_and_display(true);
         }
     });
 }
@@ -183,7 +183,7 @@ void MainWindow::load_data()
         ui->current_name_set->setCurrentIndex(0);
 
         load_name_set(-1);
-        convert_and_display();
+        convert_and_display(true);
     }
 }
 
@@ -218,17 +218,21 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::convert_and_display()
+void MainWindow::convert_and_display(const bool scroll_back)
 {
     if (!input_text.isEmpty() && !pages[current_page].isEmpty())
     {
         ui->statusbar->showMessage("Converting...");
 
-        saved_scroll = {
-            ui->cn_input->verticalScrollBar()->value(),
-            ui->sv_output->verticalScrollBar()->value(),
-            ui->vn_output->verticalScrollBar()->value()
-        };
+        if (scroll_back)
+        {
+            saved_scroll = {
+                ui->cn_input->verticalScrollBar()->value(),
+                ui->sv_output->verticalScrollBar()->value(),
+                ui->vn_output->verticalScrollBar()->value()
+            };
+        }
+        else saved_scroll = {0, 0, 0};
 
         auto reporter = [this](int progress)
         {
@@ -538,7 +542,7 @@ void MainWindow::open_popup()
             }
         }
 
-        if ( !token_id.isEmpty())
+        if (!token_id.isEmpty())
         {
             if (const QTextCursor cn_cursor = find_token(ui->cn_input->document(), token_id); !cn_cursor.isNull())
             {
@@ -732,6 +736,6 @@ void MainWindow::open_popup()
     popup->setAttribute(Qt::WA_DeleteOnClose);
     if (popup->exec())
     {
-        convert_and_display();
+        convert_and_display(true);
     }
 }
