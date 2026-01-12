@@ -521,9 +521,24 @@ void MainWindow::open_popup()
     else if (sender_browser == ui->vn_output)
     {
         const QTextCursor vn_cursor = sender_browser->textCursor();
-        const int click_pos = vn_cursor.selectionStart();
+        int click_pos = vn_cursor.selectionStart();
 
-        if (QString token_id = token_id_at(sender_browser, click_pos); !token_id.isEmpty())
+        QString token_id = token_id_at(sender_browser, click_pos);
+
+        if (token_id.isEmpty())
+        {
+            if (click_pos > 0)
+            {
+                token_id = token_id_at(sender_browser, click_pos - 1);
+            }
+
+            if (token_id.isEmpty() && click_pos < sender_browser->document()->characterCount() - 1)
+            {
+                token_id = token_id_at(sender_browser, click_pos + 1);
+            }
+        }
+
+        if ( !token_id.isEmpty())
         {
             if (const QTextCursor cn_cursor = find_token(ui->cn_input->document(), token_id); !cn_cursor.isNull())
             {
