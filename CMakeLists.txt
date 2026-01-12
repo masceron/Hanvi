@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.1)
+cmake_minimum_required(VERSION 4.2)
 project(Converter)
 
 set(CMAKE_CXX_STANDARD 26)
@@ -118,38 +118,37 @@ if (WIN32)
                 --dir "$<TARGET_FILE_DIR:ConverterCLI>"
                 "$<TARGET_FILE:ConverterCLI>"
         )
+
+        set(DIST_DIR "${CMAKE_BINARY_DIR}/Converter")
+        set(ZIP_NAME "Converter.zip")
+
+        add_custom_target(MakePortableZip ALL
+                DEPENDS Converter ConverterCLI
+        )
+
+        add_custom_command(TARGET MakePortableZip POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E remove_directory "${DIST_DIR}"
+                COMMAND ${CMAKE_COMMAND} -E make_directory "${DIST_DIR}"
+
+                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:Converter>" "${DIST_DIR}"
+                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:ConverterCLI>" "${DIST_DIR}"
+
+                COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/dict.db" "${DIST_DIR}"
+
+                COMMAND "${WINDEPLOYQT_EXE}"
+                --dir "${DIST_DIR}"
+                --no-translations
+                --no-compiler-runtime
+                "${DIST_DIR}/$<TARGET_FILE_NAME:Converter>"
+
+                COMMAND "${WINDEPLOYQT_EXE}"
+                --dir "${DIST_DIR}"
+                --no-translations
+                --no-compiler-runtime
+                "${DIST_DIR}/$<TARGET_FILE_NAME:ConverterCLI>"
+
+                COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/${ZIP_NAME}" --format=zip "${DIST_DIR}"
+                COMMAND ${CMAKE_COMMAND} -E rm -r "${DIST_DIR}"
+        )
     endif ()
-endif ()
-
-if (WIN32 AND WINDEPLOYQT_EXE)
-    set(DIST_DIR "${CMAKE_BINARY_DIR}/Converter")
-    set(ZIP_NAME "Converter.zip")
-
-    add_custom_target(MakePortableZip ALL
-            DEPENDS Converter ConverterCLI
-    )
-
-    add_custom_command(TARGET MakePortableZip POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E remove_directory "${DIST_DIR}"
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${DIST_DIR}"
-
-            COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:Converter>" "${DIST_DIR}"
-            COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:ConverterCLI>" "${DIST_DIR}"
-
-            COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/dict.db" "${DIST_DIR}"
-
-            COMMAND "${WINDEPLOYQT_EXE}"
-            --dir "${DIST_DIR}"
-            --no-translations
-            --no-compiler-runtime
-            "${DIST_DIR}/$<TARGET_FILE_NAME:Converter>"
-
-            COMMAND "${WINDEPLOYQT_EXE}"
-            --dir "${DIST_DIR}"
-            --no-translations
-            --no-compiler-runtime
-            "${DIST_DIR}/$<TARGET_FILE_NAME:ConverterCLI>"
-
-            COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/${ZIP_NAME}" --format=zip "${DIST_DIR}"
-    )
 endif ()
