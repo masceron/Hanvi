@@ -71,9 +71,9 @@ static bool should_append_space(const QStringView& input, const int current_end_
     return true;
 }
 
-static bool is_optimal_phrase(const QStringView& text, const int current_pos, const int current_len)
+static int is_optimal_phrase(const QStringView& text, const int current_pos, const int current_len)
 {
-    const int threshold = (current_len < 3) ? 3 : current_len;
+    const int threshold = std::max(current_len, 3);
 
     const int limit = current_pos + current_len;
 
@@ -81,10 +81,10 @@ static bool is_optimal_phrase(const QStringView& text, const int current_pos, co
     {
         if (const Match match = dictionary.find(text, next_start); match.length > threshold)
         {
-            return false;
+            return next_start;
         }
     }
-    return true;
+    return -1;
 }
 
 struct ConversionResult
@@ -327,8 +327,25 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
 
         if (length > 0 && priority == PHRASE)
         {
+            if (int conflict_start = is_optimal_phrase(input, i, length); conflict_start != -1)
+            {
+                int max_allowed_len = conflict_start - i;
 
-            if (!is_optimal_phrase(input, i, length))
+                length = 0;
+                translation = nullptr;
+
+                for (int try_len = max_allowed_len; try_len >= 1; --try_len)
+                {
+                    if (auto [_, exact_phrases] = dictionary.find_exact(input.mid(i, try_len).toString()); exact_phrases && !exact_phrases->isEmpty())
+                    {
+                        length = try_len;
+                        translation = &exact_phrases->first();
+                        break;
+                    }
+                }
+            }
+
+            if (length == 0)
             {
                 goto process_single_char;
             }
@@ -365,7 +382,7 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
 
         process_single_char:
         {
-            QString source_text = input.mid(i, 1).toString();
+            QString source_text = input[i];
             QString translated_text;
             QString sv_text;
             bool is_punct = false;
@@ -563,7 +580,25 @@ PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Pr
 
         if (length > 0 && priority == PHRASE)
         {
-            if (!is_optimal_phrase(input, i, length))
+            if (int conflict_start = is_optimal_phrase(input, i, length); conflict_start != -1)
+            {
+                int max_allowed_len = conflict_start - i;
+
+                length = 0;
+                translation = nullptr;
+
+                for (int try_len = max_allowed_len; try_len >= 1; --try_len)
+                {
+                    if (auto [_, exact_phrases] = dictionary.find_exact(input.mid(i, try_len).toString()); exact_phrases && !exact_phrases->isEmpty())
+                    {
+                        length = try_len;
+                        translation = &exact_phrases->first();
+                        break;
+                    }
+                }
+            }
+
+            if (length == 0)
             {
                 goto process_single_char;
             }
