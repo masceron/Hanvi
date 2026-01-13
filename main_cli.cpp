@@ -1,6 +1,7 @@
 #include <iostream>
 #include <QCoreApplication>
 #include <QtConcurrent>
+#include <QThreadPool>
 #include <QElapsedTimer>
 
 #include "core/converter.h"
@@ -38,12 +39,17 @@ int main(int argc, char* argv[])
     parser.addOption(input_option_folder);
 
     const QCommandLineOption name_set_used(QStringList() << "n" << "nameset",
-                                            "Use the specified nameset if exists.", "nameset");
+                                           "Use the specified nameset if exists.", "nameset");
     parser.addOption(name_set_used);
 
     const QCommandLineOption output_option_folder(QStringList() << "o" << "output",
                                                   "Write all files to <folder>.", "folder");
     parser.addOption(output_option_folder);
+
+    const QCommandLineOption job_number(QStringList() << "j" << "jobs",
+                                        "Number of conversion jobs, default 0 (all).", "jobs", "0");
+
+    parser.addOption(job_number);
 
     parser.process(app);
 
@@ -82,6 +88,11 @@ int main(int argc, char* argv[])
                     qCritical() << "Error: Could not create output folder:" << out_dir.absolutePath();
                     QCoreApplication::exit();
                 }
+            }
+
+            if (const int jobs = parser.value(job_number).toInt(); jobs > 0)
+            {
+                QThreadPool::globalInstance()->setMaxThreadCount(jobs);
             }
 
             if (const auto set_specified = parser.value(name_set_used); !set_specified.isEmpty())
