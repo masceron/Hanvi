@@ -336,7 +336,7 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
 
                 for (int try_len = max_allowed_len; try_len >= 1; --try_len)
                 {
-                    if (auto [_, exact_phrases] = dictionary.find_exact(input.mid(i, try_len).toString()); exact_phrases && !exact_phrases->isEmpty())
+                    if (auto [_, exact_phrases] = dictionary.find_exact(input.mid(i, try_len)); exact_phrases && !exact_phrases->isEmpty())
                     {
                         length = try_len;
                         translation = &exact_phrases->first();
@@ -589,7 +589,7 @@ PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Pr
 
                 for (int try_len = max_allowed_len; try_len >= 1; --try_len)
                 {
-                    if (auto [_, exact_phrases] = dictionary.find_exact(input.mid(i, try_len).toString()); exact_phrases && !exact_phrases->isEmpty())
+                    if (auto [_, exact_phrases] = dictionary.find_exact(input.mid(i, try_len)); exact_phrases && !exact_phrases->isEmpty())
                     {
                         length = try_len;
                         translation = &exact_phrases->first();

@@ -363,7 +363,7 @@ void Dictionary::insert_bulk(const QString& key, const Priority priority, const 
     }
 }
 
-std::pair<QString*, QStringList*> Dictionary::find_exact(const QString& key) const
+std::pair<QString*, QStringList*> Dictionary::find_exact(const QStringView& key) const
 {
     const TrieNode* node = walk_node(key);
 
@@ -491,7 +491,7 @@ void Dictionary::edit_rule(const QString& start, const QString& end, const QStri
     }
 }
 
-TrieNode* Dictionary::walk_node(const QString& key) const
+TrieNode* Dictionary::walk_node(const QStringView& key) const
 {
     TrieNode* node = root;
     for (const QChar ch : key) {

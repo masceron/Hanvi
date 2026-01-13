@@ -93,7 +93,7 @@ public:
     Dictionary& operator=(Dictionary&& other) noexcept;
 
     [[nodiscard]] Match find(const QStringView& text, int startPos) const;
-    [[nodiscard]] std::pair<QString*, QStringList*> find_exact(const QString& key) const;
+    [[nodiscard]] std::pair<QString*, QStringList*> find_exact(const QStringView& key) const;
 
     void insert(const QString& key, const QString& value, Priority priority) const;
     void insert_bulk(const QString& key, Priority priority, const QString& value) const;
@@ -112,7 +112,7 @@ private:
     TrieNode* root;
     NodePool pool;
     
-    [[nodiscard]] TrieNode* walk_node(const QString& key) const;
+    [[nodiscard]] TrieNode* walk_node(const QStringView& key) const;
 };
 
 struct NameSet
