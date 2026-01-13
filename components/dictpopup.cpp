@@ -107,28 +107,38 @@ DictPopup::DictPopup(QWidget* parent) :
 
     connect(ui->cap_none_phrase, &QPushButton::clicked, this, [this]
     {
-        const QLineEdit* editor = phrase_chip_delegate->get_current_editor();
-        phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 0));
+        if (const QLineEdit* editor = phrase_chip_delegate->get_current_editor())
+        {
+            phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 0));
+        }
     });
     connect(ui->cap_1_phrase, &QPushButton::clicked, this, [this]
     {
-        const QLineEdit* editor = phrase_chip_delegate->get_current_editor();
-        phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 1));
+        if (const QLineEdit* editor = phrase_chip_delegate->get_current_editor())
+        {
+            phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 1));
+        }
     });
     connect(ui->cap_2_phrase, &QPushButton::clicked, this, [this]
     {
-        const QLineEdit* editor = phrase_chip_delegate->get_current_editor();
-        phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 2));
+        if (const QLineEdit* editor = phrase_chip_delegate->get_current_editor())
+        {
+            phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 2));
+        }
     });
     connect(ui->cap_3_phrase, &QPushButton::clicked, this, [this]
     {
-        const QLineEdit* editor = phrase_chip_delegate->get_current_editor();
-        phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 3));
+        if (const QLineEdit* editor = phrase_chip_delegate->get_current_editor())
+        {
+            phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 3));
+        }
     });
     connect(ui->cap_all_phrase, &QPushButton::clicked, this, [this]
     {
-        const QLineEdit* editor = phrase_chip_delegate->get_current_editor();
-        phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 4));
+        if (const QLineEdit* editor = phrase_chip_delegate->get_current_editor())
+        {
+            phrase_chip_delegate->set_editor_text(capitalize(editor->text(), 4));
+        }
     });
 
     connect(phrase_chip_delegate, &ChipDelegate::editing_started, this, [this]
