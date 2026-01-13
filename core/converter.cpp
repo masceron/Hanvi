@@ -604,9 +604,9 @@ PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Pr
             }
 
             QString trans = *translation;
-            if (cap_next && !trans.isEmpty() && trans[0].isLower())
+            if (cap_next)
             {
-                trans[0] = trans[0].toUpper();
+                if (!trans.isEmpty() && trans[0].isLower()) trans[0] = trans[0].toUpper();
                 cap_next = false;
             }
 
