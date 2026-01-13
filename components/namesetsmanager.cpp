@@ -228,7 +228,7 @@ void NamesetsManager::import_set()
                 break;
             }
 
-            const QString original = line.left(separator_index); // Keep spaces inside the phrase if any
+            const QString original = line.left(separator_index);
             const QString translated = line.mid(separator_index + 1);
 
             if (original.isEmpty() || translated.isEmpty())

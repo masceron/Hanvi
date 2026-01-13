@@ -162,8 +162,8 @@ int main(int argc, char* argv[])
 
                 QMutexLocker locker(&console_mutex);
 
-                QString logMsg;
-                QTextStream ts(&logMsg);
+                QString log;
+                QTextStream ts(&log);
 
                 ts << "Converted "
                     << file_info.absoluteFilePath()
@@ -173,7 +173,7 @@ int main(int argc, char* argv[])
                     << QString::number(static_cast<double>(timer.elapsed()) / 1000.0, 'f', 3)
                     << "s.\n";
 
-                write_std_out(logMsg);
+                write_std_out(log);
             };
 
             QtConcurrent::blockingMap(files, process_file);

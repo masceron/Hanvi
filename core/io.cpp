@@ -20,18 +20,18 @@ QList<QStringView> paginate(const QString& input_text, const int min_length)
 
         if (target_end >= length)
         {
-            pages.append(full_view.mid(cursor));
+            pages.append(full_view.sliced(cursor));
             break;
         }
         if (const int cutoff = static_cast<int>(full_view.indexOf('\n', target_end)); cutoff == -1)
         {
-            pages.append(full_view.mid(cursor));
+            pages.append(full_view.sliced(cursor));
             break;
         }
         else
         {
             const int chunk_len = (cutoff + 1) - cursor;
-            pages.append(full_view.mid(cursor, chunk_len));
+            pages.append(full_view.sliced(cursor, chunk_len));
 
             cursor = cutoff + 1;
         }

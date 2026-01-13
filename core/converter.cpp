@@ -87,6 +87,28 @@ static int is_optimal_phrase(const QStringView& text, const int current_pos, con
     return -1;
 }
 
+static void append_escaped(QString& buffer, const QStringView& view)
+{
+    const QChar* data = view.data();
+    const int len = view.length();
+    for (int i = 0; i < len; ++i)
+    {
+        switch (data[i].unicode())
+        {
+        case '<': buffer += u"&lt;";
+            break;
+        case '>': buffer += u"&gt;";
+            break;
+        case '&': buffer += u"&amp;";
+            break;
+        case '"': buffer += u"&quot;";
+            break;
+        default: buffer += data[i];
+            break;
+        }
+    }
+}
+
 struct ConversionResult
 {
     QString cn;
@@ -117,7 +139,7 @@ std::optional<RuleMatch> find_matching_rule(const QStringView& text, const int c
         }
     }
 
-    const QStringView search_area = text.mid(current_pos, limit - current_pos);
+    const QStringView search_area = text.sliced(current_pos, limit - current_pos);
     std::optional<RuleMatch> best_match = std::nullopt;
 
     for (const auto& rule : rules)
@@ -194,7 +216,7 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
             if (Match match = name_set_dictionary.find(input, i); match.length > 0 && match.priority == NAME)
             {
                 QString uid = QString::number(token_counter++);
-                QString sv = get_sv(input.mid(i, match.length));
+                QString sv = get_sv(input.sliced(i, match.length));
                 if (cap_next)
                 {
                     sv[0] = sv[0].toUpper();
@@ -203,8 +225,10 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
 
                 QString trans = *match.translation;
 
-                QString safe_src = input.mid(i, match.length).toString().toHtmlEscaped();
-                out.cn += u"<a href='" % uid % u"'>" % safe_src % u"</a>";
+                out.cn += u"<a href='" % uid % u"'>";
+                append_escaped(out.cn, input.sliced(i, match.length));
+                out.cn += u"</a>";
+
                 out.sv += u"<a href='" % uid % u"'>" % sv.toHtmlEscaped() % u"</a>";
                 out.vn += u"<a href='" % uid % u"'>" % trans.toHtmlEscaped() % u"</a>";
 
@@ -228,7 +252,7 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
         if (length > 0 && priority == NAME)
         {
             QString uid = QString::number(token_counter++);
-            QString sv = get_sv(input.mid(i, length));
+            QString sv = get_sv(input.sliced(i, length));
             if (cap_next)
             {
                 sv[0] = sv[0].toUpper();
@@ -237,8 +261,10 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
 
             QString trans = *translation;
 
-            QString safe_src = input.mid(i, length).toString().toHtmlEscaped();
-            out.cn += u"<a href='" % uid % u"'>" % safe_src % u"</a>";
+            out.cn += u"<a href='" % uid % u"'>";
+            append_escaped(out.cn, input.sliced(i, length));
+            out.cn += u"</a>";
+
             out.sv += u"<a href='" % uid % u"'>" % sv.toHtmlEscaped() % u"</a>";
             out.vn += u"<a href='" % uid % u"'>" % trans.toHtmlEscaped() % u"</a>";
 
@@ -264,10 +290,10 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
                 int rule_start_len = static_cast<int>(rule->original_start.length());
 
                 bool phrase_overrides_rule = (length > 0 && priority == PHRASE &&
-                                              length > rule_start_len);
+                    length > rule_start_len);
 
-                if (!phrase_overrides_rule) {
-
+                if (!phrase_overrides_rule)
+                {
                     int inner_start_idx = i + rule_start_len;
                     int inner_len = rule_match->abs_start_of_end_token - inner_start_idx;
                     int rule_end_len = static_cast<int>(rule->original_end.length());
@@ -283,16 +309,20 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
                         cap_next = false;
                     }
 
-                    ConversionResult inner = convert_recursive(input.mid(inner_start_idx, inner_len),
+                    ConversionResult inner = convert_recursive(input.sliced(inner_start_idx, inner_len),
                                                                start_offset + inner_start_idx,
                                                                token_counter,
                                                                cap_next, progress);
 
                     progress.update(rule_end_len);
 
-                    out.cn += u"<a href='" % uid % u"'>" % rule->original_start.toHtmlEscaped() % u"</a>";
+                    out.cn += u"<a href='" % uid % u"'>";
+                    append_escaped(out.cn, rule->original_start);
+                    out.cn += u"</a>";
                     out.cn += inner.cn;
-                    out.cn += u"<a href='" % uid % u"'>" % rule->original_end.toHtmlEscaped() % u"</a>";
+                    out.cn += u"<a href='" % uid % u"'>";
+                    append_escaped(out.cn, rule->original_end);
+                    out.cn += u"</a>";
 
                     QString sv_start = get_sv(rule->original_start);
                     QString sv_end = get_sv(rule->original_end);
@@ -336,7 +366,8 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
 
                 for (int try_len = max_allowed_len; try_len >= 1; --try_len)
                 {
-                    if (auto [_, exact_phrases] = dictionary.find_exact(input.mid(i, try_len)); exact_phrases && !exact_phrases->isEmpty())
+                    if (auto [_, exact_phrases] = dictionary.find_exact(input.sliced(i, try_len)); exact_phrases &&
+                        !exact_phrases->isEmpty())
                     {
                         length = try_len;
                         translation = &exact_phrases->first();
@@ -351,7 +382,7 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
             }
 
             QString uid = QString::number(token_counter++);
-            QString sv = get_sv(input.mid(i, length));
+            QString sv = get_sv(input.sliced(i, length));
             QString trans = *translation;
 
             if (cap_next)
@@ -361,8 +392,10 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
                 cap_next = false;
             }
 
-            QString safe_src = input.mid(i, length).toString().toHtmlEscaped();
-            out.cn += u"<a href='" % uid % u"'>" % safe_src % u"</a>";
+            out.cn += u"<a href='" % uid % u"'>";
+            append_escaped(out.cn, input.sliced(i, length));
+            out.cn += u"</a>";
+
             out.sv += u"<a href='" % uid % u"'>" % sv.toHtmlEscaped() % u"</a>";;
             out.vn += u"<a href='" % uid % u"'>" % trans.toHtmlEscaped() % u"</a>";;
 
@@ -380,7 +413,7 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
             continue;
         }
 
-        process_single_char:
+    process_single_char:
         {
             QString source_text = input[i];
             QString translated_text;
@@ -420,7 +453,10 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
             }
 
             QString uid = QString::number(token_counter++);
-            out.cn += u"<a href='" % uid % u"'>" % source_text.toHtmlEscaped() % u"</a>";;
+            out.cn += u"<a href='" % uid % u"'>";
+            append_escaped(out.cn, source_text);
+            out.cn += u"</a>";
+
             out.sv += u"<a href='" % uid % u"'>" % sv_text.toHtmlEscaped() % u"</a>";;
             out.vn += u"<a href='" % uid % u"'>" % translated_text.toHtmlEscaped() % u"</a>";;
 
@@ -532,10 +568,10 @@ PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Pr
                 int start_len = static_cast<int>(rule->original_start.length());
 
                 bool phrase_overrides_rule = (length > 0 && priority == PHRASE &&
-                                              length > start_len);
+                    length > start_len);
 
-                if (!phrase_overrides_rule) {
-
+                if (!phrase_overrides_rule)
+                {
                     int inner_start_idx = i + start_len;
                     int inner_len = rule_match->abs_start_of_end_token - inner_start_idx;
                     int end_len = static_cast<int>(rule->original_end.length());
@@ -549,7 +585,8 @@ PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Pr
                         cap_next = false;
                     }
 
-                    auto [text, _] = convert_recursive_plain(input.mid(inner_start_idx, inner_len), cap_next, progress);
+                    auto [text, _] = convert_recursive_plain(input.sliced(inner_start_idx, inner_len), cap_next,
+                                                             progress);
 
                     progress.update(end_len);
 
@@ -589,7 +626,8 @@ PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Pr
 
                 for (int try_len = max_allowed_len; try_len >= 1; --try_len)
                 {
-                    if (auto [_, exact_phrases] = dictionary.find_exact(input.mid(i, try_len)); exact_phrases && !exact_phrases->isEmpty())
+                    if (auto [_, exact_phrases] = dictionary.find_exact(input.sliced(i, try_len)); exact_phrases &&
+                        !exact_phrases->isEmpty())
                     {
                         length = try_len;
                         translation = &exact_phrases->first();
@@ -624,7 +662,7 @@ PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Pr
             continue;
         }
 
-        process_single_char:
+    process_single_char:
         {
             QString translated_text;
             bool is_punct = false;
