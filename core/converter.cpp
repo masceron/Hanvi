@@ -79,7 +79,15 @@ static int is_optimal_phrase(const QStringView& text, const int current_pos, con
 
     for (int next_start = current_pos + 1; next_start < limit; ++next_start)
     {
-        if (const Match match = dictionary.find(text, next_start); match.length > threshold)
+        if (current_name_set_id != -1)
+        {
+            if (const Match match = name_set_dictionary.find(text, next_start); match.length > 0)
+            {
+                return next_start;
+            }
+        }
+
+        if (const Match match = dictionary.find(text, next_start); match.priority == NAME || match.length > threshold)
         {
             return next_start;
         }
@@ -90,7 +98,7 @@ static int is_optimal_phrase(const QStringView& text, const int current_pos, con
 static void append_escaped(QString& buffer, const QStringView& view)
 {
     const QChar* data = view.data();
-    const int len = view.length();
+    const int len = static_cast<int>(view.length());
     for (int i = 0; i < len; ++i)
     {
         switch (data[i].unicode())
@@ -366,8 +374,24 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
 
                 for (int try_len = max_allowed_len; try_len >= 1; --try_len)
                 {
-                    if (auto [_, exact_phrases] = dictionary.find_exact(input.sliced(i, try_len)); exact_phrases &&
-                        !exact_phrases->isEmpty())
+                    const auto try_string = input.sliced(i, try_len);
+                    if (current_name_set_id != -1)
+                    {
+                        if (auto [set_name, _] = name_set_dictionary.find_exact(try_string); set_name)
+                        {
+                            length = try_len;
+                            translation = set_name;
+                            break;
+                        }
+                    }
+                    auto [exact_name, exact_phrases] = dictionary.find_exact(try_string);
+                    if (exact_name)
+                    {
+                        length = try_len;
+                        translation = exact_name;
+                        break;
+                    }
+                    if (exact_phrases && !exact_phrases->isEmpty())
                     {
                         length = try_len;
                         translation = &exact_phrases->first();
@@ -626,8 +650,24 @@ PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Pr
 
                 for (int try_len = max_allowed_len; try_len >= 1; --try_len)
                 {
-                    if (auto [_, exact_phrases] = dictionary.find_exact(input.sliced(i, try_len)); exact_phrases &&
-                        !exact_phrases->isEmpty())
+                    const auto try_string = input.sliced(i, try_len);
+                    if (current_name_set_id != -1)
+                    {
+                        if (auto [set_name, _] = name_set_dictionary.find_exact(try_string); set_name)
+                        {
+                            length = try_len;
+                            translation = set_name;
+                            break;
+                        }
+                    }
+                    auto [exact_name, exact_phrases] = dictionary.find_exact(try_string);
+                    if (exact_name)
+                    {
+                        length = try_len;
+                        translation = exact_name;
+                        break;
+                    }
+                    if (exact_phrases && !exact_phrases->isEmpty())
                     {
                         length = try_len;
                         translation = &exact_phrases->first();
