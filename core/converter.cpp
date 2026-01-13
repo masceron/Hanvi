@@ -153,32 +153,80 @@ std::optional<RuleMatch> find_matching_rule(const QStringView& text, const int c
     for (const auto& rule : rules)
     {
         const int start_len = static_cast<int>(rule.original_start.length());
-
         if (search_area.length() <= start_len) continue;
 
-        if (const int relative_end_idx = static_cast<int>(search_area.indexOf(rule.original_end, start_len));
-            relative_end_idx != -1)
+        int search_offset = start_len;
+
+        while (true)
         {
+            const int relative_end_idx = static_cast<int>(search_area.indexOf(rule.original_end, search_offset));
+
+            if (relative_end_idx == -1) break;
+
             const int abs_start_of_end = current_pos + relative_end_idx;
-            const int total_end = abs_start_of_end + static_cast<int>(rule.original_end.length());
+            const int rule_end_len = static_cast<int>(rule.original_end.length());
+
+            bool is_safe = true;
+
+            const int lookback_limit = std::max(current_pos + start_len, abs_start_of_end - 6);
+
+            for (int k = abs_start_of_end; k >= lookback_limit; --k)
+            {
+                auto check_overlap = [&](const auto& dict, const Priority target_prio)
+                {
+                    Match m = dict.find(text, k);
+                    if (m.length > 0 && m.priority == target_prio)
+                    {
+                        if (k + m.length > abs_start_of_end)
+                        {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                if (current_name_set_id != -1)
+                {
+                    if (check_overlap(name_set_dictionary, NAME))
+                    {
+                        is_safe = false;
+                        break;
+                    }
+                }
+                if (check_overlap(dictionary, NAME))
+                {
+                    is_safe = false;
+                    break;
+                }
+            }
+
+            if (!is_safe)
+            {
+                search_offset = relative_end_idx + 1;
+                continue;
+            }
+
+            const int total_end = abs_start_of_end + rule_end_len;
 
             if (!best_match.has_value())
             {
                 best_match = RuleMatch{&rule, abs_start_of_end, total_end};
-                continue;
             }
-
-            if (total_end > best_match->total_end_pos)
+            else
             {
-                best_match = RuleMatch{&rule, abs_start_of_end, total_end};
-            }
-            else if (total_end == best_match->total_end_pos)
-            {
-                if (rule.original_end.length() > best_match->rule->original_end.length())
+                if (total_end > best_match->total_end_pos)
                 {
                     best_match = RuleMatch{&rule, abs_start_of_end, total_end};
                 }
+                else if (total_end == best_match->total_end_pos)
+                {
+                    if (rule.original_end.length() > best_match->rule->original_end.length())
+                    {
+                        best_match = RuleMatch{&rule, abs_start_of_end, total_end};
+                    }
+                }
             }
+            break;
         }
     }
 
