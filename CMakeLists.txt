@@ -132,6 +132,7 @@ if (WIN32)
 
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:Converter>" "${DIST_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:ConverterCLI>" "${DIST_DIR}"
+                COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/resources/NotoSansSC.ttf" ${DIST_DIR}
 
                 COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/dict.db" "${DIST_DIR}"
 
