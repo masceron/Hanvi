@@ -139,13 +139,13 @@ if (WIN32)
                 COMMAND "${WINDEPLOYQT_EXE}"
                 --dir "${DIST_DIR}"
                 --no-translations
-                --no-compiler-runtime
+                --compiler-runtime
                 "${DIST_DIR}/$<TARGET_FILE_NAME:Converter>"
 
                 COMMAND "${WINDEPLOYQT_EXE}"
                 --dir "${DIST_DIR}"
                 --no-translations
-                --no-compiler-runtime
+                --compiler-runtime
                 "${DIST_DIR}/$<TARGET_FILE_NAME:ConverterCLI>"
 
                 COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/${ZIP_NAME}" --format=zip "${DIST_DIR}"
