@@ -14,10 +14,18 @@ struct NodeData {
     std::vector<Rule> rules;
 };
 
-struct ChildHeader {
+using ChildEntry = std::pair<QChar, TrieNode*>;
+
+struct alignas(ChildEntry) ChildHeader {
     uint16_t capacity;
     uint16_t count;
-    std::pair<QChar, TrieNode*> entries[]; 
+    ChildEntry* entries() {
+        return reinterpret_cast<ChildEntry*>(this + 1);
+    }
+
+    [[nodiscard]] const ChildEntry* entries() const {
+        return reinterpret_cast<const ChildEntry*>(this + 1);
+    }
 };
 
 TrieNode* NodePool::allocate() {
@@ -70,8 +78,8 @@ TrieNode* TrieNode::find_child(const QChar ch) const {
     if (!children_block) return nullptr;
 
     const auto* header = static_cast<ChildHeader*>(children_block);
-    const auto* begin = header->entries;
-    const auto* end = header->entries + header->count;
+    const auto* begin = header->entries();
+    const auto* end = header->entries() + header->count;
 
     const auto it = std::lower_bound(begin, end, ch,
         [](const std::pair<QChar, TrieNode*>& p, const QChar val) {
@@ -105,15 +113,15 @@ void TrieNode::add_child(QChar ch, TrieNode* node) {
         new_header->capacity = static_cast<uint16_t>(new_cap);
         new_header->count = header->count;
 
-        std::uninitialized_copy_n(header->entries, header->count, new_header->entries);
+        std::uninitialized_copy_n(header->entries(), header->count, new_header->entries());
         
         ::operator delete(children_block);
         children_block = new_header;
         header = new_header;
     }
 
-    auto* begin = header->entries;
-    auto* end = header->entries + header->count;
+    auto* begin = header->entries();
+    auto* end = header->entries() + header->count;
     
     const auto it = std::lower_bound(begin, end, ch,
         [](const std::pair<QChar, TrieNode*>& p, const QChar val) {
@@ -276,7 +284,7 @@ Dictionary::~Dictionary() {
             if (n->children_block) {
                 const auto h = static_cast<ChildHeader*>(n->children_block);
                 for (int i = 0; i < h->count; ++i) {
-                    self(self, h->entries[i].second);
+                    self(self, h->entries()[i].second);
                 }
             }
             n->~TrieNode();
@@ -299,7 +307,7 @@ Dictionary& Dictionary::operator=(Dictionary&& other) noexcept {
                 if (n->children_block) {
                     auto* h = static_cast<ChildHeader*>(n->children_block);
                     for (int i = 0; i < h->count; ++i) {
-                        self(self, h->entries[i].second);
+                        self(self, h->entries()[i].second);
                     }
                 }
                 n->~TrieNode();
