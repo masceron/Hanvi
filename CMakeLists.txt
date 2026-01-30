@@ -1,35 +1,45 @@
-cmake_minimum_required(VERSION 4.2)
+cmake_minimum_required(VERSION 3.20)
 project(Converter)
 
-set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD 23)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+option(BUILD_PORTABLE "Build for distribution" ON)
+
 if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    set(CMAKE_PREFIX_PATH "D:/Programs/Qt/6.10.1/msvc2022_64")
     if (CMAKE_BUILD_TYPE MATCHES "Release")
         string(REPLACE "/EHsc" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
         string(REPLACE "/EHsc" "" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
-
         string(REPLACE "/Ob2" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
         string(REPLACE "/Ob2" "" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 
-        add_compile_options(/O2 /Oi /Ot /Ob3 /GL /GF /GA /Gy /Gw /Qpar /EHs-c- /D_HAS_EXCEPTIONS=0 /arch:AVX512 /W3 /WX /permissive-)
+        add_compile_options(/O2 /Oi /Ot /Ob3 /GL /GF /GA /Gy /Gw /Qpar /EHs-c- /D_HAS_EXCEPTIONS=0 /W3 /WX /permissive-)
         add_link_options(/LTCG /OPT:REF /OPT:ICF)
     endif ()
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    set(CMAKE_PREFIX_PATH "D:/Programs/Qt/6.10.1/mingw_64")
     if (CMAKE_BUILD_TYPE MATCHES "Release")
-        add_compile_options(-O3 -fno-exceptions -ffunction-sections -fdata-sections -march=native -mtune=native -Wall -Wextra -Werror -pedantic-errors -DNDEBUG)
+        add_compile_options(-O3 -fno-exceptions -ffunction-sections -fdata-sections -Wall -Wextra -Werror -pedantic-errors -DNDEBUG)
         add_link_options(-s)
+
+        if (BUILD_PORTABLE)
+            add_compile_options(-mtune=generic -march=x86-64-v2)
+        else()
+            add_compile_options(-march=native -mtune=native)
+        endif()
     endif ()
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    set(CMAKE_PREFIX_PATH "D:/Programs/Qt/6.10.1/llvm-mingw_64")
     if (CMAKE_BUILD_TYPE MATCHES "Release")
-        add_compile_options(-O3 -fno-exceptions -flto=full -ffunction-sections -fdata-sections -march=native -mtune=native -Wall -Wextra -Werror -pedantic-errors -DNDEBUG)
+        add_compile_options(-O3 -fno-exceptions -flto=full -ffunction-sections -fdata-sections -Wall -Wextra -Werror -pedantic-errors -DNDEBUG)
         add_link_options(-flto=full -Wl,--gc-sections -Wl,--icf=all)
+
+        if (BUILD_PORTABLE)
+            add_compile_options(-mtune=generic -march=x86-64-v2)
+        else()
+            add_compile_options(-march=native -mtune=native)
+        endif()
     endif ()
 else ()
     message(FATAL_ERROR "Compiler not supported.")
@@ -92,11 +102,13 @@ add_executable(ConverterCLI main_cli.cpp)
 target_link_libraries(ConverterCLI PRIVATE CoreLogic Qt::Core Qt::Sql Qt::Concurrent)
 
 if (WIN32)
-    find_program(WINDEPLOYQT_EXE windeployqt HINTS "${Qt6_DIR}/../../../bin")
+    if(NOT WINDEPLOYQT_EXECUTABLE)
+        find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${Qt6_DIR}/bin")
+    endif()
 
-    if (WINDEPLOYQT_EXE)
+    if (WINDEPLOYQT_EXECUTABLE)
         add_custom_command(TARGET Converter POST_BUILD
-                COMMAND "${WINDEPLOYQT_EXE}"
+                COMMAND "${WINDEPLOYQT_EXECUTABLE}"
                 --verbose 0
                 --no-translations
                 --no-compiler-runtime
@@ -111,7 +123,7 @@ if (WIN32)
         )
 
         add_custom_command(TARGET ConverterCLI POST_BUILD
-                COMMAND "${WINDEPLOYQT_EXE}"
+                COMMAND "${WINDEPLOYQT_EXECUTABLE}"
                 --verbose 0
                 --no-translations
                 --no-compiler-runtime
@@ -136,13 +148,13 @@ if (WIN32)
 
                 COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/dict.db" "${DIST_DIR}"
 
-                COMMAND "${WINDEPLOYQT_EXE}"
+                COMMAND "${WINDEPLOYQT_EXECUTABLE}"
                 --dir "${DIST_DIR}"
                 --no-translations
                 --compiler-runtime
                 "${DIST_DIR}/$<TARGET_FILE_NAME:Converter>"
 
-                COMMAND "${WINDEPLOYQT_EXE}"
+                COMMAND "${WINDEPLOYQT_EXECUTABLE}"
                 --dir "${DIST_DIR}"
                 --no-translations
                 --compiler-runtime
@@ -152,4 +164,6 @@ if (WIN32)
                 COMMAND ${CMAKE_COMMAND} -E rm -r "${DIST_DIR}"
         )
     endif ()
+    else ()
+        message(FATAL_ERROR "Windeployqt not found.")
 endif ()
