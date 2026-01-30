@@ -37,7 +37,7 @@ jobs:
         git config user.name "GitHub Actions"
         git config user.email "actions@github.com"
         # Force create/update the tag locally
-        git tag -fa nightly -m "Nightly build"
+        git tag -fa nightly -m "Hanvi"
         git push -f origin nightly
         
     - name: Update Nightly Release
