@@ -3,8 +3,9 @@ name: Build Hanvi
 on:
   push:
     branches: [ "master", "main" ]
-  pull_request:
-    branches: [ "master", "main" ]
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -31,8 +32,20 @@ jobs:
     - name: Create Portable Zip
       run: cmake --build build --target MakePortableZip --config Release
 
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
+    - name: Update Nightly Tag
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        # Force create/update the tag locally
+        git tag -fa nightly -m "Nightly build"
+        git push -f origin nightly
+        
+    - name: Update Nightly Release
+      uses: softprops/action-gh-release@v2
       with:
-        name: Hanvi
-        path: build/Hanvi.zip
+        tag_name: nightly
+        name: Nightly Build
+        body: "Latest automatic build from the main branch."
+        files: build/Hanvi.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
