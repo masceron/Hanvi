@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
 #endif
 
     const QCoreApplication app(argc, argv);
-    QCoreApplication::setApplicationName("Converter-CLI");
+    QCoreApplication::setApplicationName("Hanvi-CLI");
     QCoreApplication::setApplicationVersion("1.0");
     QCommandLineParser parser;
     parser.setApplicationDescription("Convert Chinese text to Vietnamese via CLI.");

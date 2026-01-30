@@ -20,7 +20,7 @@ MainWindow::MainWindow(QWidget* parent) :
     current_page = 0;
     setWindowState(Qt::WindowMaximized);
     ui->setupUi(this);
-    setWindowTitle("Converter");
+    setWindowTitle("Hanvi");
 
     const auto name_set_manager = new QAction("Namesets", this);
 

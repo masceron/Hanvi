@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(Converter)
+project(Hanvi)
 
 set(CMAKE_CXX_STANDARD 23)
 
@@ -21,7 +21,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     endif ()
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     if (CMAKE_BUILD_TYPE MATCHES "Release")
-        add_compile_options(-O3 -fno-exceptions -ffunction-sections -fdata-sections -Wall -Wextra -Werror -pedantic-errors -DNDEBUG)
+        add_compile_options(-O3 -fomit-frame-pointer -fno-exceptions -ffunction-sections -fdata-sections -Wall -Wextra -Werror -pedantic-errors -DNDEBUG)
         add_link_options(-s)
 
         if (BUILD_PORTABLE)
@@ -32,7 +32,7 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     endif ()
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     if (CMAKE_BUILD_TYPE MATCHES "Release")
-        add_compile_options(-O3 -fno-exceptions -flto=full -ffunction-sections -fdata-sections -Wall -Wextra -Werror -pedantic-errors -DNDEBUG)
+        add_compile_options(-O3 -fomit-frame-pointer -fno-exceptions -flto=full -ffunction-sections -fdata-sections -Wall -Wextra -Werror -pedantic-errors -DNDEBUG)
         add_link_options(-flto=full -Wl,--gc-sections -Wl,--icf=all)
 
         if (BUILD_PORTABLE)
@@ -69,7 +69,7 @@ set(CORE
 add_library(CoreLogic STATIC ${CORE})
 target_link_libraries(CoreLogic PRIVATE Qt::Core Qt::Widgets Qt::Sql Qt::Concurrent)
 
-add_executable(Converter WIN32 main.cpp
+add_executable(Hanvi WIN32 main.cpp
         components/mainwindow.cpp
         components/mainwindow.h
         components/mainwindow.ui
@@ -91,15 +91,15 @@ add_executable(Converter WIN32 main.cpp
         components/rulepopup.ui
 )
 
-target_include_directories(Converter PRIVATE
+target_include_directories(Hanvi PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/components"
         "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
-target_link_libraries(Converter PRIVATE CoreLogic Qt::Core Qt::Sql Qt::Gui Qt::Widgets Qt::Concurrent)
+target_link_libraries(Hanvi PRIVATE CoreLogic Qt::Core Qt::Sql Qt::Gui Qt::Widgets Qt::Concurrent)
 
-add_executable(ConverterCLI main_cli.cpp)
-target_link_libraries(ConverterCLI PRIVATE CoreLogic Qt::Core Qt::Sql Qt::Concurrent)
+add_executable(HanviCLI main_cli.cpp)
+target_link_libraries(HanviCLI PRIVATE CoreLogic Qt::Core Qt::Sql Qt::Concurrent)
 
 if (WIN32)
     if(NOT WINDEPLOYQT_EXECUTABLE)
@@ -107,43 +107,43 @@ if (WIN32)
     endif()
 
     if (WINDEPLOYQT_EXECUTABLE)
-        add_custom_command(TARGET Converter POST_BUILD
+        add_custom_command(TARGET Hanvi POST_BUILD
                 COMMAND "${WINDEPLOYQT_EXECUTABLE}"
                 --verbose 0
                 --no-translations
                 --no-compiler-runtime
-                --dir "$<TARGET_FILE_DIR:Converter>"
-                "$<TARGET_FILE:Converter>"
+                --dir "$<TARGET_FILE_DIR:Hanvi>"
+                "$<TARGET_FILE:Hanvi>"
         )
 
-        add_custom_command(TARGET Converter POST_BUILD
+        add_custom_command(TARGET Hanvi POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CMAKE_CURRENT_SOURCE_DIR}/dict.db"
-                "$<TARGET_FILE_DIR:Converter>/dict.db"
+                "$<TARGET_FILE_DIR:Hanvi>/dict.db"
         )
 
-        add_custom_command(TARGET ConverterCLI POST_BUILD
+        add_custom_command(TARGET HanviCLI POST_BUILD
                 COMMAND "${WINDEPLOYQT_EXECUTABLE}"
                 --verbose 0
                 --no-translations
                 --no-compiler-runtime
-                --dir "$<TARGET_FILE_DIR:ConverterCLI>"
-                "$<TARGET_FILE:ConverterCLI>"
+                --dir "$<TARGET_FILE_DIR:HanviCLI>"
+                "$<TARGET_FILE:HanviCLI>"
         )
 
-        set(DIST_DIR "${CMAKE_BINARY_DIR}/Converter")
-        set(ZIP_NAME "Converter.zip")
+        set(DIST_DIR "${CMAKE_BINARY_DIR}/Hanvi")
+        set(ZIP_NAME "Hanvi.zip")
 
         add_custom_target(MakePortableZip ALL
-                DEPENDS Converter ConverterCLI
+                DEPENDS Hanvi HanviCLI
         )
 
         add_custom_command(TARGET MakePortableZip POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E remove_directory "${DIST_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E make_directory "${DIST_DIR}"
 
-                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:Converter>" "${DIST_DIR}"
-                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:ConverterCLI>" "${DIST_DIR}"
+                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:Hanvi>" "${DIST_DIR}"
+                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:HanviCLI>" "${DIST_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/resources/NotoSansSC.ttf" ${DIST_DIR}
 
                 COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/dict.db" "${DIST_DIR}"
@@ -152,18 +152,18 @@ if (WIN32)
                 --dir "${DIST_DIR}"
                 --no-translations
                 --compiler-runtime
-                "${DIST_DIR}/$<TARGET_FILE_NAME:Converter>"
+                "${DIST_DIR}/$<TARGET_FILE_NAME:Hanvi>"
 
                 COMMAND "${WINDEPLOYQT_EXECUTABLE}"
                 --dir "${DIST_DIR}"
                 --no-translations
                 --compiler-runtime
-                "${DIST_DIR}/$<TARGET_FILE_NAME:ConverterCLI>"
+                "${DIST_DIR}/$<TARGET_FILE_NAME:HanviCLI>"
 
                 COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/${ZIP_NAME}" --format=zip "${DIST_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E rm -r "${DIST_DIR}"
         )
-    endif ()
     else ()
         message(FATAL_ERROR "Windeployqt not found.")
+    endif ()
 endif ()
