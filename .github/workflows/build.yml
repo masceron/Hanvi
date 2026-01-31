@@ -15,16 +15,22 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v6
 
+    - name: Install LLVM-MinGW
+      run: |
+        curl -L -o llvm-mingw.zip https://github.com/mstorsjo/llvm-mingw/releases/download/nightly/llvm-mingw-nightly-ucrt-x86_64.zip
+        7z x llvm-mingw.zip -o"C:\" -y
+        echo "C:\llvm-mingw-nightly-ucrt-x86_64\bin" >> $env:GITHUB_PATH
+
     - name: Install Qt
       uses: jurplel/install-qt-action@v4
       with:
-        version: '6.10.1' 
+        version: '6.10.2'
         host: 'windows'
         target: 'desktop'
-        arch: 'win64_msvc2022_64'
+        arch: 'win64_llvm_mingw'
 
     - name: Configure CMake
-      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+      run: cmake -B build -S . -G "Ninja" -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
       run: cmake --build build --config Release
@@ -39,13 +45,13 @@ jobs:
         # Force create/update the tag locally
         git tag -fa nightly -m "Hanvi"
         git push -f origin nightly
-        
+
     - name: Update Nightly Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: nightly
         name: Hanvi
-        body: "Latest automatic build from the main branch."
+        body: "Latest automatic build of Hanvi."
         files: build/Hanvi.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
