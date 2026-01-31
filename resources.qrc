@@ -3,6 +3,5 @@
     <qresource prefix="/">
         <file>resources/loader.gif</file>
         <file>resources/icon.ico</file>
-        <file>resources/NotoSansSC.ttf</file>
     </qresource>
 </RCC>
