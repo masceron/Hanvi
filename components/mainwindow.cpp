@@ -22,8 +22,7 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->setupUi(this);
     setWindowTitle("Hanvi");
 
-    const auto name_set_manager = new QAction("Namesets", this);
-
+    auto* name_set_manager = ui->menubar->addAction("Namesets");
     connect(name_set_manager, &QAction::triggered, this, [this]
     {
         auto* manager = new NamesetsManager(this);
@@ -34,7 +33,7 @@ MainWindow::MainWindow(QWidget* parent) :
 
     ui->menubar->addAction(name_set_manager);
 
-    const auto reload_action = new QAction("Reload", this);
+    auto* reload_action = ui->menubar->addAction("Re-convert");
     reload_action->setShortcut(QKeySequence("Ctrl+R"));
     connect(reload_action, &QAction::triggered, this, [this]
     {
@@ -43,8 +42,19 @@ MainWindow::MainWindow(QWidget* parent) :
             convert_and_display(true);
         }
     });
-
     ui->menubar->addAction(reload_action);
+
+    auto* reload_data_action = ui->menubar->addAction("Reload dict");
+    reload_data_action->setShortcut(QKeySequence("Ctrl+Shift+R"));
+    connect(reload_data_action, &QAction::triggered, this, [this]
+    {
+        ui->progress_bar->setValue(0);
+        reload_dict([&]
+        {
+            convert_and_display(true);
+        });
+    });
+    ui->menubar->addAction(reload_data_action);
 
     ui->left_right->setStretchFactor(0, 1);
     ui->left_right->setStretchFactor(1, 4);
@@ -419,7 +429,8 @@ void MainWindow::update_display()
         saved_cursor_pos = -1;
     }
 
-    QTimer::singleShot(0, this, [this] {
+    QTimer::singleShot(0, this, [this]
+    {
         ui->cn_input->verticalScrollBar()->setValue(saved_scroll.cn);
         ui->sv_output->verticalScrollBar()->setValue(saved_scroll.sv);
         ui->vn_output->verticalScrollBar()->setValue(saved_scroll.vn);
