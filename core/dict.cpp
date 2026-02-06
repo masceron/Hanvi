@@ -19,7 +19,7 @@ void init_db()
     query.exec("VACUUM;");
 }
 
-void load_data_on_startup(const std::function<void()>& on_finished)
+void load_global_data(const std::function<void()>& on_finished)
 {
     QFuture<void> future_sv = QtConcurrent::run([]
     {
@@ -135,7 +135,7 @@ void load_dict(const std::function<void()>& on_finished)
 {
     init_db();
     load_name_sets_data();
-    load_data_on_startup(on_finished);
+    load_global_data(on_finished);
 }
 
 void load_name_set(const int id)
@@ -158,4 +158,16 @@ void load_name_set(const int id)
             name_set_dictionary.insert_bulk(key, NAME, val);
         }
     }
+}
+
+void reload_dict(const std::function<void()>& on_finished)
+{
+    sv_readings.clear();
+    punctuations.clear();
+    dictionary = Dictionary();
+    name_sets.clear();
+
+    load_name_sets_data();
+    load_name_set(current_name_set_id);
+    load_global_data(on_finished);
 }

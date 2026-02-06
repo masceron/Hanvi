@@ -64,7 +64,7 @@ struct TrieNode {
 
     void set_name(const QString& value);
     void add_phrase(const QString& value);
-    void set_phrases(const QStringList& list);
+    void set_phrases(const QStringList& list_val);
     void add_rule(const Rule& rule);
 
     void remove_name();

@@ -252,8 +252,7 @@ void TrieNode::add_rule(const Rule& rule) {
 }
 
 void TrieNode::remove_name() {
-    const uintptr_t tag = data & TAG_MASK;
-    if (tag == TAG_NAME) {
+    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_NAME) {
         delete reinterpret_cast<QString*>(data & ~TAG_MASK);
         data = TAG_NULL;
     } else if (tag == TAG_COMPLEX) {
@@ -263,8 +262,7 @@ void TrieNode::remove_name() {
 }
 
 void TrieNode::remove_phrases() {
-    const uintptr_t tag = data & TAG_MASK;
-    if (tag == TAG_PHRASE) {
+    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_PHRASE) {
         delete reinterpret_cast<QStringList*>(data & ~TAG_MASK);
         data = TAG_NULL;
     } else if (tag == TAG_COMPLEX) {

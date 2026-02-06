@@ -13,3 +13,4 @@ inline std::vector<NameSet> name_sets;
 
 void load_dict(const std::function<void()>& on_finished);
 void load_name_set(int id);
+void reload_dict(const std::function<void()>& on_finished);
