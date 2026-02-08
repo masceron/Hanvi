@@ -377,7 +377,7 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
 
                     progress.update(rule_start_len);
 
-                    QString uid = u"r" + QString::number(token_counter++);
+                    QString uid = "r" + QString::number(token_counter++);
 
                     QString t_start = rule->translation_start;
                     if (cap_next && !t_start.isEmpty())
