@@ -1,5 +1,3 @@
-#include <QListWidgetItem>
-
 #include "dictpopup.h"
 #include "chiplist.h"
 #include "ui_DictPopup.h"

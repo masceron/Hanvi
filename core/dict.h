@@ -1,6 +1,7 @@
 #pragma once
 
-#include <QSqlDatabase>
+#include <QHash>
+#include <QString>
 
 #include "structures.h"
 
