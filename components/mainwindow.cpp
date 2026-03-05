@@ -171,6 +171,14 @@ MainWindow::MainWindow(QWidget* parent) :
             convert_and_display(true);
         }
     });
+
+    ui->current_page->setValidator(new QIntValidator(1, 9999, this));
+    connect(ui->current_page, &QLineEdit::editingFinished, this, [&]
+    {
+        const auto target = std::clamp(ui->current_page->text().toInt(), 1, static_cast<int>(pages.size()));
+        current_page = target - 1;
+        convert_and_display(false);
+    });
 }
 
 void MainWindow::load_data()
@@ -201,14 +209,17 @@ void MainWindow::update_pagination_controls() const
 {
     if (const int total = static_cast<int>(pages.size()); total == 0)
     {
-        ui->current_page->setText("Page 0 / 0");
+        ui->current_page->setText("0");
+        ui->current_page->setEnabled(false);
+        ui->total_page->setText("0");
         ui->previous_page->setEnabled(false);
         ui->next_page->setEnabled(false);
     }
     else
     {
-        ui->current_page->setText(QString("Page %1 / %2").arg(current_page + 1).arg(total));
-
+        ui->current_page->setEnabled(total > 1);
+        ui->current_page->setText(QString::number(current_page + 1));
+        ui->total_page->setText(QString::number(total));
         ui->previous_page->setEnabled(current_page > 0);
         ui->next_page->setEnabled(current_page < total - 1);
     }
