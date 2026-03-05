@@ -14,78 +14,104 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="outer">
-   <layout class="QVBoxLayout" name="verticalLayout_3">
+   <layout class="QVBoxLayout" name="verticalLayout" stretch="1,0">
     <item>
-     <layout class="QVBoxLayout" name="main" stretch="1,0">
-      <item>
-       <widget class="QSplitter" name="left_right">
-        <property name="orientation">
-         <enum>Qt::Orientation::Horizontal</enum>
+     <widget class="QSplitter" name="left_right">
+      <property name="orientation">
+       <enum>Qt::Orientation::Horizontal</enum>
+      </property>
+      <widget class="QSplitter" name="cn_sv">
+       <property name="orientation">
+        <enum>Qt::Orientation::Vertical</enum>
+       </property>
+       <widget class="QTextBrowser" name="cn_input">
+        <property name="focusPolicy">
+         <enum>Qt::FocusPolicy::ClickFocus</enum>
         </property>
-        <widget class="QSplitter" name="cn_sv">
-         <property name="orientation">
-          <enum>Qt::Orientation::Vertical</enum>
-         </property>
-         <widget class="QTextBrowser" name="cn_input">
+        <property name="styleSheet">
+         <string notr="true"/>
+        </property>
+        <property name="openLinks">
+         <bool>false</bool>
+        </property>
+       </widget>
+       <widget class="QTextBrowser" name="sv_output">
+        <property name="focusPolicy">
+         <enum>Qt::FocusPolicy::ClickFocus</enum>
+        </property>
+        <property name="openLinks">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </widget>
+      <widget class="QWidget" name="">
+       <layout class="QVBoxLayout" name="vn_out" stretch="1,0">
+        <item>
+         <widget class="QTextBrowser" name="vn_output">
           <property name="focusPolicy">
            <enum>Qt::FocusPolicy::ClickFocus</enum>
-          </property>
-          <property name="styleSheet">
-           <string notr="true"/>
           </property>
           <property name="openLinks">
            <bool>false</bool>
           </property>
          </widget>
-         <widget class="QTextBrowser" name="sv_output">
-          <property name="focusPolicy">
-           <enum>Qt::FocusPolicy::ClickFocus</enum>
-          </property>
-          <property name="openLinks">
-           <bool>false</bool>
-          </property>
-         </widget>
-        </widget>
-        <widget class="QWidget" name="layoutWidget">
-         <layout class="QVBoxLayout" name="verticalLayout">
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="page_control" stretch="1,0,1">
           <item>
-           <widget class="QTextBrowser" name="vn_output">
-            <property name="focusPolicy">
-             <enum>Qt::FocusPolicy::ClickFocus</enum>
+           <widget class="QPushButton" name="previous_page">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+              <bold>true</bold>
+             </font>
             </property>
-            <property name="openLinks">
-             <bool>false</bool>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="text">
+             <string>Previous</string>
             </property>
            </widget>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout" stretch="2,3,2">
+           <layout class="QHBoxLayout" name="page_counter" stretch="0,1,0">
+            <property name="spacing">
+             <number>6</number>
+            </property>
             <item>
-             <widget class="QPushButton" name="previous_page">
+             <widget class="QLineEdit" name="current_page">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>45</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>45</width>
+                <height>16777215</height>
+               </size>
+              </property>
               <property name="font">
                <font>
-                <pointsize>10</pointsize>
+                <family>Tahoma</family>
+                <pointsize>11</pointsize>
                 <bold>true</bold>
+                <kerning>false</kerning>
                </font>
               </property>
               <property name="focusPolicy">
-               <enum>Qt::FocusPolicy::NoFocus</enum>
+               <enum>Qt::FocusPolicy::ClickFocus</enum>
               </property>
-              <property name="text">
-               <string>Previous</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="current_page">
-              <property name="font">
-               <font>
-                <pointsize>13</pointsize>
-                <bold>true</bold>
-               </font>
-              </property>
-              <property name="text">
-               <string/>
+              <property name="styleSheet">
+               <string notr="true">background: transparent</string>
               </property>
               <property name="alignment">
                <set>Qt::AlignmentFlag::AlignCenter</set>
@@ -93,69 +119,136 @@
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="next_page">
+             <widget class="QLabel" name="slash">
+              <property name="minimumSize">
+               <size>
+                <width>20</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>20</width>
+                <height>16777215</height>
+               </size>
+              </property>
               <property name="font">
                <font>
-                <pointsize>10</pointsize>
+                <family>Tahoma</family>
+                <pointsize>11</pointsize>
                 <bold>true</bold>
+                <kerning>false</kerning>
                </font>
               </property>
               <property name="focusPolicy">
-               <enum>Qt::FocusPolicy::NoFocus</enum>
+               <enum>Qt::FocusPolicy::ClickFocus</enum>
               </property>
               <property name="text">
-               <string>Next</string>
+               <string>/</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignCenter</set>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="total_page">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>45</width>
+                <height>0</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>45</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="focusPolicy">
+               <enum>Qt::FocusPolicy::ClickFocus</enum>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">font: 700 12pt &quot;Tahoma&quot;;</string>
+              </property>
+              <property name="text">
+               <string>0</string>
+              </property>
+              <property name="alignment">
+               <set>Qt::AlignmentFlag::AlignCenter</set>
               </property>
              </widget>
             </item>
            </layout>
           </item>
+          <item>
+           <widget class="QPushButton" name="next_page">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+              <bold>true</bold>
+             </font>
+            </property>
+            <property name="focusPolicy">
+             <enum>Qt::FocusPolicy::NoFocus</enum>
+            </property>
+            <property name="text">
+             <string>Next</string>
+            </property>
+           </widget>
+          </item>
          </layout>
-        </widget>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="bottom_bar">
+      <item>
+       <widget class="QProgressBar" name="progress_bar">
+        <property name="styleSheet">
+         <string notr="true">font: 700 9pt &quot;Segoe UI&quot;;</string>
+        </property>
+        <property name="value">
+         <number>0</number>
+        </property>
        </widget>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="bottom_bar">
-        <item>
-         <widget class="QProgressBar" name="progress_bar">
-          <property name="styleSheet">
-           <string notr="true">font: 700 9pt &quot;Segoe UI&quot;;</string>
-          </property>
-          <property name="value">
-           <number>0</number>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QComboBox" name="current_name_set">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="editable">
-           <bool>false</bool>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QSpinBox" name="char_per_page">
-          <property name="minimum">
-           <number>1000</number>
-          </property>
-          <property name="maximum">
-           <number>50000</number>
-          </property>
-          <property name="singleStep">
-           <number>1000</number>
-          </property>
-          <property name="value">
-           <number>5000</number>
-          </property>
-         </widget>
-        </item>
-       </layout>
+       <widget class="QComboBox" name="current_name_set">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="editable">
+         <bool>false</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QSpinBox" name="char_per_page">
+        <property name="minimum">
+         <number>1000</number>
+        </property>
+        <property name="maximum">
+         <number>50000</number>
+        </property>
+        <property name="singleStep">
+         <number>1000</number>
+        </property>
+        <property name="value">
+         <number>5000</number>
+        </property>
+       </widget>
       </item>
      </layout>
     </item>
