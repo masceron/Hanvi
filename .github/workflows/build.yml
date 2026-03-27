@@ -28,6 +28,7 @@ jobs:
         host: 'windows'
         target: 'desktop'
         arch: 'win64_llvm_mingw'
+        extra: '--base https://download.qt.io'
 
     - name: Configure CMake
       run: cmake -B build -S . -G "Ninja" -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Release
