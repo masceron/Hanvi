@@ -112,6 +112,23 @@ add_custom_command(TARGET Hanvi POST_BUILD
 )
 
 if (WIN32)
+    if (NOT WINDEPLOYQT_EXECUTABLE)
+        find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${Qt6_DIR}/bin")
+    endif ()
+
+    if (NOT WINDEPLOYQT_EXECUTABLE)
+        message(FATAL_ERROR "Windeployqt not found.")
+    endif ()
+endif ()
+
+add_custom_command(TARGET Hanvi POST_BUILD
+        COMMAND "${WINDEPLOYQT_EXECUTABLE}" --dir "${CMAKE_BINARY_DIR}" --no-translations --no-compiler-runtime "$<TARGET_FILE_NAME:Hanvi>"
+)
+add_custom_command(TARGET HanviCLI POST_BUILD
+        COMMAND "${WINDEPLOYQT_EXECUTABLE}" --dir "${CMAKE_BINARY_DIR}" --no-translations --no-compiler-runtime "$<TARGET_FILE_NAME:HanviCLI>"
+)
+
+if (WIN32)
     set(DIST_DIR "${CMAKE_BINARY_DIR}/Hanvi")
 else ()
     set(DIST_DIR "${CMAKE_BINARY_DIR}/Hanvi v1.0")
@@ -121,16 +138,6 @@ set(ZIP_NAME "Hanvi.zip")
 add_custom_target(MakePortableZip ALL
         DEPENDS Hanvi HanviCLI
 )
-
-if (WIN32)
-    if (NOT WINDEPLOYQT_EXECUTABLE)
-        find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${Qt6_DIR}/bin")
-    endif ()
-
-    if (NOT WINDEPLOYQT_EXECUTABLE)
-        message(FATAL_ERROR "Windeployqt not found.")
-    endif ()
-endif ()
 
 add_custom_command(TARGET MakePortableZip POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E remove_directory "${DIST_DIR}"

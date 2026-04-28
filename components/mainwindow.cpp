@@ -46,12 +46,16 @@ MainWindow::MainWindow(QWidget* parent) :
 
     auto* reload_data_action = ui->menubar->addAction("Reload dict");
     reload_data_action->setShortcut(QKeySequence("Ctrl+Shift+R"));
-    connect(reload_data_action, &QAction::triggered, this, [this]
+    connect(reload_data_action, &QAction::triggered, this, [this, reload_data_action]
     {
         ui->progress_bar->setValue(0);
-        reload_dict([&]
+        ui->statusbar->showMessage("Reloading dictionary...");
+        reload_data_action->setEnabled(false);
+        QCoreApplication::processEvents();
+        reload_dict([this, reload_data_action]
         {
             convert_and_display(true);
+            reload_data_action->setEnabled(true);
         });
     });
     ui->menubar->addAction(reload_data_action);
@@ -241,6 +245,9 @@ MainWindow::~MainWindow()
 
 void MainWindow::convert_and_display(const bool scroll_back)
 {
+    if (watcher.isRunning()) {
+        return;
+    }
     if (!input_text.isEmpty() && !pages[current_page].isEmpty())
     {
         ui->statusbar->showMessage("Converting...");
