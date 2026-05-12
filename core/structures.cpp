@@ -147,7 +147,7 @@ void TrieNode::add_child(QChar ch, TrieNode* node) {
     header->count++;
 }
 
-const QString* TrieNode::get_name() const {
+QString* TrieNode::get_name() const {
     const uintptr_t tag = data & TAG_MASK;
     const uintptr_t ptr_val = data & ~TAG_MASK;
 
@@ -159,7 +159,7 @@ const QString* TrieNode::get_name() const {
     return nullptr;
 }
 
-const QStringList* TrieNode::get_phrases() const {
+QStringList* TrieNode::get_phrases() const {
     const uintptr_t tag = data & TAG_MASK;
     const uintptr_t ptr_val = data & ~TAG_MASK;
 
@@ -332,15 +332,13 @@ Dictionary& Dictionary::operator=(Dictionary&& other) noexcept {
     return *this;
 }
 
-void Dictionary::insert(const QString& key, const QString& value, const Priority priority) const
+void Dictionary::insert(const QString& key, const QString& value, const Priority priority)
 {
-    auto* mutable_this = const_cast<Dictionary*>(this);
-
     TrieNode* node = root;
     for (const QChar ch : key) {
         TrieNode* next = node->find_child(ch);
         if (!next) {
-            next = mutable_this->pool.allocate();
+            next = pool.allocate();
             node->add_child(ch, next);
         }
         node = next;
@@ -354,15 +352,13 @@ void Dictionary::insert(const QString& key, const QString& value, const Priority
     }
 }
 
-void Dictionary::insert_bulk(const QString& key, const Priority priority, const QString& value) const
+void Dictionary::insert_bulk(const QString& key, const Priority priority, const QString& value)
 {
-    auto* mutable_this = const_cast<Dictionary*>(this);
-
     TrieNode* node = root;
     for (const QChar ch : key) {
         TrieNode* next = node->find_child(ch);
         if (!next) {
-            next = mutable_this->pool.allocate();
+            next = pool.allocate();
             node->add_child(ch, next);
         }
         node = next;
@@ -388,7 +384,7 @@ std::pair<QString*, QStringList*> Dictionary::find_exact(const QStringView& key)
         return {nullptr, nullptr};
     }
 
-    return { const_cast<QString*>(node->get_name()), const_cast<QStringList*>(node->get_phrases()) };
+    return { node->get_name(), node->get_phrases() };
 }
 
 void Dictionary::reorder(const QString& key, const QStringList& new_order) const
@@ -438,15 +434,13 @@ Match Dictionary::find(const QStringView& text, const int startPos) const
     return {best_len_found, priority, rules, translated};
 }
 
-void Dictionary::insert_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end) const
+void Dictionary::insert_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end)
 {
-    auto* mutable_this = const_cast<Dictionary*>(this);
-
     TrieNode* node = root;
     for (const QChar ch : start) {
         TrieNode* next = node->find_child(ch);
         if (!next) {
-            next = mutable_this->pool.allocate();
+            next = pool.allocate();
             node->add_child(ch, next);
         }
         node = next;
@@ -535,7 +529,7 @@ void Dictionary::remove_meaning(const QString& key, const QString& value) const
     TrieNode* node = walk_node(key);
     if (!node) return;
 
-    if (const auto list = const_cast<QStringList*>(node->get_phrases())) {
+    if (const auto list = node->get_phrases()) {
         list->removeAll(value);
         if (list->isEmpty()) {
             node->remove_phrases();

@@ -58,8 +58,8 @@ struct TrieNode {
     [[nodiscard]] TrieNode* find_child(QChar ch) const;
     void add_child(QChar ch, TrieNode* node);
 
-    [[nodiscard]] const QString* get_name() const;
-    [[nodiscard]] const QStringList* get_phrases() const;
+    [[nodiscard]] QString* get_name() const;
+    [[nodiscard]] QStringList* get_phrases() const;
     [[nodiscard]] std::vector<Rule>* get_rules() const;
 
     void set_name(const QString& value);
@@ -95,15 +95,15 @@ public:
     [[nodiscard]] Match find(const QStringView& text, int startPos) const;
     [[nodiscard]] std::pair<QString*, QStringList*> find_exact(const QStringView& key) const;
 
-    void insert(const QString& key, const QString& value, Priority priority) const;
-    void insert_bulk(const QString& key, Priority priority, const QString& value) const;
+    void insert(const QString& key, const QString& value, Priority priority);
+    void insert_bulk(const QString& key, Priority priority, const QString& value);
 
     void remove(const QString& key, Priority priority) const;
     void remove_meaning(const QString& key, const QString& value) const;
 
     void reorder(const QString& key, const QStringList& new_order) const;
 
-    void insert_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end) const;
+    void insert_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end);
     [[nodiscard]] const Rule* find_exact_rule(const QString& start, const QString& end) const;
     void edit_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end) const;
     void remove_rule(const QString& start, const QString& end) const;
