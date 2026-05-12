@@ -37,7 +37,7 @@ jobs:
       run: cmake --build build --config Release
 
     - name: Create Portable Zip
-      run: cmake --build build --target MakePortableZip --config Release
+      run: cmake --build build --target MakePortableZip --config Release -j 16
 
     - name: Update Nightly Tag
       run: |
