@@ -79,8 +79,19 @@ TrieNode* TrieNode::find_child(const QChar ch) const {
 
     const auto* header = static_cast<ChildHeader*>(children_block);
     const auto* begin = header->entries();
-    const auto* end = header->entries() + header->count;
 
+    //Most nodes have only one child on average for CN-VN conversion.
+    if (header->count == 1) {
+        return (begin->first == ch) ? begin->second : nullptr;
+    }
+
+    const auto* end = header->entries() + header->count;
+    if (header->count <= 8) {
+        for (const auto* it = begin; it != end; ++it) {
+            if (it->first == ch) return it->second;
+        }
+        return nullptr;
+    }
     const auto it = std::lower_bound(begin, end, ch,
         [](const std::pair<QChar, TrieNode*>& p, const QChar val) {
             return p.first < val;
@@ -103,26 +114,26 @@ void TrieNode::add_child(QChar ch, TrieNode* node) {
         header->capacity = static_cast<uint16_t>(initial_cap);
         header->count = 0;
         children_block = header;
-    } 
+    }
     else if (header->count == header->capacity) {
         const size_t new_cap = header->capacity * 2;
         const size_t size_bytes = sizeof(ChildHeader) + new_cap * sizeof(std::pair<QChar, TrieNode*>);
-        
+
         void* mem = ::operator new(size_bytes);
         auto* new_header = new (mem) ChildHeader;
         new_header->capacity = static_cast<uint16_t>(new_cap);
         new_header->count = header->count;
 
         std::uninitialized_copy_n(header->entries(), header->count, new_header->entries());
-        
-        ::operator delete(children_block);
+
+        operator delete(children_block);
         children_block = new_header;
         header = new_header;
     }
 
     auto* begin = header->entries();
     auto* end = header->entries() + header->count;
-    
+
     const auto it = std::lower_bound(begin, end, ch,
         [](const std::pair<QChar, TrieNode*>& p, const QChar val) {
             return p.first < val;
@@ -131,7 +142,7 @@ void TrieNode::add_child(QChar ch, TrieNode* node) {
     if (it != end) {
         std::move_backward(it, end, end + 1);
     }
-    
+
     *it = {ch, node};
     header->count++;
 }
@@ -139,7 +150,7 @@ void TrieNode::add_child(QChar ch, TrieNode* node) {
 const QString* TrieNode::get_name() const {
     const uintptr_t tag = data & TAG_MASK;
     const uintptr_t ptr_val = data & ~TAG_MASK;
-    
+
     if (tag == TAG_NAME) return reinterpret_cast<QString*>(ptr_val);
     if (tag == TAG_COMPLEX) {
         const auto* c = reinterpret_cast<NodeData*>(ptr_val);
@@ -192,10 +203,10 @@ void TrieNode::set_name(const QString& value) {
     }
 
     const uintptr_t tag = data & TAG_MASK;
-    
+
     if (tag == TAG_NAME) {
         *reinterpret_cast<QString*>(data & ~TAG_MASK) = value;
-    } 
+    }
     else {
         ensure_complex();
         auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
@@ -245,7 +256,7 @@ void TrieNode::add_rule(const Rule& rule) {
     ensure_complex();
     auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
     c->rules.push_back(rule);
-    
+
     std::ranges::sort(c->rules, [](const Rule& a, const Rule& b) {
         return a.original_end.length() > b.original_end.length();
     });
@@ -324,7 +335,7 @@ Dictionary& Dictionary::operator=(Dictionary&& other) noexcept {
 void Dictionary::insert(const QString& key, const QString& value, const Priority priority) const
 {
     auto* mutable_this = const_cast<Dictionary*>(this);
-    
+
     TrieNode* node = root;
     for (const QChar ch : key) {
         TrieNode* next = node->find_child(ch);
@@ -384,7 +395,7 @@ void Dictionary::reorder(const QString& key, const QStringList& new_order) const
 {
     TrieNode* node = walk_node(key);
     if (!node) return;
-    
+
     node->set_phrases(new_order);
 }
 
