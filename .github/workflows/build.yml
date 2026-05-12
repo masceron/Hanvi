@@ -34,7 +34,7 @@ jobs:
       run: cmake -B build -S . -G "Ninja" -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
-      run: cmake --build build --config Release
+      run: cmake --build build --config Release -j 16
 
     - name: Create Portable Zip
       run: cmake --build build --target MakePortableZip --config Release -j 16
