@@ -202,9 +202,7 @@ void TrieNode::set_name(const QString& value) {
         return;
     }
 
-    const uintptr_t tag = data & TAG_MASK;
-
-    if (tag == TAG_NAME) {
+    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_NAME) {
         *reinterpret_cast<QString*>(data & ~TAG_MASK) = value;
     }
     else {
