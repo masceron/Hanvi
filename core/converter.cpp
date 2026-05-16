@@ -511,7 +511,7 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
             QString source_text = input[i];
             QString translated_text;
             QString sv_text;
-            bool is_punct = false;
+            bool is_punctuator = false;
 
             if (sv_readings.contains(ch))
             {
@@ -524,21 +524,21 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
                 translated_text = !mapped.isNull() ? mapped : ch;
                 sv_text = translated_text;
 
-                static constexpr QStringView punct(u".!?…:;\"");
+                static constexpr QStringView punctuators(u".!?…:;\"");
                 static constexpr QStringView comma(u",");
 
-                if (punct.contains(translated_text))
+                if (punctuators.contains(translated_text))
                 {
                     cap_next = true;
-                    is_punct = true;
+                    is_punctuator = true;
                 }
                 else if (comma.contains(translated_text))
                 {
-                    is_punct = true;
+                    is_punctuator = true;
                 }
             }
 
-            if (!is_punct && cap_next && !translated_text.isEmpty())
+            if (!is_punctuator && cap_next && !translated_text.isEmpty())
             {
                 if (translated_text[0].isLower()) translated_text[0] = translated_text[0].toUpper();
                 if (!sv_text.isEmpty() && sv_text[0].isLower()) sv_text[0] = sv_text[0].toUpper();
@@ -774,7 +774,7 @@ PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Pr
     process_single_char:
         {
             QString translated_text;
-            bool is_punct = false;
+            bool is_punctuator = false;
 
             if (sv_readings.contains(ch))
             {
@@ -784,20 +784,20 @@ PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Pr
             {
                 QChar mapped = punctuations.value(ch);
                 translated_text = !mapped.isNull() ? mapped : ch;
-                static constexpr QStringView punct(u".!?…:;\"");
+                static constexpr QStringView punctuators(u".!?…:;\"");
                 static constexpr QStringView comma(u",");
-                if (punct.contains(translated_text))
+                if (punctuators.contains(translated_text))
                 {
                     cap_next = true;
-                    is_punct = true;
+                    is_punctuator = true;
                 }
                 else if (comma.contains(translated_text))
                 {
-                    is_punct = true;
+                    is_punctuator = true;
                 }
             }
 
-            if (!is_punct && cap_next && !translated_text.isEmpty())
+            if (!is_punctuator && cap_next && !translated_text.isEmpty())
             {
                 if (translated_text[0].isLower()) translated_text[0] = translated_text[0].toUpper();
                 cap_next = false;
@@ -827,7 +827,7 @@ std::tuple<QString, QString, QString> convert(const QStringView& input,
 
     cn_output.append(R"(<style>a{text-decoration:none;color:white;font-family:"Noto Sans SC";font-size:18px}</style>)");
     sv_output.append(R"(<style>a{text-decoration:none;color:white;font-family:"Tahoma";font-size:16px}</style>)");
-    vn_output.append(R"(<style>a{text-decoration:none;color:white;font-family:"Tahoma";font-size:16px}</style>)");
+    vn_output.append(R"(<style>a{text-decoration:none;color:white;font-family:"Tahoma";font-size:16px;}</style>)");
 
     int token_counter = 0;
     bool cap_next = true;

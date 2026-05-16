@@ -11,6 +11,7 @@
 #include "rulepopup.h"
 #include "dictpopup.h"
 #include "namesetsmanager.h"
+#include "namesetchooser.h"
 #include "../core/converter.h"
 #include "core/dict.h"
 
@@ -167,12 +168,18 @@ MainWindow::MainWindow(QWidget* parent) :
         convert_to_file();
     });
 
-    connect(ui->current_name_set, &QComboBox::currentIndexChanged, this, [this]
+    connect(ui->current_name_set, &QPushButton::clicked, this, [this]
     {
-        if (const int change_to = ui->current_name_set->currentData().toInt(); change_to != current_name_set_id)
+        auto* chooser = new namesetchooser(this);
+        chooser->setAttribute(Qt::WA_DeleteOnClose);
+        if (chooser->exec() == QDialog::Accepted)
         {
-            load_name_set(change_to);
-            convert_and_display(true);
+            if (const int change_to = chooser->get_chosen_id(); change_to != -2 && change_to != current_name_set_id)
+            {
+                load_name_set(change_to);
+                convert_and_display(true);
+                load_data();
+            }
         }
     });
 
@@ -187,25 +194,25 @@ MainWindow::MainWindow(QWidget* parent) :
 
 void MainWindow::load_data()
 {
-    const QVariant current_data = ui->current_name_set->currentData();
-    const int target_id = current_data.isValid() ? current_data.toInt() : -1;
-    const QSignalBlocker blocker(ui->current_name_set);
-    ui->current_name_set->clear();
-    ui->current_name_set->addItem("None", -1);
+    bool found = false;
     for (const auto& [index, title] : name_sets)
     {
-        ui->current_name_set->addItem(title, index);
+        if (index == current_name_set_id)
+        {
+            ui->current_name_set->setText(title);
+            found = true;
+            break;
+        }
     }
-    if (const int index_to_restore = ui->current_name_set->findData(target_id); index_to_restore != -1)
-    {
-        ui->current_name_set->setCurrentIndex(index_to_restore);
-    }
-    else
-    {
-        ui->current_name_set->setCurrentIndex(0);
 
-        load_name_set(-1);
-        convert_and_display(true);
+    if (!found)
+    {
+        ui->current_name_set->setText("None");
+        if (current_name_set_id != -1)
+        {
+            load_name_set(-1);
+            convert_and_display(true);
+        }
     }
 }
 
@@ -417,6 +424,18 @@ QString MainWindow::token_id_at(const QTextBrowser* browser, const int position)
     return format.anchorHref();
 }
 
+static void set_line_height(const QTextBrowser* text_browser, const int height)
+{
+    if (!text_browser) return;
+
+    QTextCursor cursor(text_browser->document());
+    cursor.select(QTextCursor::Document);
+
+    QTextBlockFormat blockFormat;
+    blockFormat.setLineHeight(height, QTextBlockFormat::ProportionalHeight);
+    cursor.mergeBlockFormat(blockFormat);
+}
+
 void MainWindow::update_display()
 {
     update_pagination_controls();
@@ -427,6 +446,9 @@ void MainWindow::update_display()
     ui->cn_input->setHtml(cn_out);
     ui->sv_output->setHtml(sv_out);
     ui->vn_output->setHtml(vn_out);
+
+    set_line_height(ui->sv_output, 110);
+    set_line_height(ui->vn_output, 125);
 
     if (saved_cursor_pos != -1)
     {

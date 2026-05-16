@@ -5,6 +5,11 @@ QWidget {
     font-size: 10pt;
 }
 
+QHeaderView::section {
+    padding: 4px;
+    background-color: #2b2b2b;
+}
+
 QPushButton {
     background-color: #2b2b2b;
     border: 1px solid #555555;
@@ -12,7 +17,6 @@ QPushButton {
     padding: 6px 12px;
 }
 QPushButton:hover {
-
     background-color: #575757;
 }
 
@@ -65,21 +69,32 @@ QPushButton:hover#delete_name {
     background-color: #D22B2B;
 }
 
-QPushButton#edit_set,dump_set {
+QPushButton#edit_set, QPushButton#dump_set, QPushButton#choose_set {
     background-color: #2b2b2b;
     border: 0.5px solid #6164f6;
     font-weight: bold;
 }
-QPushButton:hover#edit_set,dump_set {
+QPushButton:hover#edit_set, QPushButton:hover#dump_set, QPushButton:hover#choose_set {
     background-color: #6164f6;
 }
 
-QPushButton#delete_set {
+QPushButton#current_name_set {
+    background-color: #2b2b2b;
+    font-weight: bold;
+    font-family:"Noto Sans SC";
+    padding: 4px 8px;
+}
+
+QPushButton:hover#current_name_set {
+    background-color: #6164f6;
+}
+
+QPushButton#delete_set, QPushButton#name_set_choose_none {
     background-color: #2b2b2b;
     border: 0.5px solid #D22B2B;
     font-weight: bold;
 }
-QPushButton:hover#delete_set {
+QPushButton:hover#delete_set, QPushButton:hover#name_set_choose_none {
     background-color: #D22B2B;
 }
 
