@@ -254,7 +254,7 @@
      </widget>
     </item>
     <item>
-     <layout class="QHBoxLayout" name="bottom_bar">
+     <layout class="QHBoxLayout" name="bottom_bar" stretch="20,2,1">
       <item>
        <widget class="QProgressBar" name="progress_bar">
         <property name="styleSheet">
@@ -266,15 +266,24 @@
        </widget>
       </item>
       <item>
-       <widget class="QComboBox" name="current_name_set">
+       <widget class="QPushButton" name="current_name_set">
         <property name="sizePolicy">
-         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
-        <property name="editable">
-         <bool>false</bool>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+          <bold>true</bold>
+         </font>
+        </property>
+        <property name="focusPolicy">
+         <enum>Qt::FocusPolicy::NoFocus</enum>
+        </property>
+        <property name="text">
+         <string>None</string>
         </property>
        </widget>
       </item>

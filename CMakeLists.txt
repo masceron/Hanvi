@@ -88,6 +88,9 @@ set(APP_SOURCES main.cpp
         components/rulepopup.cpp
         components/rulepopup.h
         components/rulepopup.ui
+        components/namesetchooser.cpp
+        components/namesetchooser.h
+        components/namesetchooser.ui
 )
 
 if (WIN32)
