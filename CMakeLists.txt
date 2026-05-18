@@ -16,13 +16,19 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
         string(REPLACE "/Ob2" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
         string(REPLACE "/Ob2" "" CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 
-        add_compile_options(/O2 /Oi /Ot /Ob3 /GL /GF /GA /Gy /Gw /Qpar /EHs-c- /D_HAS_EXCEPTIONS=0 /W3 /WX /permissive-)
+        add_compile_options(/O2 /Oi /Ot /Ob3
+                /GL /GF /GA /Gy /Gw
+                /Qpar /EHs-c- /D_HAS_EXCEPTIONS=0
+                /W3 /WX /permissive-)
         add_link_options(/LTCG /OPT:REF /OPT:ICF)
     endif ()
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     if (CMAKE_BUILD_TYPE MATCHES "Release")
-        add_compile_options(-O3 -fomit-frame-pointer -fno-exceptions -ffunction-sections -fdata-sections -Wall -Wextra -Werror -pedantic-errors -DNDEBUG)
-        add_link_options(-s)
+        add_compile_options(-O3 -fomit-frame-pointer -fno-exceptions
+                -flto=auto -fipa-pta -flto-partition=one -fwhole-program
+                -ffunction-sections -fdata-sections
+                -Wall -Wextra -Werror -pedantic-errors -DNDEBUG)
+        add_link_options(-flto=auto -fwhole-program -s)
 
         if (BUILD_PORTABLE)
             add_compile_options(-mtune=generic -march=x86-64-v2)
@@ -32,8 +38,11 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     endif ()
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     if (CMAKE_BUILD_TYPE MATCHES "Release")
-        add_compile_options(-O3 -fomit-frame-pointer -fno-exceptions -flto=full -ffunction-sections -fdata-sections -Wall -Wextra -Werror -pedantic-errors -DNDEBUG)
-        add_link_options(-flto=full -Wl,--gc-sections -Wl,--icf=all)
+        add_compile_options(-O3 -fomit-frame-pointer -fno-exceptions
+                -flto=full -ffunction-sections
+                -fdata-sections -Wall -Wextra -Werror
+                -pedantic-errors -DNDEBUG)
+        add_link_options(-flto=full -s -Wl,--gc-sections -Wl,--icf=all)
 
         if (BUILD_PORTABLE)
             add_compile_options(-mtune=generic -march=x86-64-v2)
