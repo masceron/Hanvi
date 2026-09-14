@@ -16,17 +16,20 @@ struct NodeData {
 
 using ChildEntry = std::pair<QChar, TrieNode*>;
 
-struct alignas(ChildEntry) ChildHeader {
-    uint16_t capacity;
-    uint16_t count;
-    ChildEntry* entries() {
-        return reinterpret_cast<ChildEntry*>(this + 1);
-    }
+namespace
+{
+    struct alignas(ChildEntry) ChildHeader {
+        uint16_t capacity;
+        uint16_t count;
+        ChildEntry* entries() {
+            return reinterpret_cast<ChildEntry*>(this + 1);
+        }
 
-    [[nodiscard]] const ChildEntry* entries() const {
-        return reinterpret_cast<const ChildEntry*>(this + 1);
-    }
-};
+        [[nodiscard]] const ChildEntry* entries() const {
+            return reinterpret_cast<const ChildEntry*>(this + 1);
+        }
+    };
+}
 
 TrieNode* NodePool::allocate() {
     if (current_block_offset + sizeof(TrieNode) > BLOCK_SIZE) {

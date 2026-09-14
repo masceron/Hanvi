@@ -5,24 +5,27 @@
 #include "structures.h"
 #include "dict.h"
 
-struct Progress
+namespace
 {
-    const std::function<void(int)>& progress_callback = nullptr;
-    int next_val = 2500;
-    int current = 0;
-
-    void update(const int n)
+    struct Progress
     {
-        current += n;
-        if (progress_callback && current >= next_val)
-        {
-            progress_callback(current);
-            next_val += 2500;
-        }
-    }
-};
+        const std::function<void(int)>& progress_callback = nullptr;
+        int next_val = 2500;
+        int current = 0;
 
-QString get_sv(const QStringView& cn)
+        void update(const int n)
+        {
+            current += n;
+            if (progress_callback && current >= next_val)
+            {
+                progress_callback(current);
+                next_val += 2500;
+            }
+        }
+    };
+}
+
+static QString get_sv(const QStringView& cn)
 {
     QString sv_reading;
     for (const auto& ch : cn)
@@ -138,23 +141,29 @@ static void append_escaped(QString& buffer, const QStringView& view)
     }
 }
 
-struct ConversionResult
+namespace
 {
-    QString cn;
-    QString sv;
-    QString vn;
-    int length_consumed = 0;
-};
+    struct ConversionResult
+    {
+        QString cn;
+        QString sv;
+        QString vn;
+        int length_consumed = 0;
+    };
+}
 
-struct RuleMatch
+namespace
 {
-    const Rule* rule;
-    int abs_start_of_end_token; // Where the end token starts in the text
-    int total_end_pos; // Where the entire rule ends (start_of_end + length)
-};
+    struct RuleMatch
+    {
+        const Rule* rule;
+        int abs_start_of_end_token; // Where the end token starts in the text
+        int total_end_pos; // Where the entire rule ends (start_of_end + length)
+    };
+}
 
-std::optional<RuleMatch> find_matching_rule(const QStringView& text, const int current_pos,
-                                            const std::vector<Rule>& rules)
+static std::optional<RuleMatch> find_matching_rule(const QStringView& text, const int current_pos,
+                                                   const std::vector<Rule>& rules)
 {
     static constexpr QStringView stoppers(u"，。：；！？“”’.,，;:!?)]}>\"'");
     int limit = std::min(static_cast<int>(text.length()), current_pos + 25);
@@ -254,8 +263,8 @@ std::optional<RuleMatch> find_matching_rule(const QStringView& text, const int c
     return best_match;
 }
 
-ConversionResult convert_recursive(const QStringView& input, int start_offset, int& token_counter, bool& cap_next,
-                                   Progress& progress)
+static ConversionResult convert_recursive(const QStringView& input, int start_offset, int& token_counter, bool& cap_next,
+                                          Progress& progress)
 {
     ConversionResult out;
     int i = 0;
@@ -568,13 +577,16 @@ ConversionResult convert_recursive(const QStringView& input, int start_offset, i
     return out;
 }
 
-struct PlainResult
+namespace
 {
-    QString text;
-    int length_consumed = 0;
-};
+    struct PlainResult
+    {
+        QString text;
+        int length_consumed = 0;
+    };
+}
 
-PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Progress& progress)
+static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Progress& progress)
 {
     PlainResult out;
     int i = 0;

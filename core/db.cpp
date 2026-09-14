@@ -5,7 +5,7 @@
 #include "dict.h"
 #include "structures.h"
 
-QString get_table_name(const Priority priority)
+static QString get_table_name(const Priority priority)
 {
     return (priority == NAME) ? "names" : "phrases";
 }
