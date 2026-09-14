@@ -1,7 +1,8 @@
 #pragma once
 #include <QString>
-#include <tuple>
 #include <functional>
+#include <memory>
 
-std::tuple<QString, QString, QString> convert(const QStringView& input, const std::function<void(int)>& progress_callback = nullptr);
+class AlignedDocument;
+std::shared_ptr<AlignedDocument> convert(const QStringView& input, const std::function<void(int)>& progress_callback = nullptr);
 QString convert_plain(const QStringView& input, const std::function<void(int)>& progress_callback = nullptr);

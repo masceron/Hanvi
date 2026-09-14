@@ -24,35 +24,23 @@
        <property name="orientation">
         <enum>Qt::Orientation::Vertical</enum>
        </property>
-       <widget class="QTextBrowser" name="cn_input">
+       <widget class="TokenCanvas" name="cn_input">
         <property name="focusPolicy">
          <enum>Qt::FocusPolicy::ClickFocus</enum>
-        </property>
-        <property name="styleSheet">
-         <string notr="true"/>
-        </property>
-        <property name="openLinks">
-         <bool>false</bool>
         </property>
        </widget>
-       <widget class="QTextBrowser" name="sv_output">
+       <widget class="TokenCanvas" name="sv_output">
         <property name="focusPolicy">
          <enum>Qt::FocusPolicy::ClickFocus</enum>
-        </property>
-        <property name="openLinks">
-         <bool>false</bool>
         </property>
        </widget>
       </widget>
       <widget class="QWidget" name="layoutWidget">
        <layout class="QVBoxLayout" name="vn_out" stretch="1,0">
         <item>
-         <widget class="QTextBrowser" name="vn_output">
+         <widget class="TokenCanvas" name="vn_output">
           <property name="focusPolicy">
            <enum>Qt::FocusPolicy::ClickFocus</enum>
-          </property>
-          <property name="openLinks">
-           <bool>false</bool>
           </property>
          </widget>
         </item>
@@ -358,6 +346,13 @@
    </property>
   </action>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>TokenCanvas</class>
+   <extends>QAbstractScrollArea</extends>
+   <header>documents/token_canvas.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

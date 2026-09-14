@@ -36,18 +36,6 @@ QPushButton:hover#close_popup {
     background-color: #CC5500;
 }
 
-QPushButton#close_popup {
-    background-color: #2b2b2b;
-    border: 1px solid #CC5500;
-    border-radius: 6px;
-    padding: 6px 12px;
-    font-size: 12px;
-}
-
-QPushButton:hover#close_popup {
-    background-color: #CC5500;
-}
-
 QPushButton#delete_node_phrase {
     background-color: #2b2b2b;
     border: 0.5px solid #D22B2B;
@@ -114,13 +102,17 @@ QPushButton:hover#add_phrase {
 }
 
 
-QLineEdit, QTextEdit, QPlainTextEdit {
+QLineEdit, QTextEdit, QPlainTextEdit, TokenCanvas {
     border-style: solid;
     border-color: #2d2d2d;
     border-width: 0 0 2px 0;
     background-color: #2d2d2d;
     border-radius: 4px;
     padding: 4px;
+}
+
+TokenCanvas {
+    selection-background-color: #214283;
 }
 
 QTextBrowser {
@@ -131,8 +123,21 @@ QCheckBox:disabled {
     color: #b2beb5;
 }
 
-QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, TokenCanvas:focus {
     border-color: #61ccff;
+}
+
+QSplitter::handle {
+    background-color: #1e1e1e;
+}
+QSplitter::handle:horizontal {
+    width: 6px;
+}
+QSplitter::handle:vertical {
+    height: 6px;
+}
+QSplitter::handle:hover {
+    background-color: #383838;
 }
 
 QLineEdit#current_page {
