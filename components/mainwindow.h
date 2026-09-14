@@ -1,8 +1,12 @@
 #pragma once
 
 #include <QMainWindow>
-#include <QTextBrowser>
 #include <QFutureWatcher>
+#include <memory>
+
+class AlignedDocument;
+class DocumentSession;
+struct Rule;
 
 QT_BEGIN_NAMESPACE
 
@@ -31,7 +35,8 @@ public:
 
 private slots:
     void update_display();
-    void open_popup();
+    void on_request_dict_popup(const QString& chinese_text);
+    void on_request_rule_popup(const Rule* rule);
 
 private:
     int current_page;
@@ -40,19 +45,13 @@ private:
     QString input_text;
     QList<QStringView> pages;
     Ui::MainWindow* ui;
-    QFutureWatcher<std::tuple<QString, QString, QString>> watcher;
+    DocumentSession* session = nullptr;
+    QFutureWatcher<std::shared_ptr<AlignedDocument>> watcher;
     QFutureWatcher<QString> plain_watcher;
-    int saved_cursor_pos = -1;
     SavedScroll saved_scroll;
+    QString saved_token_cn;
 
     void convert_and_display(bool scroll_back);
     void update_pagination_controls() const;
-    void click_token(const QUrl &link) const;
-    static void highlight_token(QTextBrowser* browser, const QString& token, bool scroll = true);
-    static QTextCursor find_token(QTextDocument* document, const QString& token);
-    static QString token_id_at(const QTextBrowser* browser, int position);
-    static void snap_selection_to_token(QTextBrowser* browser);
-    static void snap_selection_to_word(QTextBrowser* browser);
-    QString get_chinese_text_from_ids(const QStringList& ids) const;
     void convert_to_file();
 };

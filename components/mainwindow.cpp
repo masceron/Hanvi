@@ -1,5 +1,4 @@
 #include <QFileDialog>
-#include <QTextBlock>
 #include <QMessageBox>
 #include <QDesktopServices>
 #include <QUrl>
@@ -20,12 +19,39 @@
 #include "core/dict.h"
 
 MainWindow::MainWindow(QWidget* parent) :
-    QMainWindow(parent), ui(new Ui::MainWindow)
+    QMainWindow(parent), ui(new Ui::MainWindow), session(new DocumentSession(this))
 {
     current_page = 0;
     setWindowState(Qt::WindowMaximized);
     ui->setupUi(this);
     setWindowTitle("Hanvi");
+
+    ui->cn_input->set_session(session);
+    ui->cn_input->set_role(LanguageRole::Chinese);
+    QFont cn_font("Noto Sans SC");
+    cn_font.setStyleHint(QFont::SansSerif);
+    cn_font.setPixelSize(18);
+    ui->cn_input->set_font(cn_font);
+    ui->cn_input->set_line_height_percent(100);
+
+    ui->sv_output->set_session(session);
+    ui->sv_output->set_role(LanguageRole::SinoVietnamese);
+    QFont sv_font("Tahoma");
+    sv_font.setStyleHint(QFont::SansSerif);
+    sv_font.setPixelSize(16);
+    ui->sv_output->set_font(sv_font);
+    ui->sv_output->set_line_height_percent(110);
+
+    ui->vn_output->set_session(session);
+    ui->vn_output->set_role(LanguageRole::Vietnamese);
+    QFont vn_font("Tahoma");
+    vn_font.setStyleHint(QFont::SansSerif);
+    vn_font.setPixelSize(16);
+    ui->vn_output->set_font(vn_font);
+    ui->vn_output->set_line_height_percent(125);
+
+    connect(session, &DocumentSession::request_dict_popup, this, &MainWindow::on_request_dict_popup);
+    connect(session, &DocumentSession::request_rule_popup, this, &MainWindow::on_request_rule_popup);
 
     auto* name_set_manager = ui->menubar->addAction("Namesets");
     connect(name_set_manager, &QAction::triggered, this, [this]
@@ -111,11 +137,7 @@ MainWindow::MainWindow(QWidget* parent) :
         }
     });
 
-    connect(ui->cn_input, &QTextBrowser::anchorClicked, this, &MainWindow::click_token);
-    connect(ui->sv_output, &QTextBrowser::anchorClicked, this, &MainWindow::click_token);
-    connect(ui->vn_output, &QTextBrowser::anchorClicked, this, &MainWindow::click_token);
-
-    connect(&watcher, &QFutureWatcher<std::tuple<QString, QString, QString>>::finished, this,
+    connect(&watcher, &QFutureWatcher<std::shared_ptr<AlignedDocument>>::finished, this,
             &MainWindow::update_display);
     connect(&plain_watcher, &QFutureWatcher<QString>::finished, this, [this]
     {
@@ -154,13 +176,6 @@ MainWindow::MainWindow(QWidget* parent) :
         pages = paginate(input_text, page_length);
         convert_and_display(false);
     });
-
-    ui->cn_input->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(ui->cn_input, &QWidget::customContextMenuRequested, this, &MainWindow::open_popup);
-    ui->sv_output->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(ui->sv_output, &QWidget::customContextMenuRequested, this, &MainWindow::open_popup);
-    ui->vn_output->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(ui->vn_output, &QWidget::customContextMenuRequested, this, &MainWindow::open_popup);
 
     connect(ui->save_to_file, &QAction::triggered, this, [this]
     {
@@ -246,15 +261,6 @@ void MainWindow::update_pagination_controls() const
     }
 }
 
-void MainWindow::click_token(const QUrl& link) const
-{
-    const QString token = link.toString();
-
-    highlight_token(ui->cn_input, token);
-    highlight_token(ui->vn_output, token);
-    highlight_token(ui->sv_output, token);
-}
-
 MainWindow::~MainWindow()
 {
     delete ui;
@@ -272,12 +278,12 @@ void MainWindow::convert_and_display(const bool scroll_back)
         if (scroll_back)
         {
             saved_scroll = {
-                ui->cn_input->verticalScrollBar()->value(),
-                ui->sv_output->verticalScrollBar()->value(),
-                ui->vn_output->verticalScrollBar()->value()
+                ui->cn_input->scroll_value(),
+                ui->sv_output->scroll_value(),
+                ui->vn_output->scroll_value()
             };
         }
-        else saved_scroll = {0, 0, 0};
+        else saved_scroll = {.cn = 0, .sv = 0, .vn = 0};
 
         auto reporter = [this](int progress)
         {
@@ -287,7 +293,7 @@ void MainWindow::convert_and_display(const bool scroll_back)
             });
         };
 
-        const QFuture<std::tuple<QString, QString, QString>> future = QtConcurrent::run(
+        const QFuture<std::shared_ptr<AlignedDocument>> future = QtConcurrent::run(
             convert, pages[current_page], reporter);
         watcher.setFuture(future);
     }
@@ -313,493 +319,58 @@ void MainWindow::convert_to_file()
     }
 }
 
-void MainWindow::highlight_token(QTextBrowser* browser, const QString& token, const bool scroll)
-{
-    browser->setCursorWidth(0);
-
-    QTextCursor clear_cursor = browser->textCursor();
-    clear_cursor.clearSelection();
-    browser->setTextCursor(clear_cursor);
-
-    if (token.isEmpty())
-    {
-        browser->setExtraSelections({});
-        return;
-    }
-
-    QList<QTextEdit::ExtraSelection> selections;
-    QTextDocument* doc = browser->document();
-    bool first_match_found = false;
-    int first_match_pos = 0;
-
-    QTextBlock block = doc->begin();
-    while (block.isValid())
-    {
-        for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it)
-        {
-            QTextFragment fragment = it.fragment();
-            if (!fragment.isValid()) continue;
-
-            if (fragment.charFormat().anchorHref() == token)
-            {
-                QTextEdit::ExtraSelection sel;
-                sel.cursor = QTextCursor(doc);
-                sel.cursor.setPosition(fragment.position());
-                sel.cursor.setPosition(fragment.position() + fragment.length(), QTextCursor::KeepAnchor);
-
-                sel.format.setForeground(Qt::red);
-                sel.format.setFontWeight(QFont::Bold);
-                sel.format.setBackground(Qt::transparent);
-
-                selections.append(sel);
-
-                if (!first_match_found)
-                {
-                    first_match_pos = fragment.position();
-                    first_match_found = true;
-                }
-            }
-        }
-        block = block.next();
-    }
-
-    browser->setExtraSelections(selections);
-
-    if (scroll && first_match_found)
-    {
-        auto pan = QTextCursor(doc);
-        pan.setPosition(first_match_pos);
-        browser->setTextCursor(pan);
-    }
-}
-
-QTextCursor MainWindow::find_token(QTextDocument* document, const QString& token)
-{
-    QTextCursor cursor(document);
-    int start_pos = -1;
-    int end_pos = -1;
-    bool found = false;
-
-    QTextBlock block = document->begin();
-    while (block.isValid())
-    {
-        for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it)
-        {
-            QTextFragment fragment = it.fragment();
-            if (!fragment.isValid()) continue;
-            QTextCharFormat format = fragment.charFormat();
-
-            if (!found)
-            {
-                if (format.isAnchor() && format.anchorHref() == token)
-                {
-                    start_pos = fragment.position();
-                    found = true;
-                    end_pos = fragment.position() + fragment.length();
-                }
-            }
-            else
-            {
-                if (format.anchorHref() == token)
-                {
-                    end_pos = fragment.position() + fragment.length();
-                }
-                else
-                {
-                    cursor.setPosition(start_pos);
-                    cursor.setPosition(end_pos, QTextCursor::KeepAnchor);
-                    return cursor;
-                }
-            }
-        }
-
-        if (found)
-        {
-            cursor.setPosition(start_pos);
-            cursor.setPosition(end_pos, QTextCursor::KeepAnchor);
-            return cursor;
-        }
-
-        block = block.next();
-    }
-    return {};
-}
-
-QString MainWindow::token_id_at(const QTextBrowser* browser, const int position)
-{
-    QTextCursor cursor = browser->textCursor();
-    cursor.setPosition(position);
-
-    const QTextCharFormat format = cursor.charFormat();
-    return format.anchorHref();
-}
-
-static void set_line_height(const QTextBrowser* text_browser, const int height)
-{
-    if (!text_browser) return;
-
-    QTextCursor cursor(text_browser->document());
-    cursor.select(QTextCursor::Document);
-
-    QTextBlockFormat blockFormat;
-    blockFormat.setLineHeight(height, QTextBlockFormat::ProportionalHeight);
-    cursor.mergeBlockFormat(blockFormat);
-}
-
 void MainWindow::update_display()
 {
     update_pagination_controls();
     ui->progress_bar->setValue(100);
-    const auto [cn_out, sv_out, vn_out] = watcher.result();
+    const auto doc = watcher.result();
     ui->statusbar->showMessage("Conversion completed.");
 
-    ui->cn_input->setHtml(cn_out);
-    ui->sv_output->setHtml(sv_out);
-    ui->vn_output->setHtml(vn_out);
+    session->set_document(doc);
 
-    set_line_height(ui->sv_output, 110);
-    set_line_height(ui->vn_output, 125);
+    ui->cn_input->set_scroll_value(saved_scroll.cn);
+    ui->sv_output->set_scroll_value(saved_scroll.sv);
+    ui->vn_output->set_scroll_value(saved_scroll.vn);
+    saved_scroll = {0, 0, 0};
 
-    if (saved_cursor_pos != -1)
+    if (!saved_token_cn.isEmpty())
     {
-        QTextDocument* doc = ui->cn_input->document();
-        int target_pos = qMin(saved_cursor_pos, doc->characterCount() - 1);
-        if (target_pos < 0) target_pos = 0;
-
-        QTextCursor restoration_cursor(doc);
-        restoration_cursor.setPosition(target_pos);
-        restoration_cursor.movePosition(QTextCursor::NextCharacter);
-
-        if (const QString anchor_name = restoration_cursor.charFormat().anchorHref(); !anchor_name.isEmpty())
+        for (const auto& para : doc->paragraphs)
         {
-            highlight_token(ui->cn_input, anchor_name, false);
-            highlight_token(ui->sv_output, anchor_name, false);
-            highlight_token(ui->vn_output, anchor_name, false);
+            for (const auto& tok : para.tokens)
+            {
+                if (tok.cn == saved_token_cn || tok.cn.contains(saved_token_cn))
+                {
+                    session->set_active_token(tok.id);
+                    goto token_found;
+                }
+            }
         }
-        saved_cursor_pos = -1;
-    }
-
-    QTimer::singleShot(0, this, [this]
-    {
-        ui->cn_input->verticalScrollBar()->setValue(saved_scroll.cn);
-        ui->sv_output->verticalScrollBar()->setValue(saved_scroll.sv);
-        ui->vn_output->verticalScrollBar()->setValue(saved_scroll.vn);
-    });
-}
-
-void MainWindow::snap_selection_to_token(QTextBrowser* browser)
-{
-    QTextCursor cursor = browser->textCursor();
-    if (!cursor.hasSelection()) return;
-
-    const int start_pos = cursor.selectionStart();
-    const int end_pos = cursor.selectionEnd();
-
-    const QString start_id = token_id_at(browser, start_pos);
-
-    const QString end_id = token_id_at(browser, end_pos - 1);
-
-    int new_start = start_pos;
-    int new_end = end_pos;
-
-    if (!start_id.isEmpty())
-    {
-        if (const QTextCursor token_cursor = find_token(browser->document(), start_id); !token_cursor.isNull())
-        {
-            new_start = token_cursor.selectionStart();
-        }
-    }
-
-    if (!end_id.isEmpty())
-    {
-        if (const QTextCursor token_cursor = find_token(browser->document(), end_id); !token_cursor.isNull())
-        {
-            new_end = token_cursor.selectionEnd();
-        }
-    }
-
-    if (new_start != start_pos || new_end != end_pos)
-    {
-        cursor.setPosition(new_start);
-        cursor.setPosition(new_end, QTextCursor::KeepAnchor);
-        browser->setTextCursor(cursor);
+    token_found:
+        saved_token_cn.clear();
     }
 }
 
-void MainWindow::snap_selection_to_word(QTextBrowser* browser)
+void MainWindow::on_request_dict_popup(const QString& chinese_text)
 {
-    QTextCursor cursor = browser->textCursor();
-    if (!cursor.hasSelection()) return;
-
-    {
-        const int pos = cursor.selectionStart();
-        const QTextBlock block = browser->document()->findBlock(pos);
-        const QString text = block.text();
-        int block_pos = pos - block.position();
-
-        while (block_pos > 0 && !text[block_pos - 1].isSpace())
-        {
-            block_pos--;
-        }
-        cursor.setPosition(block.position() + block_pos);
-    }
-
-    {
-        const int pos = browser->textCursor().selectionEnd();
-        const QTextBlock block = browser->document()->findBlock(pos);
-        const QString text = block.text();
-        int block_pos = pos - block.position();
-
-        while (block_pos < text.length() && !text[block_pos].isSpace())
-        {
-            block_pos++;
-        }
-        cursor.setPosition(block.position() + block_pos, QTextCursor::KeepAnchor);
-    }
-
-    browser->setTextCursor(cursor);
-}
-
-QString MainWindow::get_chinese_text_from_ids(const QStringList& ids) const
-{
-    QString result;
-
-    for (const QString& id : ids)
-    {
-        if (QTextCursor cursor = find_token(ui->cn_input->document(), id); !cursor.isNull())
-        {
-            result.append(cursor.selectedText());
-        }
-    }
-    return result;
-}
-
-void MainWindow::open_popup()
-{
-    const auto sender_browser = qobject_cast<QTextBrowser*>(sender());
-    if (!sender_browser) return;
-
-    if (sender_browser == ui->cn_input || sender_browser == ui->sv_output)
-    {
-        saved_cursor_pos = sender_browser->textCursor().selectionStart();
-    }
-    else if (sender_browser == ui->vn_output)
-    {
-        const QTextCursor vn_cursor = sender_browser->textCursor();
-        int click_pos = vn_cursor.selectionStart();
-
-        QString token_id = token_id_at(sender_browser, click_pos);
-
-        if (token_id.isEmpty())
-        {
-            if (click_pos > 0)
-            {
-                token_id = token_id_at(sender_browser, click_pos - 1);
-            }
-
-            if (token_id.isEmpty() && click_pos < sender_browser->document()->characterCount() - 1)
-            {
-                token_id = token_id_at(sender_browser, click_pos + 1);
-            }
-        }
-
-        if (!token_id.isEmpty())
-        {
-            if (const QTextCursor cn_cursor = find_token(ui->cn_input->document(), token_id); !cn_cursor.isNull())
-            {
-                saved_cursor_pos = cn_cursor.selectionStart();
-            }
-        }
-        else return;
-    }
-
-    if (sender_browser == ui->vn_output)
-    {
-        if (QTextCursor cursor = sender_browser->textCursor(); cursor.hasSelection())
-        {
-            int start = cursor.selectionStart();
-            int end = cursor.selectionEnd();
-
-            QString first_rule_id;
-
-            QTextBlock block = sender_browser->document()->findBlock(start);
-            while (block.isValid() && block.position() < end)
-            {
-                for (auto it = block.begin(); !it.atEnd(); ++it)
-                {
-                    QTextFragment fragment = it.fragment();
-
-                    if (int frag_pos = fragment.position(); frag_pos + fragment.length() > start && frag_pos < end)
-                    {
-                        if (QString id = fragment.charFormat().anchorHref(); id.startsWith("r"))
-                        {
-                            first_rule_id = id;
-                            goto rule_found;
-                        }
-                    }
-                }
-                block = block.next();
-            }
-
-        rule_found:
-            if (!first_rule_id.isEmpty())
-            {
-                highlight_token(ui->cn_input, first_rule_id);
-                highlight_token(ui->sv_output, first_rule_id);
-                highlight_token(ui->vn_output, first_rule_id);
-
-                QString start_rule;
-                QString end_rule;
-                int found_count = 0;
-
-                QTextBlock search_block = ui->cn_input->document()->begin();
-
-                while (search_block.isValid() && found_count < 2)
-                {
-                    for (auto it = search_block.begin(); !it.atEnd(); ++it)
-                    {
-                        if (QTextFragment frag = it.fragment(); frag.charFormat().anchorHref() == first_rule_id)
-                        {
-                            if (found_count == 0)
-                            {
-                                start_rule = frag.text();
-                                found_count++;
-                            }
-                            else if (found_count == 1)
-                            {
-                                end_rule = frag.text();
-                                found_count++;
-                                break;
-                            }
-                        }
-                    }
-                    search_block = search_block.next();
-                }
-
-                auto* popup = new RulePopup(this);
-
-                popup->load_data(dictionary.find_exact_rule(start_rule, end_rule));
-                popup->setAttribute(Qt::WA_DeleteOnClose);
-                popup->exec();
-
-                return;
-            }
-        }
-    }
-
-    QString selected_chinese_text;
-
-    if (sender_browser == ui->vn_output)
-    {
-        snap_selection_to_token(sender_browser);
-
-        const QTextCursor cursor = sender_browser->textCursor();
-        const int start = cursor.selectionStart();
-        const int end = cursor.selectionEnd();
-
-        QStringList token_ids;
-
-        QTextBlock block = sender_browser->document()->findBlock(start);
-        while (block.isValid() && block.position() < end)
-        {
-            for (auto it = block.begin(); !it.atEnd(); ++it)
-            {
-                QTextFragment fragment = it.fragment();
-                const int frag_start = fragment.position();
-
-                if (const int frag_end = frag_start + fragment.length(); frag_end > start && frag_start < end)
-                {
-                    if (QString id = fragment.charFormat().anchorHref(); !id.isEmpty() && !token_ids.contains(id))
-                    {
-                        token_ids.append(id);
-                    }
-                }
-            }
-            block = block.next();
-        }
-
-        selected_chinese_text = get_chinese_text_from_ids(token_ids);
-    }
-    else if (sender_browser == ui->sv_output)
-    {
-        snap_selection_to_word(sender_browser);
-
-        const QTextCursor cursor = sender_browser->textCursor();
-        const int sel_start = cursor.selectionStart();
-        const int sel_end = cursor.selectionEnd();
-
-        QTextBlock block = sender_browser->document()->findBlock(sel_start);
-
-        while (block.isValid() && block.position() < sel_end)
-        {
-            for (auto it = block.begin(); !it.atEnd(); ++it)
-            {
-                QTextFragment fragment = it.fragment();
-                int frag_start = fragment.position();
-
-                if (int frag_end = frag_start + fragment.length(); frag_end > sel_start && frag_start < sel_end)
-                {
-                    const QString id = fragment.charFormat().anchorHref();
-                    if (id.isEmpty()) continue;
-
-                    QTextCursor cn_cursor = find_token(ui->cn_input->document(), id);
-                    if (cn_cursor.isNull()) continue;
-                    QString full_chinese_token = cn_cursor.selectedText();
-
-                    int words_before_fragment = 0;
-                    static auto reg = QRegularExpression("\\s+");
-
-                    for (auto pre_it = block.begin(); pre_it != it; ++pre_it)
-                    {
-                        if (pre_it.fragment().charFormat().anchorHref() == id)
-                        {
-                            QString pre_text = pre_it.fragment().text();
-
-                            words_before_fragment += static_cast<int>(pre_text.split(
-                                reg, Qt::SkipEmptyParts).size());
-                        }
-                    }
-
-                    int intersect_start = qMax(sel_start, frag_start);
-                    int intersect_end = qMin(sel_end, frag_end);
-
-                    QString fragment_text = fragment.text();
-
-                    QString text_pre_selection = fragment_text.left(intersect_start - frag_start);
-                    int words_pre_selection = static_cast<int>(text_pre_selection.split(
-                        reg, Qt::SkipEmptyParts).size());
-
-                    QString text_selected = fragment_text.mid(intersect_start - frag_start,
-                                                              intersect_end - intersect_start);
-                    int words_in_selection = static_cast<int>(text_selected.split(
-                        reg, Qt::SkipEmptyParts).size());
-
-                    int cn_start_index = words_before_fragment + words_pre_selection;
-                    int cn_length = words_in_selection;
-
-                    if (cn_start_index < full_chinese_token.length())
-                    {
-                        selected_chinese_text.append(full_chinese_token.mid(cn_start_index, cn_length));
-                    }
-                }
-            }
-            block = block.next();
-        }
-    }
-    else
-    {
-        selected_chinese_text = sender_browser->textCursor().selectedText();
-    }
-
-    if (selected_chinese_text.isEmpty()) return;
+    if (chinese_text.isEmpty()) return;
 
     auto* popup = new DictPopup(this);
-
-    popup->load_data(selected_chinese_text);
-
+    popup->load_data(chinese_text);
     popup->setAttribute(Qt::WA_DeleteOnClose);
     if (popup->exec())
     {
+        saved_token_cn = chinese_text;
         convert_and_display(true);
     }
+}
+
+void MainWindow::on_request_rule_popup(const Rule* rule)
+{
+    if (!rule) return;
+
+    auto* popup = new RulePopup(this);
+    popup->load_data(rule);
+    popup->setAttribute(Qt::WA_DeleteOnClose);
+    popup->exec();
 }

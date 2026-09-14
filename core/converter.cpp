@@ -1,9 +1,9 @@
-#include <QStringBuilder>
-#include <optional>
-
 #include "converter.h"
 #include "structures.h"
 #include "dict.h"
+#include <optional>
+
+#include "documents/aligned_document.h"
 
 namespace
 {
@@ -98,58 +98,43 @@ static bool should_append_space(const QStringView& input, const int current_end_
 static int is_optimal_phrase(const QStringView& text, const int current_pos, const int current_len)
 {
     const int threshold = std::max(current_len, 3);
-
-    const int limit = current_pos + current_len;
+    const int limit = std::min(static_cast<int>(text.length()), current_pos + threshold);
 
     for (int next_start = current_pos + 1; next_start < limit; ++next_start)
     {
+        const auto sub = text.mid(next_start);
+        int match_len = 0;
+        int match_priority = 0;
+
         if (current_name_set_id != -1)
         {
-            if (const Match match = name_set_dictionary.find(text, next_start); match.length > 0)
+            if (const auto [len, prio, _, trans] = name_set_dictionary.find(sub, 0); len > 0)
             {
-                return next_start;
+                match_len = len;
+                match_priority = prio;
             }
         }
 
-        if (const Match match = dictionary.find(text, next_start); match.priority == NAME || match.length > threshold)
+        if (match_len == 0)
         {
-            return next_start;
+            const auto [len, prio, _, trans] = dictionary.find(sub, 0);
+            match_len = len;
+            match_priority = prio;
+        }
+
+        if (match_len > 0)
+        {
+            if (const int overlap_end = next_start + match_len; overlap_end > current_pos + current_len)
+            {
+                if (match_priority == NAME || match_len > current_len)
+                {
+                    return next_start;
+                }
+            }
         }
     }
+
     return -1;
-}
-
-static void append_escaped(QString& buffer, const QStringView& view)
-{
-    const QChar* data = view.data();
-    const int len = static_cast<int>(view.length());
-    for (int i = 0; i < len; ++i)
-    {
-        switch (data[i].unicode())
-        {
-        case '<': buffer += u"&lt;";
-            break;
-        case '>': buffer += u"&gt;";
-            break;
-        case '&': buffer += u"&amp;";
-            break;
-        case '"': buffer += u"&quot;";
-            break;
-        default: buffer += data[i];
-            break;
-        }
-    }
-}
-
-namespace
-{
-    struct ConversionResult
-    {
-        QString cn;
-        QString sv;
-        QString vn;
-        int length_consumed = 0;
-    };
 }
 
 namespace
@@ -157,77 +142,49 @@ namespace
     struct RuleMatch
     {
         const Rule* rule;
-        int abs_start_of_end_token; // Where the end token starts in the text
-        int total_end_pos; // Where the entire rule ends (start_of_end + length)
+        int abs_start_of_end_token;
+        int total_end_pos;
     };
 }
 
 static std::optional<RuleMatch> find_matching_rule(const QStringView& text, const int current_pos,
                                                    const std::vector<Rule>& rules)
 {
-    static constexpr QStringView stoppers(u"，。：；！？“”’.,，;:!?)]}>\"'");
-    int limit = std::min(static_cast<int>(text.length()), current_pos + 25);
+    const int limit = std::min(static_cast<int>(text.length()), current_pos + 50);
+    const QStringView search_area = text.mid(current_pos, limit - current_pos);
 
-    for (int i = current_pos; i < limit; ++i)
-    {
-        if (const QChar ch = text[i]; stoppers.contains(ch))
-        {
-            limit = i;
-            break;
-        }
-    }
-
-    const QStringView search_area = text.sliced(current_pos, limit - current_pos);
     std::optional<RuleMatch> best_match = std::nullopt;
 
     for (const auto& rule : rules)
     {
         const int start_len = static_cast<int>(rule.original_start.length());
+        const int rule_end_len = static_cast<int>(rule.original_end.length());
+
         if (search_area.length() <= start_len) continue;
 
         int search_offset = start_len;
-
-        while (true)
+        while (search_offset < search_area.length())
         {
             const int relative_end_idx = static_cast<int>(search_area.indexOf(rule.original_end, search_offset));
-
             if (relative_end_idx == -1) break;
 
             const int abs_start_of_end = current_pos + relative_end_idx;
-            const int rule_end_len = static_cast<int>(rule.original_end.length());
+            const int candidate_inner_start = current_pos + start_len;
+            const int candidate_inner_len = abs_start_of_end - candidate_inner_start;
 
             bool is_safe = true;
-
-            const int lookback_limit = std::max(current_pos + start_len, abs_start_of_end - 6);
-
-            for (int k = abs_start_of_end; k >= lookback_limit; --k)
+            for (int scan = 0; scan < candidate_inner_len;)
             {
-                auto check_overlap = [&](const auto& dict, const Priority target_prio)
-                {
-                    Match m = dict.find(text, k);
-                    if (m.length > 0 && m.priority == target_prio)
-                    {
-                        if (k + m.length > abs_start_of_end)
-                        {
-                            return true;
-                        }
-                    }
-                    return false;
-                };
+                auto [found_len, priority, sub_rules, _] = dictionary.find(
+                    text.mid(candidate_inner_start + scan, candidate_inner_len - scan), 0);
 
-                if (current_name_set_id != -1)
-                {
-                    if (check_overlap(name_set_dictionary, NAME))
-                    {
-                        is_safe = false;
-                        break;
-                    }
-                }
-                if (check_overlap(dictionary, NAME))
+                if (found_len > 0 && priority == PHRASE && (candidate_inner_start + scan + found_len >
+                    abs_start_of_end))
                 {
                     is_safe = false;
                     break;
                 }
+                scan += (found_len > 0) ? found_len : 1;
             }
 
             if (!is_safe)
@@ -263,10 +220,9 @@ static std::optional<RuleMatch> find_matching_rule(const QStringView& text, cons
     return best_match;
 }
 
-static ConversionResult convert_recursive(const QStringView& input, int start_offset, int& token_counter, bool& cap_next,
-                                          Progress& progress)
+static void convert_recursive_aligned(const QStringView& input, int start_offset, uint32_t& token_counter, bool& cap_next,
+                                      Progress& progress, AlignedDocument& doc)
 {
-    ConversionResult out;
     int i = 0;
 
     while (i < input.length())
@@ -275,24 +231,19 @@ static ConversionResult convert_recursive(const QStringView& input, int start_of
 
         if (ch == '\n')
         {
-            out.cn += u"<br>";
-            out.sv += u"<br>";
-            out.vn += u"<br>";
+            doc.paragraphs.emplace_back();
             cap_next = true;
             i++;
-            out.length_consumed++;
-
             progress.update(1);
             continue;
         }
         if (ch.isSpace())
         {
-            out.cn += u"&nbsp;";
-            out.sv += u"&nbsp;";
-            out.vn += u"&nbsp;";
+            if (!doc.paragraphs.empty() && !doc.paragraphs.back().tokens.empty())
+            {
+                doc.paragraphs.back().tokens.back().has_trailing_space = true;
+            }
             i++;
-            out.length_consumed++;
-
             progress.update(1);
             continue;
         }
@@ -301,7 +252,6 @@ static ConversionResult convert_recursive(const QStringView& input, int start_of
         {
             if (Match match = name_set_dictionary.find(input, i); match.length > 0 && match.priority == NAME)
             {
-                QString uid = QString::number(token_counter++);
                 QString sv = get_sv(input.sliced(i, match.length));
                 if (cap_next)
                 {
@@ -309,26 +259,16 @@ static ConversionResult convert_recursive(const QStringView& input, int start_of
                     cap_next = false;
                 }
 
-                QString trans = *match.translation;
-
-                out.cn += u"<a href='" % uid % u"'>";
-                append_escaped(out.cn, input.sliced(i, match.length));
-                out.cn += u"</a>";
-
-                out.sv += u"<a href='" % uid % u"'>" % sv.toHtmlEscaped() % u"</a>";
-                out.vn += u"<a href='" % uid % u"'>" % trans.toHtmlEscaped() % u"</a>";
+                Token tok;
+                tok.id = ++token_counter;
+                tok.cn = input.sliced(i, match.length).toString();
+                tok.sv = std::move(sv);
+                tok.vn = *match.translation;
 
                 i += match.length;
-                out.length_consumed += match.length;
-
                 progress.update(match.length);
 
-                if (should_append_space(input, i) && !out.vn.endsWith(' '))
-                {
-                    out.vn += u" ";
-                    out.sv += u" ";
-                }
-
+                doc.paragraphs.back().tokens.push_back(std::move(tok));
                 continue;
             }
         }
@@ -337,7 +277,6 @@ static ConversionResult convert_recursive(const QStringView& input, int start_of
 
         if (length > 0 && priority == NAME)
         {
-            QString uid = QString::number(token_counter++);
             QString sv = get_sv(input.sliced(i, length));
             if (cap_next)
             {
@@ -345,26 +284,16 @@ static ConversionResult convert_recursive(const QStringView& input, int start_of
                 cap_next = false;
             }
 
-            QString trans = *translation;
-
-            out.cn += u"<a href='" % uid % u"'>";
-            append_escaped(out.cn, input.sliced(i, length));
-            out.cn += u"</a>";
-
-            out.sv += u"<a href='" % uid % u"'>" % sv.toHtmlEscaped() % u"</a>";
-            out.vn += u"<a href='" % uid % u"'>" % trans.toHtmlEscaped() % u"</a>";
+            Token tok;
+            tok.id = ++token_counter;
+            tok.cn = input.sliced(i, length).toString();
+            tok.sv = std::move(sv);
+            tok.vn = *translation;
 
             i += length;
-            out.length_consumed += length;
-
             progress.update(length);
 
-            if (should_append_space(input, i) && !out.vn.endsWith(' '))
-            {
-                out.vn += u" ";
-                out.sv += u" ";
-            }
-
+            doc.paragraphs.back().tokens.push_back(std::move(tok));
             continue;
         }
 
@@ -386,7 +315,7 @@ static ConversionResult convert_recursive(const QStringView& input, int start_of
 
                     progress.update(rule_start_len);
 
-                    QString uid = "r" + QString::number(token_counter++);
+                    uint32_t rule_uid = ++token_counter;
 
                     QString t_start = rule->translation_start;
                     if (cap_next && !t_start.isEmpty())
@@ -395,47 +324,31 @@ static ConversionResult convert_recursive(const QStringView& input, int start_of
                         cap_next = false;
                     }
 
-                    ConversionResult inner = convert_recursive(input.sliced(inner_start_idx, inner_len),
-                                                               start_offset + inner_start_idx,
-                                                               token_counter,
-                                                               cap_next, progress);
+                    Token start_tok;
+                    start_tok.id = rule_uid;
+                    start_tok.cn = rule->original_start;
+                    start_tok.sv = get_sv(rule->original_start);
+                    start_tok.vn = t_start;
+                    start_tok.rule = rule;
+                    doc.paragraphs.back().tokens.push_back(std::move(start_tok));
+
+                    convert_recursive_aligned(input.sliced(inner_start_idx, inner_len),
+                                              start_offset + inner_start_idx,
+                                              token_counter,
+                                              cap_next, progress, doc);
 
                     progress.update(rule_end_len);
 
-                    out.cn += u"<a href='" % uid % u"'>";
-                    append_escaped(out.cn, rule->original_start);
-                    out.cn += u"</a>";
-                    out.cn += inner.cn;
-                    out.cn += u"<a href='" % uid % u"'>";
-                    append_escaped(out.cn, rule->original_end);
-                    out.cn += u"</a>";
-
-                    QString sv_start = get_sv(rule->original_start);
-                    QString sv_end = get_sv(rule->original_end);
-
-                    out.sv += u"<a href='" % uid % u"'>" % sv_start.toHtmlEscaped() % u" </a>";
-                    out.sv += inner.sv;
-                    out.sv += u"<a href='" % uid % u"'>" % sv_end.toHtmlEscaped() % u"</a> ";
-
-                    if (!t_start.isEmpty())
-                    {
-                        out.vn += u"<a href='" % uid % u"'>" % t_start.toHtmlEscaped() % u" </a>";
-                    }
-
-                    out.vn += inner.vn;
-
-                    if (!rule->translation_end.isEmpty())
-                    {
-                        out.vn += u"<a href='" % uid % u"'>" % rule->translation_end.toHtmlEscaped() % u"</a>";
-                    }
+                    Token end_tok;
+                    end_tok.id = rule_uid;
+                    end_tok.cn = rule->original_end;
+                    end_tok.sv = get_sv(rule->original_end);
+                    end_tok.vn = rule->translation_end;
+                    end_tok.rule = rule;
 
                     i += rule_start_len + inner_len + rule_end_len;
-                    out.length_consumed += rule_start_len + inner_len + rule_end_len;
+                    doc.paragraphs.back().tokens.push_back(std::move(end_tok));
 
-                    if (should_append_space(input, i) && !out.vn.endsWith(' '))
-                    {
-                        out.vn += u" ";
-                    }
                     continue;
                 }
             }
@@ -483,7 +396,6 @@ static ConversionResult convert_recursive(const QStringView& input, int start_of
                 goto process_single_char;
             }
 
-            QString uid = QString::number(token_counter++);
             QString sv = get_sv(input.sliced(i, length));
             QString trans = *translation;
 
@@ -494,24 +406,16 @@ static ConversionResult convert_recursive(const QStringView& input, int start_of
                 cap_next = false;
             }
 
-            out.cn += u"<a href='" % uid % u"'>";
-            append_escaped(out.cn, input.sliced(i, length));
-            out.cn += u"</a>";
-
-            out.sv += u"<a href='" % uid % u"'>" % sv.toHtmlEscaped() % u"</a>";;
-            out.vn += u"<a href='" % uid % u"'>" % trans.toHtmlEscaped() % u"</a>";;
+            Token tok;
+            tok.id = ++token_counter;
+            tok.cn = input.sliced(i, length).toString();
+            tok.sv = std::move(sv);
+            tok.vn = std::move(trans);
 
             i += length;
-            out.length_consumed += length;
-
             progress.update(length);
 
-            if (should_append_space(input, i) && !out.vn.endsWith(' '))
-            {
-                out.vn += u" ";
-                out.sv += u" ";
-            }
-
+            doc.paragraphs.back().tokens.push_back(std::move(tok));
             continue;
         }
 
@@ -554,27 +458,40 @@ static ConversionResult convert_recursive(const QStringView& input, int start_of
                 cap_next = false;
             }
 
-            QString uid = QString::number(token_counter++);
-            out.cn += u"<a href='" % uid % u"'>";
-            append_escaped(out.cn, source_text);
-            out.cn += u"</a>";
-
-            out.sv += u"<a href='" % uid % u"'>" % sv_text.toHtmlEscaped() % u"</a>";;
-            out.vn += u"<a href='" % uid % u"'>" % translated_text.toHtmlEscaped() % u"</a>";;
+            Token tok;
+            tok.id = ++token_counter;
+            tok.cn = std::move(source_text);
+            tok.sv = std::move(sv_text);
+            tok.vn = std::move(translated_text);
 
             i += 1;
-            out.length_consumed += 1;
-
             progress.update(1);
 
-            if (!translated_text.isEmpty() && should_append_space(input, i, ch) && !out.vn.endsWith(' '))
-            {
-                out.vn += u" ";
-                out.sv += u" ";
-            }
+            doc.paragraphs.back().tokens.push_back(std::move(tok));
         }
     }
-    return out;
+}
+
+std::shared_ptr<AlignedDocument> convert(const QStringView& input,
+                                         const std::function<void(int)>& progress_callback)
+{
+    auto doc = std::make_shared<AlignedDocument>();
+    doc->paragraphs.emplace_back();
+
+    uint32_t token_counter = 0;
+    bool cap_next = true;
+
+    Progress progress(progress_callback);
+
+    convert_recursive_aligned(input, 0, token_counter, cap_next, progress, *doc);
+
+    if (doc->paragraphs.size() > 1 && doc->paragraphs.back().empty())
+    {
+        doc->paragraphs.pop_back();
+    }
+
+    doc->build_index();
+    return doc;
 }
 
 namespace
@@ -671,52 +588,45 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
             {
                 const Rule* rule = rule_match->rule;
                 int start_len = static_cast<int>(rule->original_start.length());
+                int inner_start_idx = i + start_len;
+                int inner_len = rule_match->abs_start_of_end_token - inner_start_idx;
+                int end_len = static_cast<int>(rule->original_end.length());
 
-                bool phrase_overrides_rule = (length > 0 && priority == PHRASE &&
-                    length > start_len);
+                progress.update(start_len);
 
-                if (!phrase_overrides_rule)
+                QString t_start = rule->translation_start;
+                if (cap_next && !t_start.isEmpty())
                 {
-                    int inner_start_idx = i + start_len;
-                    int inner_len = rule_match->abs_start_of_end_token - inner_start_idx;
-                    int end_len = static_cast<int>(rule->original_end.length());
-
-                    progress.update(start_len);
-
-                    QString t_start = rule->translation_start;
-                    if (cap_next && !t_start.isEmpty())
-                    {
-                        if (t_start[0].isLower()) t_start[0] = t_start[0].toUpper();
-                        cap_next = false;
-                    }
-
-                    auto [text, _] = convert_recursive_plain(input.sliced(inner_start_idx, inner_len), cap_next,
-                                                             progress);
-
-                    progress.update(end_len);
-
-                    if (!t_start.isEmpty())
-                    {
-                        out.text += t_start + " ";
-                    }
-
-                    out.text += text;
-
-                    if (!rule->translation_end.isEmpty())
-                    {
-                        if (!out.text.endsWith(' ')) out.text += u" ";
-                        out.text += rule->translation_end;
-                    }
-
-                    i += start_len + inner_len + end_len;
-                    out.length_consumed += start_len + inner_len + end_len;
-
-                    if (should_append_space(input, i) && !out.text.endsWith(' '))
-                    {
-                        out.text += u" ";
-                    }
-                    continue;
+                    if (t_start[0].isLower()) t_start[0] = t_start[0].toUpper();
+                    cap_next = false;
                 }
+
+                auto [text, _] = convert_recursive_plain(input.sliced(inner_start_idx, inner_len), cap_next,
+                                                         progress);
+
+                progress.update(end_len);
+
+                if (!t_start.isEmpty())
+                {
+                    out.text += t_start + " ";
+                }
+
+                out.text += text;
+
+                if (!rule->translation_end.isEmpty())
+                {
+                    if (!out.text.endsWith(' ')) out.text += u" ";
+                    out.text += rule->translation_end;
+                }
+
+                i += start_len + inner_len + end_len;
+                out.length_consumed += start_len + inner_len + end_len;
+
+                if (should_append_space(input, i) && !out.text.endsWith(' '))
+                {
+                    out.text += u" ";
+                }
+                continue;
             }
         }
 
@@ -828,31 +738,6 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
         }
     }
     return out;
-}
-
-std::tuple<QString, QString, QString> convert(const QStringView& input,
-                                              const std::function<void(int)>& progress_callback)
-{
-    QString cn_output;
-    QString sv_output;
-    QString vn_output;
-
-    cn_output.append(R"(<style>a{text-decoration:none;color:white;font-family:"Noto Sans SC";font-size:18px}</style>)");
-    sv_output.append(R"(<style>a{text-decoration:none;color:white;font-family:"Tahoma";font-size:16px}</style>)");
-    vn_output.append(R"(<style>a{text-decoration:none;color:white;font-family:"Tahoma";font-size:16px;}</style>)");
-
-    int token_counter = 0;
-    bool cap_next = true;
-
-    Progress progress(progress_callback);
-
-    const ConversionResult res = convert_recursive(input, 0, token_counter, cap_next, progress);
-
-    cn_output.append(res.cn);
-    sv_output.append(res.sv);
-    vn_output.append(res.vn);
-
-    return {cn_output, sv_output, vn_output};
 }
 
 QString convert_plain(const QStringView& input, const std::function<void(int)>& progress_callback)

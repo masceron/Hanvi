@@ -59,9 +59,15 @@ set(CORE
         core/io.cpp
         core/structures.h
         core/structures.cpp
+        components/documents/aligned_document.h
+        components/documents/aligned_document.cpp
 )
 
 add_library(CoreLogic STATIC ${CORE})
+target_include_directories(CoreLogic PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/components"
+)
 target_link_libraries(CoreLogic PRIVATE Qt::Core Qt::Widgets Qt::Sql Qt::Concurrent)
 
 set(APP_SOURCES main.cpp
@@ -70,6 +76,10 @@ set(APP_SOURCES main.cpp
         components/mainwindow.ui
         app/app.cpp
         app/app.h
+        components/documents/document_session.h
+        components/documents/document_session.cpp
+        components/documents/token_canvas.h
+        components/documents/token_canvas.cpp
         components/dictpopup.cpp
         components/dictpopup.h
         components/dictpopup.ui

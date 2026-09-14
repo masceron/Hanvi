@@ -1,0 +1,126 @@
+#pragma once
+
+#include <QString>
+#include <vector>
+#include <memory>
+#include <optional>
+#include <cstdint>
+#include "core/structures.h"
+
+enum class LanguageRole : uint8_t {
+    Chinese,
+    SinoVietnamese,
+    Vietnamese
+};
+
+struct Token {
+    uint32_t id = 0;
+    QString cn;
+    QString sv;
+    QString vn;
+    const Rule* rule = nullptr;
+    bool has_trailing_space = false;
+
+    [[nodiscard]] const QString& text(LanguageRole role) const noexcept {
+        switch (role) {
+            case LanguageRole::Chinese: return cn;
+            case LanguageRole::SinoVietnamese: return sv;
+            case LanguageRole::Vietnamese: return vn;
+        }
+        return cn;
+    }
+    [[nodiscard]] bool is_rule() const noexcept { return rule != nullptr; }
+    [[nodiscard]] bool is_valid() const noexcept { return id != 0; }
+};
+
+namespace Typography {
+
+inline bool is_closer_char(QChar c) noexcept {
+    return c == u'.' || c == u',' || c == u'!' || c == u'?' ||
+           c == u':' || c == u';' || c == u'…' ||
+           c == u')' || c == u']' || c == u'}' || c == u'>' ||
+           c == u'”' || c == u'’' || c == u'」' || c == u'』' ||
+           c == u'】' || c == u'》' || c == u'）' ||
+           c == u'。' || c == u'，' || c == u'！' || c == u'？' ||
+           c == u'：' || c == u'；';
+}
+
+inline bool is_opener_char(QChar c) noexcept {
+    return c == u'(' || c == u'[' || c == u'{' || c == u'<' ||
+           c == u'“' || c == u'‘' || c == u'「' || c == u'『' ||
+           c == u'【' || c == u'《' || c == u'（';
+}
+
+inline bool should_insert_space_before(const QString& text, const QString& tok_str, bool& in_quote) noexcept {
+    if (text.isEmpty()) return false;
+    if (text.endsWith(u' ')) return false;
+
+    const QChar prev_char = text.back();
+    const QChar first_char = tok_str[0];
+
+    // Quotation mark handling
+    if (tok_str == u"\"") {
+        if (!in_quote) {
+            in_quote = true;
+            return !is_opener_char(prev_char);
+        } else {
+            in_quote = false;
+            return false;
+        }
+    }
+
+    // If previous character is an opener or opening quote, no space
+    if (is_opener_char(prev_char) || (prev_char == u'"' && in_quote)) {
+        return false;
+    }
+
+    // If this token is a closer / punctuation, no space before it
+    if (is_closer_char(first_char)) {
+        return false;
+    }
+
+    return true;
+}
+
+} // namespace Typography
+
+struct DocumentPosition {
+    size_t paragraph = 0;
+    size_t token = 0;
+
+    auto operator<=>(const DocumentPosition&) const = default;
+};
+
+struct DocumentSelection {
+    DocumentPosition start;
+    DocumentPosition end;
+
+    [[nodiscard]] bool is_empty() const noexcept { return start == end; }
+    [[nodiscard]] DocumentSelection normalized() const noexcept {
+        return (start <= end) ? *this : DocumentSelection{end, start};
+    }
+};
+
+struct Paragraph {
+    std::vector<Token> tokens;
+    [[nodiscard]] bool empty() const noexcept { return tokens.empty(); }
+};
+
+class AlignedDocument {
+public:
+    std::vector<Paragraph> paragraphs;
+
+    void build_index();
+
+    [[nodiscard]] const Token* find_token(uint32_t id) const noexcept;
+    [[nodiscard]] std::optional<DocumentPosition> find_token_position(uint32_t id) const noexcept;
+    [[nodiscard]] QString get_text_range(const DocumentSelection& selection, LanguageRole role) const;
+    [[nodiscard]] QString get_chinese_for_range(const DocumentSelection& selection) const;
+
+    [[nodiscard]] size_t total_tokens() const noexcept { return total_tokens_; }
+    void clear() noexcept;
+
+private:
+    std::vector<DocumentPosition> token_lut_;
+    size_t total_tokens_ = 0;
+};
