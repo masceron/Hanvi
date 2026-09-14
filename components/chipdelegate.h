@@ -24,7 +24,7 @@ public:
         QString text = index.data().toString();
         if (text.isEmpty()) text = "New Meaning";
         const int width = option.fontMetrics.horizontalAdvance(text) + 50;
-        return QSize(width, 36);
+        return {width, 36};
     }
 
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override
@@ -35,7 +35,7 @@ public:
 
         const QRect rect = option.rect.adjusted(2, 4, -2, -4);
 
-        const auto bg_color = QColor("#313131");
+        const auto bg_color = QColor(0x313131);
         painter->setBrush(bg_color);
         painter->setPen(Qt::NoPen);
         painter->drawRoundedRect(rect, 14, 14);
@@ -55,7 +55,7 @@ public:
 
         painter->drawText(text_rect, Qt::AlignVCenter | Qt::AlignLeft, index.data().toString());
 
-        QPen xPen(QColor("#ddd"));
+        QPen xPen(QColor(0xdddddd));
         xPen.setWidth(2);
         painter->setPen(xPen);
 
@@ -93,13 +93,13 @@ public:
 
     void setEditorData(QWidget *editor, const QModelIndex &index) const override
     {
-        const auto line = static_cast<QLineEdit*>(editor);
+        const auto line = dynamic_cast<QLineEdit*>(editor);
         line->setText(index.data().toString());
     }
 
     void setModelData(QWidget *editor, QAbstractItemModel *model, const QModelIndex &index) const override
     {
-        const QLineEdit *line = static_cast<QLineEdit*>(editor);
+        const QLineEdit *line = dynamic_cast<QLineEdit*>(editor);
         const QString value = line->text();
         model->setData(index, value, Qt::EditRole);
     }
@@ -113,7 +113,7 @@ public:
     bool editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option, const QModelIndex &index) override
     {
         if (event->type() == QEvent::MouseButtonRelease) {
-            const QMouseEvent *me = static_cast<QMouseEvent*>(event);
+            const QMouseEvent *me = dynamic_cast<QMouseEvent*>(event);
             const QRect rect = option.rect.adjusted(2, 4, -2, -4);
             if (const auto xRect = QRect(rect.right() - 22, rect.center().y() - 10, 22, 22); xRect.contains(me->pos())) {
                 emit request_delete(index);

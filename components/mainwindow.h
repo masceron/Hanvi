@@ -2,7 +2,7 @@
 
 #include <QMainWindow>
 #include <QTextBrowser>
-#include <QtConcurrent>
+#include <QFutureWatcher>
 
 QT_BEGIN_NAMESPACE
 

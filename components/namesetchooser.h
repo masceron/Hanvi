@@ -21,7 +21,7 @@ public:
     explicit namesetchooser(QWidget* parent = nullptr);
     ~namesetchooser() override;
 
-    int get_chosen_id() const;
+    [[nodiscard]] int get_chosen_id() const;
 
 private:
     Ui::namesetchooser* ui;

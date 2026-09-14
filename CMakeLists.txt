@@ -7,8 +7,6 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-option(BUILD_PORTABLE "Build for distribution" ON)
-
 if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     if (CMAKE_BUILD_TYPE MATCHES "Release")
         string(REPLACE "/EHsc" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
@@ -19,7 +17,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
         add_compile_options(/O2 /Oi /Ot /Ob3
                 /GL /GF /GA /Gy /Gw
                 /Qpar /EHs-c- /D_HAS_EXCEPTIONS=0
-                /W3 /WX /permissive-)
+                /W3 /WX /permissive- /arch:AVX2)
         add_link_options(/LTCG /OPT:REF /OPT:ICF)
     endif ()
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -27,28 +25,16 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         add_compile_options(-O3 -fomit-frame-pointer -fno-exceptions
                 -flto=auto -fipa-pta -flto-partition=one -fwhole-program
                 -ffunction-sections -fdata-sections
-                -Wall -Wextra -Werror -pedantic-errors -DNDEBUG)
+                -Wall -Wextra -Werror -pedantic-errors -DNDEBUG -mtune=generic -march=x86-64-v3)
         add_link_options(-flto=auto -fwhole-program -s)
-
-        if (BUILD_PORTABLE)
-            add_compile_options(-mtune=generic -march=x86-64-v2)
-        else ()
-            add_compile_options(-march=native -mtune=native)
-        endif ()
     endif ()
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     if (CMAKE_BUILD_TYPE MATCHES "Release")
         add_compile_options(-O3 -fomit-frame-pointer -fno-exceptions
                 -flto=full -ffunction-sections
                 -fdata-sections -Wall -Wextra -Werror
-                -pedantic-errors -DNDEBUG)
+                -pedantic-errors -DNDEBUG -mtune=generic -march=x86-64-v3)
         add_link_options(-flto=full -s -Wl,--gc-sections -Wl,--icf=all)
-
-        if (BUILD_PORTABLE)
-            add_compile_options(-mtune=generic -march=x86-64-v2)
-        else ()
-            add_compile_options(-march=native -mtune=native)
-        endif ()
     endif ()
 else ()
     message(FATAL_ERROR "Compiler not supported.")

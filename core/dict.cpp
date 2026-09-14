@@ -1,10 +1,11 @@
 #include <QSqlQuery>
-#include <QtConcurrent>
+#include <QFutureWatcher>
+#include <QtConcurrentRun>
 
 #include "dict.h"
 #include "structures.h"
 
-void init_db()
+static void init_db()
 {
     auto db = QSqlDatabase::addDatabase("QSQLITE");
     db.setDatabaseName("dict.db");
@@ -19,7 +20,7 @@ void init_db()
     query.exec("VACUUM;");
 }
 
-void load_global_data(const std::function<void()>& on_finished)
+static void load_global_data(const std::function<void()>& on_finished)
 {
     QFuture<void> future_sv = QtConcurrent::run([]
     {
@@ -118,7 +119,7 @@ void load_global_data(const std::function<void()>& on_finished)
     watcher->setFuture(master_future);
 }
 
-void load_name_sets_data()
+static void load_name_sets_data()
 {
     QSqlQuery query;
     query.prepare("SELECT id, title FROM name_sets");

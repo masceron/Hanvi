@@ -4,6 +4,9 @@
 #include <QDesktopServices>
 #include <QUrl>
 #include <QScrollBar>
+#include <QShortcut>
+#include <QtConcurrentRun>
+#include <QTimer>
 
 #include "ui_MainWindow.h"
 #include "../core/io.h"
@@ -13,6 +16,7 @@
 #include "namesetsmanager.h"
 #include "namesetchooser.h"
 #include "../core/converter.h"
+#include "app/app.h"
 #include "core/dict.h"
 
 MainWindow::MainWindow(QWidget* parent) :
@@ -189,6 +193,12 @@ MainWindow::MainWindow(QWidget* parent) :
         const auto target = std::clamp(ui->current_page->text().toInt(), 1, static_cast<int>(pages.size()));
         current_page = target - 1;
         convert_and_display(false);
+    });
+
+    const auto quit_shortcut = new QShortcut(QKeySequence("Ctrl+W"), this);
+    connect(quit_shortcut, &QShortcut::activated, this, []
+    {
+        QApplication::quit();
     });
 }
 
@@ -737,13 +747,16 @@ void MainWindow::open_popup()
                     QString full_chinese_token = cn_cursor.selectedText();
 
                     int words_before_fragment = 0;
+                    static auto reg = QRegularExpression("\\s+");
+
                     for (auto pre_it = block.begin(); pre_it != it; ++pre_it)
                     {
                         if (pre_it.fragment().charFormat().anchorHref() == id)
                         {
                             QString pre_text = pre_it.fragment().text();
+
                             words_before_fragment += static_cast<int>(pre_text.split(
-                                QRegularExpression("\\s+"), Qt::SkipEmptyParts).size());
+                                reg, Qt::SkipEmptyParts).size());
                         }
                     }
 
@@ -754,12 +767,12 @@ void MainWindow::open_popup()
 
                     QString text_pre_selection = fragment_text.left(intersect_start - frag_start);
                     int words_pre_selection = static_cast<int>(text_pre_selection.split(
-                        QRegularExpression("\\s+"), Qt::SkipEmptyParts).size());
+                        reg, Qt::SkipEmptyParts).size());
 
                     QString text_selected = fragment_text.mid(intersect_start - frag_start,
                                                               intersect_end - intersect_start);
                     int words_in_selection = static_cast<int>(text_selected.split(
-                        QRegularExpression("\\s+"), Qt::SkipEmptyParts).size());
+                        reg, Qt::SkipEmptyParts).size());
 
                     int cn_start_index = words_before_fragment + words_pre_selection;
                     int cn_length = words_in_selection;
