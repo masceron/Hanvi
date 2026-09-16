@@ -702,8 +702,7 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
 {
     if (eventType == "windows_generic_MSG")
     {
-        auto* msg = static_cast<MSG*>(message);
-        if (msg->message == WM_NCCALCSIZE)
+        if (const auto* msg = static_cast<MSG*>(message); msg->message == WM_NCCALCSIZE)
         {
             if (msg->wParam == TRUE)
             {
