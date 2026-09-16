@@ -1,8 +1,6 @@
 #pragma once
 
-#include <QString>
 #include <vector>
-#include <memory>
 #include <optional>
 #include <cstdint>
 #include "core/structures.h"
