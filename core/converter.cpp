@@ -182,13 +182,13 @@ static std::optional<RuleMatch> find_matching_rule(const QStringView& text, cons
                 auto [found_len, priority, sub_rules, _] = dictionary.find(
                     text.mid(candidate_inner_start + scan, candidate_inner_len - scan), 0);
 
-                if (found_len > 0 && priority == PHRASE && (candidate_inner_start + scan + found_len >
-                    abs_start_of_end))
+                if (found_len > 0 && priority == PHRASE && candidate_inner_start + scan + found_len >
+                    abs_start_of_end)
                 {
                     is_safe = false;
                     break;
                 }
-                scan += (found_len > 0) ? found_len : 1;
+                scan += found_len > 0 ? found_len : 1;
             }
 
             if (!is_safe)
@@ -201,19 +201,19 @@ static std::optional<RuleMatch> find_matching_rule(const QStringView& text, cons
 
             if (!best_match.has_value())
             {
-                best_match = RuleMatch{&rule, abs_start_of_end, total_end};
+                best_match = RuleMatch{.rule = &rule, .abs_start_of_end_token = abs_start_of_end, .total_end_pos = total_end};
             }
             else
             {
                 if (total_end > best_match->total_end_pos)
                 {
-                    best_match = RuleMatch{&rule, abs_start_of_end, total_end};
+                    best_match = RuleMatch{.rule = &rule, .abs_start_of_end_token = abs_start_of_end, .total_end_pos = total_end};
                 }
                 else if (total_end == best_match->total_end_pos)
                 {
                     if (rule.original_end.length() > best_match->rule->original_end.length())
                     {
-                        best_match = RuleMatch{&rule, abs_start_of_end, total_end};
+                        best_match = RuleMatch{.rule = &rule, .abs_start_of_end_token = abs_start_of_end, .total_end_pos = total_end};
                     }
                 }
             }
@@ -309,8 +309,8 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
                 const Rule* rule = rule_match->rule;
                 int rule_start_len = static_cast<int>(rule->original_start.length());
 
-                bool phrase_overrides_rule = (length > 0 && priority == PHRASE &&
-                    length > rule_start_len);
+                bool phrase_overrides_rule = length > 0 && priority == PHRASE &&
+                    length > rule_start_len;
 
                 if (!phrase_overrides_rule)
                 {

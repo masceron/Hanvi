@@ -30,7 +30,7 @@ QList<QStringView> paginate(const QString& input_text, const int min_length)
         }
         else
         {
-            const int chunk_len = (cutoff + 1) - cursor;
+            const int chunk_len = cutoff + 1 - cursor;
             pages.append(full_view.sliced(cursor, chunk_len));
 
             cursor = cutoff + 1;

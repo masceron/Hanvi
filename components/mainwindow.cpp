@@ -29,6 +29,7 @@
 #include "namesetchooser.h"
 #include "../core/converter.h"
 #include "core/dict.h"
+#include "documents/token_canvas.h"
 
 namespace
 {
@@ -60,7 +61,7 @@ namespace
         }
 
     protected:
-        void tabInserted(int index) override
+        void tabInserted(const int index) override
         {
             QTabBar::tabInserted(index);
             updateGeometry();
@@ -473,7 +474,18 @@ void MainWindow::setup_hamburger_menu(QPushButton* btn)
     this->addAction(save_action);
     connect(save_action, &QAction::triggered, ui->save_to_file, &QAction::trigger);
 
+    auto* copy_vn_action = menu->addAction("Copy Vietnamese");
+    copy_vn_action->setShortcut(QKeySequence("Ctrl+Shift+C"));
+    copy_vn_action->setShortcutContext(Qt::WindowShortcut);
+    this->addAction(copy_vn_action);
+    connect(copy_vn_action, &QAction::triggered, this, [this]
+    {
+        ui->vn_output->copy_all_to_clipboard();
+        ui->statusbar->showMessage("Vietnamese text copied to clipboard.", 2000);
+    });
+
     menu->addSeparator();
+
 
     const auto* nameset_action = menu->addAction("Namesets Manager...");
     connect(nameset_action, &QAction::triggered, this, [this]
@@ -1050,9 +1062,9 @@ void MainWindow::convert_and_display(const bool scroll_back)
         if (scroll_back)
         {
             cur->saved_scroll = {
-                ui->cn_input->scroll_value(),
-                ui->sv_output->scroll_value(),
-                ui->vn_output->scroll_value()
+                .cn = ui->cn_input->scroll_value(),
+                .sv = ui->sv_output->scroll_value(),
+                .vn = ui->vn_output->scroll_value()
             };
         }
         else cur->saved_scroll = {.cn = 0, .sv = 0, .vn = 0};
@@ -1063,11 +1075,11 @@ void MainWindow::convert_and_display(const bool scroll_back)
         {
             QMetaObject::invokeMethod(this, [this, progress]
             {
-                const auto* cur = current_tab();
-                if (cur && cur->current_page < cur->pages.size() && cur->pages[cur->current_page].length() > 0)
+                if (const auto* novel_tab = current_tab(); novel_tab && novel_tab->current_page < novel_tab->pages.
+                    size() && novel_tab->pages[novel_tab->current_page].length() > 0)
                 {
                     ui->progress_bar->setValue(
-                        static_cast<int>((progress * 100) / cur->pages[cur->current_page].length()));
+                        static_cast<int>((progress * 100) / novel_tab->pages[novel_tab->current_page].length()));
                 }
             });
         };

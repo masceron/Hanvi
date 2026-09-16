@@ -19,7 +19,7 @@ void DocumentSession::set_document(std::shared_ptr<const AlignedDocument> doc)
     emit selection_changed({});
 }
 
-void DocumentSession::set_active_token(uint32_t token_id)
+void DocumentSession::set_active_token(const uint32_t token_id)
 {
     if (active_token_id_ == token_id) return;
     active_token_id_ = token_id;
@@ -31,7 +31,7 @@ void DocumentSession::clear_active_token()
     set_active_token(0);
 }
 
-void DocumentSession::set_hovered_token(uint32_t token_id)
+void DocumentSession::set_hovered_token(const uint32_t token_id)
 {
     if (hovered_token_id_ == token_id) return;
     hovered_token_id_ = token_id;
@@ -50,7 +50,7 @@ void DocumentSession::set_selection(const DocumentSelection& selection)
     emit selection_changed(selection_);
 }
 
-void DocumentSession::select_token(uint32_t token_id)
+void DocumentSession::select_token(const uint32_t token_id)
 {
     if (!doc_ || token_id == 0)
     {
@@ -65,10 +65,10 @@ void DocumentSession::select_token(uint32_t token_id)
         return;
     }
 
-    set_selection({*pos, {pos->paragraph, pos->token + 1}});
+    set_selection({.start = *pos, .end = {.paragraph = pos->paragraph, .token = pos->token + 1}});
 }
 
-void DocumentSession::select_token_range(uint32_t start_token_id, uint32_t end_token_id)
+void DocumentSession::select_token_range(const uint32_t start_token_id, const uint32_t end_token_id)
 {
     if (!doc_ || start_token_id == 0 || end_token_id == 0)
     {
@@ -87,11 +87,11 @@ void DocumentSession::select_token_range(uint32_t start_token_id, uint32_t end_t
 
     if (*start_pos <= *end_pos)
     {
-        set_selection({*start_pos, {end_pos->paragraph, end_pos->token + 1}});
+        set_selection({.start = *start_pos, .end = {.paragraph = end_pos->paragraph, .token = end_pos->token + 1}});
     }
     else
     {
-        set_selection({*end_pos, {start_pos->paragraph, start_pos->token + 1}});
+        set_selection({.start = *end_pos, .end = {.paragraph = start_pos->paragraph, .token = start_pos->token + 1}});
     }
 }
 
@@ -102,7 +102,7 @@ void DocumentSession::clear_selection()
     emit selection_changed(selection_);
 }
 
-QString DocumentSession::selected_text(LanguageRole role) const
+QString DocumentSession::selected_text(const LanguageRole role) const
 {
     if (!doc_ || selection_.is_empty()) return {};
     return doc_->get_text_range(selection_, role);
@@ -114,7 +114,7 @@ QString DocumentSession::selected_chinese_text() const
     return doc_->get_chinese_for_range(selection_);
 }
 
-void DocumentSession::trigger_click(uint32_t token_id)
+void DocumentSession::trigger_click(const uint32_t token_id)
 {
     if (token_id != 0)
     {
@@ -140,8 +140,8 @@ void DocumentSession::trigger_context_menu(const uint32_t clicked_token_id)
         for (size_t p = start.paragraph; p <= end.paragraph && p < doc_->paragraphs.size(); ++p)
         {
             const auto& [tokens] = doc_->paragraphs[p];
-            const size_t start_t = (p == start.paragraph) ? start.token : 0;
-            const size_t end_t = (p == end.paragraph) ? std::min(end.token, tokens.size()) : tokens.size();
+            const size_t start_t = p == start.paragraph ? start.token : 0;
+            const size_t end_t = p == end.paragraph ? std::min(end.token, tokens.size()) : tokens.size();
 
             for (size_t t = start_t; t < end_t; ++t)
             {

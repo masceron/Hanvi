@@ -51,7 +51,7 @@ std::optional<DocumentPosition> AlignedDocument::find_token_position(const uint3
     return std::nullopt;
 }
 
-QString AlignedDocument::get_text_range(const DocumentSelection& selection, LanguageRole role) const
+QString AlignedDocument::get_text_range(const DocumentSelection& selection, const LanguageRole role) const
 {
     if (selection.is_empty()) return {};
 

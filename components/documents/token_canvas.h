@@ -21,7 +21,7 @@ struct CharSelection {
 
     [[nodiscard]] bool is_empty() const noexcept { return start == end; }
     [[nodiscard]] CharSelection normalized() const noexcept {
-        return (start <= end) ? *this : CharSelection{end, start};
+        return start <= end ? *this : CharSelection{.start = end, .end = start};
     }
 };
 
@@ -39,17 +39,19 @@ public:
     [[nodiscard]] LanguageRole role() const noexcept { return role_; }
 
     void set_line_height_percent(int percent);
-    [[nodiscard]] int line_height_percent() const noexcept { return line_height_percent_; }
-
     void set_font(const QFont& font);
 
     [[nodiscard]] int scroll_value() const;
     void set_scroll_value(int val) const;
     void scroll_to_token(uint32_t token_id) const;
+
+    [[nodiscard]] QString full_text() const;
+    void copy_all_to_clipboard() const;
+
     void copy_selection_to_clipboard() const;
 
     [[nodiscard]] bool has_selection() const noexcept { return !normalized_selection().is_empty(); }
-    [[nodiscard]] CharSelection normalized_selection() const noexcept { return CharSelection{sel_start_, sel_end_}.normalized(); }
+    [[nodiscard]] CharSelection normalized_selection() const noexcept { return CharSelection{.start = sel_start_, .end = sel_end_}.normalized(); }
     void clear_selection() { sel_start_ = {}; sel_end_ = {}; }
 
 protected:
@@ -83,31 +85,30 @@ private:
     };
 
     DocumentSession* session_ = nullptr;
-    LanguageRole role_ = LanguageRole::Vietnamese;
+    LanguageRole role_ = LanguageRole::Chinese;
     int line_height_percent_ = 100;
     QFont font_;
-
     qreal margin_ = 8.0;
-    qreal total_height_ = 0.0;
     int last_layout_width_ = 0;
 
     std::vector<ParagraphLayout> layouts_;
+    qreal total_height_ = 0.0;
 
-    bool is_selecting_ = false;
-    bool has_dragged_ = false;
-    QPoint mouse_down_pos_;
     CharPosition sel_start_;
     CharPosition sel_end_;
-
-    void on_document_changed(const std::shared_ptr<const AlignedDocument>& doc);
-    void on_active_token_changed(uint32_t token_id) const;
-    void on_hovered_token_changed(uint32_t token_id) const;
+    bool is_selecting_ = false;
+    QPoint mouse_down_pos_;
+    bool has_dragged_ = false;
 
     void rebuild_paragraph_data();
     void layout_all();
     void update_scroll_range() const;
-
     [[nodiscard]] size_t find_paragraph_at_y(qreal doc_y) const;
-    [[nodiscard]] std::optional<std::pair<size_t, int>> char_at_pos(const QPoint& viewport_pos, bool clamp = false) const;
+    [[nodiscard]] std::optional<std::pair<size_t, int>> char_at_pos(const QPoint& viewport_pos, bool clamp) const;
     [[nodiscard]] const TokenSpan* token_at_char(size_t p_idx, int char_pos) const;
+
+private slots:
+    void on_document_changed(const std::shared_ptr<const AlignedDocument>& doc);
+    void on_active_token_changed(uint32_t token_id) const;
+    void on_hovered_token_changed(uint32_t token_id) const;
 };

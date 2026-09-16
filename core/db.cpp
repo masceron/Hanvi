@@ -7,7 +7,7 @@
 
 static QString get_table_name(const Priority priority)
 {
-    return (priority == NAME) ? "names" : "phrases";
+    return priority == NAME ? "names" : "phrases";
 }
 
 void db_insert(const QString& key, const QString& value, const Priority priority)
