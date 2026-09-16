@@ -6,10 +6,13 @@
 #include <QMovie>
 #include <QVBoxLayout>
 
-class Loader : public QDialog {
+class Loader : public QDialog
+{
     Q_OBJECT
+
 public:
-    explicit Loader(QWidget *parent = nullptr) : QDialog(parent) {
+    explicit Loader(QWidget* parent = nullptr) : QDialog(parent)
+    {
         setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
         setAttribute(Qt::WA_TranslucentBackground);
 

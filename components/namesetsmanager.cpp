@@ -15,7 +15,7 @@ NamesetsManager::NamesetsManager(QWidget* parent) :
     ui->setupUi(this);
 
     setWindowTitle("Namesets");
-    
+
     ui->name_sets_list->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     ui->name_sets_list->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     ui->name_sets_list->setColumnWidth(1, 80);
@@ -38,11 +38,12 @@ void NamesetsManager::load_data()
     ui->name_sets_list->setRowCount(0);
     QMap<int, int> counts;
     QSqlQuery query("SELECT set_id, COUNT(*) FROM name_set_entries GROUP BY set_id");
-    while (query.next()) {
+    while (query.next())
+    {
         counts.insert(query.value(0).toInt(), query.value(1).toInt());
     }
 
-    for (const auto& [index, title] : name_sets) 
+    for (const auto& [index, title] : name_sets)
     {
         const int row = ui->name_sets_list->rowCount();
         ui->name_sets_list->insertRow(row);
@@ -71,12 +72,14 @@ QWidget* NamesetsManager::create_action_widget(int id, const QString& current_ti
 
     const auto edit = new QPushButton("Edit");
     edit->setObjectName("edit_set");
-    connect(edit, &QPushButton::clicked, this, [this, id, current_title]() {
+    connect(edit, &QPushButton::clicked, this, [this, id, current_title]()
+    {
         bool ok;
         const QString text = QInputDialog::getText(this, "Edit Nameset",
-                                             "New title:", QLineEdit::Normal,
-                                             current_title, &ok);
-        if (ok && !text.isEmpty()) {
+                                                   "New title:", QLineEdit::Normal,
+                                                   current_title, &ok);
+        if (ok && !text.isEmpty())
+        {
             QSqlQuery q;
             q.prepare("UPDATE name_sets SET title = :title WHERE id = :id");
             q.bindValue(":title", text);
@@ -89,11 +92,13 @@ QWidget* NamesetsManager::create_action_widget(int id, const QString& current_ti
     const auto delete_button = new QPushButton("Delete");
     delete_button->setObjectName("delete_set");
 
-    connect(delete_button, &QPushButton::clicked, this, [this, id]() {
+    connect(delete_button, &QPushButton::clicked, this, [this, id]()
+    {
         const auto reply = QMessageBox::question(this, "Confirm deletion",
-                                           "Are you sure? This will delete all names inside this set.",
-                                           QMessageBox::Yes | QMessageBox::No);
-        if (reply == QMessageBox::Yes) {
+                                                 "Are you sure? This will delete all names inside this set.",
+                                                 QMessageBox::Yes | QMessageBox::No);
+        if (reply == QMessageBox::Yes)
+        {
             QSqlQuery q;
 
             q.prepare("DELETE FROM name_sets WHERE id = :id");
@@ -116,7 +121,8 @@ QWidget* NamesetsManager::create_action_widget(int id, const QString& current_ti
 
         QFile file(file_name);
 
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        {
             return;
         }
 
@@ -154,16 +160,21 @@ void NamesetsManager::add_new_name_set()
 {
     bool ok;
 
-    if (const QString text = QInputDialog::getText(this, "New Nameset", "Name:", QLineEdit::Normal, "", &ok); ok && !text.isEmpty()) {
+    if (const QString text = QInputDialog::getText(this, "New Nameset", "Name:", QLineEdit::Normal, "", &ok); ok && !
+        text.isEmpty())
+    {
         QSqlQuery q;
         q.prepare("INSERT INTO name_sets (title) VALUES (:title)");
         q.bindValue(":title", text);
 
-        if (q.exec()) {
+        if (q.exec())
+        {
             const int new_id = q.lastInsertId().toInt();
             name_sets.emplace_back(new_id, text);
             load_data();
-        } else {
+        }
+        else
+        {
             QMessageBox::warning(this, "Error", "Could not create nameset (Duplicate name?).");
         }
     }
@@ -234,7 +245,8 @@ void NamesetsManager::import_set()
             if (original.isEmpty() || translated.isEmpty())
             {
                 success = false;
-                error_message = QString("Format error at line %1: Original or translated text is empty.").arg(line_number);
+                error_message = QString("Format error at line %1: Original or translated text is empty.").arg(
+                    line_number);
                 break;
             }
 

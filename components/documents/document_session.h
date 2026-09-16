@@ -4,7 +4,8 @@
 #include <memory>
 #include "aligned_document.h"
 
-class DocumentSession : public QObject {
+class DocumentSession : public QObject
+{
     Q_OBJECT
 
 public:

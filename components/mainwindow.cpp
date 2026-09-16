@@ -268,7 +268,8 @@ MainWindow::~MainWindow()
 
 void MainWindow::convert_and_display(const bool scroll_back)
 {
-    if (watcher.isRunning()) {
+    if (watcher.isRunning())
+    {
         return;
     }
     if (!input_text.isEmpty() && !pages[current_page].isEmpty())

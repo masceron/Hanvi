@@ -16,7 +16,7 @@ DictPopup::DictPopup(QWidget* parent) :
 
     connect(ui->close_popup, &QPushButton::clicked, this, [this]
     {
-       close_popup();
+        close_popup();
     });
 
     connect(ui->delete_name, &QPushButton::clicked, this, [this]
@@ -48,8 +48,10 @@ DictPopup::DictPopup(QWidget* parent) :
 
     connect(phrase_chip_delegate, &QAbstractItemDelegate::closeEditor, this, &DictPopup::edit_finished_phrase);
 
-    connect(phrase_chip_delegate, &ChipDelegate::editing_started, this, [this]() { ui->add_phrase->setEnabled(false); });
-    connect(phrase_chip_delegate, &ChipDelegate::editing_finished, this, [this]() { ui->add_phrase->setEnabled(true); });
+    connect(phrase_chip_delegate, &ChipDelegate::editing_started, this,
+            [this]() { ui->add_phrase->setEnabled(false); });
+    connect(phrase_chip_delegate, &ChipDelegate::editing_finished, this,
+            [this]() { ui->add_phrase->setEnabled(true); });
 
     connect(ui->use_sv_reading_name, &QPushButton::clicked, this, [this]
     {
@@ -153,7 +155,7 @@ DictPopup::DictPopup(QWidget* parent) :
         if (ui->list_phrases->count() > 0)
         {
             QStringList list;
-            for(int i = 0; i < ui->list_phrases->count(); ++i)
+            for (int i = 0; i < ui->list_phrases->count(); ++i)
             {
                 list.append(ui->list_phrases->item(i)->text());
             }
@@ -196,7 +198,8 @@ void DictPopup::edit_finished_name()
     }
     else
     {
-        io_insert(ui->use_current_nameset->isChecked() ? current_name_set_id : -1, ui->original->text(), new_text, NAME);
+        io_insert(ui->use_current_nameset->isChecked() ? current_name_set_id : -1, ui->original->text(), new_text,
+                  NAME);
 
         original_name = new_text;
         changed = true;

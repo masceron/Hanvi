@@ -35,7 +35,7 @@ struct Token {
 
 namespace Typography {
 
-inline bool is_closer_char(QChar c) noexcept {
+inline bool is_closer_char(const QChar c) noexcept {
     return c == u'.' || c == u',' || c == u'!' || c == u'?' ||
            c == u':' || c == u';' || c == u'…' ||
            c == u')' || c == u']' || c == u'}' || c == u'>' ||
@@ -45,7 +45,7 @@ inline bool is_closer_char(QChar c) noexcept {
            c == u'：' || c == u'；';
 }
 
-inline bool is_opener_char(QChar c) noexcept {
+inline bool is_opener_char(const QChar c) noexcept {
     return c == u'(' || c == u'[' || c == u'{' || c == u'<' ||
            c == u'“' || c == u'‘' || c == u'「' || c == u'『' ||
            c == u'【' || c == u'《' || c == u'（';

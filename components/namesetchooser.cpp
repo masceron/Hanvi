@@ -18,12 +18,14 @@ namesetchooser::namesetchooser(QWidget* parent) :
     ui->name_set_list->setColumnWidth(2, 100);
     ui->name_set_list->verticalHeader()->setVisible(false);
 
-    connect(ui->name_set_choose_none, &QPushButton::clicked, this, [this] {
+    connect(ui->name_set_choose_none, &QPushButton::clicked, this, [this]
+    {
         chosen_id = -1;
         accept();
     });
 
-    connect(ui->name_set_search, &QLineEdit::textChanged, this, [this](const QString &text) {
+    connect(ui->name_set_search, &QLineEdit::textChanged, this, [this](const QString& text)
+    {
         load_data(text);
     });
 
@@ -46,13 +48,15 @@ void namesetchooser::load_data(const QString& filter)
     ui->name_set_list->setRowCount(0);
     QMap<int, int> counts;
     QSqlQuery query("SELECT set_id, COUNT(*) FROM name_set_entries GROUP BY set_id");
-    while (query.next()) {
+    while (query.next())
+    {
         counts.insert(query.value(0).toInt(), query.value(1).toInt());
     }
 
-    for (const auto& [index, title] : name_sets) 
+    for (const auto& [index, title] : name_sets)
     {
-        if (!filter.isEmpty() && !title.contains(filter, Qt::CaseInsensitive)) {
+        if (!filter.isEmpty() && !title.contains(filter, Qt::CaseInsensitive))
+        {
             continue;
         }
 
@@ -78,7 +82,8 @@ void namesetchooser::load_data(const QString& filter)
 
         const auto choose_button = new QPushButton("Choose");
         choose_button->setObjectName("choose_set");
-        connect(choose_button, &QPushButton::clicked, this, [this, index] {
+        connect(choose_button, &QPushButton::clicked, this, [this, index]
+        {
             chosen_id = index;
             accept();
         });
