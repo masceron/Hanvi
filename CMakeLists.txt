@@ -142,7 +142,7 @@ else ()
     set(DIST_DIR "${CMAKE_BINARY_DIR}/Hanvi v1.0")
 endif ()
 
-set(ZIP_NAME "Hanvi.zip")
+set(ARCHIVE_NAME "Hanvi.7z")
 add_custom_target(MakePortableZip ALL
         DEPENDS Hanvi HanviCLI
 )
@@ -168,6 +168,7 @@ if (WIN32)
 endif ()
 
 add_custom_command(TARGET MakePortableZip POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E tar "cfv" "${CMAKE_BINARY_DIR}/${ZIP_NAME}" --format=zip "${DIST_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E rm -f "${CMAKE_BINARY_DIR}/${ARCHIVE_NAME}"
+        COMMAND 7z a -t7z -mx=9 "${CMAKE_BINARY_DIR}/${ARCHIVE_NAME}" "${DIST_DIR}"
         COMMAND ${CMAKE_COMMAND} -E rm -r "${DIST_DIR}"
 )

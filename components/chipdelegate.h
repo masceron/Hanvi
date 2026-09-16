@@ -7,19 +7,22 @@
 class ChipDelegate : public QStyledItemDelegate
 {
     Q_OBJECT
+
 public:
     using QStyledItemDelegate::QStyledItemDelegate;
     mutable QLineEdit* current_editor = nullptr;
     QLineEdit* get_current_editor() const { return current_editor; }
     bool editing() const { return current_editor != nullptr; }
-    void set_editor_text(const QString &text) const
+
+    void set_editor_text(const QString& text) const
     {
-        if (current_editor) {
+        if (current_editor)
+        {
             current_editor->setText(text);
         }
     }
 
-    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override
     {
         QString text = index.data().toString();
         if (text.isEmpty()) text = "New Meaning";
@@ -27,7 +30,7 @@ public:
         return {width, 36};
     }
 
-    void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override
+    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override
     {
         if (!index.isValid()) return;
         painter->save();
@@ -47,7 +50,7 @@ public:
 
         const auto x_rect = QRect(rect.right() - x_button_width, rect.top(), x_button_width, rect.height());
 
-        const auto xDrawRect = QRect(x_rect.center().x() - x_icon_size/2, x_icon_top, x_icon_size, x_icon_size);
+        const auto xDrawRect = QRect(x_rect.center().x() - x_icon_size / 2, x_icon_top, x_icon_size, x_icon_size);
 
         painter->setPen(Qt::white);
 
@@ -65,57 +68,62 @@ public:
         painter->restore();
     }
 
-    QWidget *createEditor(QWidget *parent, const QStyleOptionViewItem &/*option*/, const QModelIndex &/*index*/) const override
+    QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem&/*option*/,
+                          const QModelIndex&/*index*/) const override
     {
         const auto editor = new QLineEdit(parent);
 
         editor->setStyleSheet("QLineEdit { "
-                              "border: 2px solid #313131; "
-                              "border-radius: 14px; "
-                              "background-color: #313131; "
-                              "color: white; "
-                              "padding-left: 10px; "
-                              "selection-background-color: white; "
-                              "selection-color: #313131; "
-                              "}");
+            "border: 2px solid #313131; "
+            "border-radius: 14px; "
+            "background-color: #313131; "
+            "color: white; "
+            "padding-left: 10px; "
+            "selection-background-color: white; "
+            "selection-color: #313131; "
+            "}");
 
         current_editor = editor;
         emit const_cast<ChipDelegate*>(this)->editing_started();
         return editor;
     }
 
-    void destroyEditor(QWidget *editor, const QModelIndex &index) const override
+    void destroyEditor(QWidget* editor, const QModelIndex& index) const override
     {
         current_editor = nullptr;
         emit const_cast<ChipDelegate*>(this)->editing_finished();
         QStyledItemDelegate::destroyEditor(editor, index);
     }
 
-    void setEditorData(QWidget *editor, const QModelIndex &index) const override
+    void setEditorData(QWidget* editor, const QModelIndex& index) const override
     {
         const auto line = dynamic_cast<QLineEdit*>(editor);
         line->setText(index.data().toString());
     }
 
-    void setModelData(QWidget *editor, QAbstractItemModel *model, const QModelIndex &index) const override
+    void setModelData(QWidget* editor, QAbstractItemModel* model, const QModelIndex& index) const override
     {
-        const QLineEdit *line = dynamic_cast<QLineEdit*>(editor);
+        const QLineEdit* line = dynamic_cast<QLineEdit*>(editor);
         const QString value = line->text();
         model->setData(index, value, Qt::EditRole);
     }
 
-    void updateEditorGeometry(QWidget *editor, const QStyleOptionViewItem &option, const QModelIndex &/*index*/) const override
+    void updateEditorGeometry(QWidget* editor, const QStyleOptionViewItem& option,
+                              const QModelIndex&/*index*/) const override
     {
         const QRect rect = option.rect.adjusted(2, 4, -2, -4);
         editor->setGeometry(rect);
     }
 
-    bool editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option, const QModelIndex &index) override
+    bool editorEvent(QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& option,
+                     const QModelIndex& index) override
     {
-        if (event->type() == QEvent::MouseButtonRelease) {
-            const QMouseEvent *me = dynamic_cast<QMouseEvent*>(event);
+        if (event->type() == QEvent::MouseButtonRelease)
+        {
+            const QMouseEvent* me = dynamic_cast<QMouseEvent*>(event);
             const QRect rect = option.rect.adjusted(2, 4, -2, -4);
-            if (const auto xRect = QRect(rect.right() - 22, rect.center().y() - 10, 22, 22); xRect.contains(me->pos())) {
+            if (const auto xRect = QRect(rect.right() - 22, rect.center().y() - 10, 22, 22); xRect.contains(me->pos()))
+            {
                 emit request_delete(index);
                 return true;
             }
@@ -126,5 +134,5 @@ public:
 signals:
     void editing_started();
     void editing_finished();
-    void request_delete(const QModelIndex &index);
+    void request_delete(const QModelIndex& index);
 };

@@ -36,7 +36,7 @@ jobs:
     - name: Build
       run: cmake --build build --config Release -j 16
 
-    - name: Create Portable Zip
+    - name: Create Portable Archive
       run: cmake --build build --target MakePortableZip --config Release -j 16
 
     - name: Update Nightly Tag
@@ -53,6 +53,6 @@ jobs:
         tag_name: nightly
         name: Hanvi
         body: "Latest automatic build of Hanvi."
-        files: build/Hanvi.zip
+        files: build/Hanvi.7z
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

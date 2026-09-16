@@ -44,8 +44,8 @@ public:
     void set_font(const QFont& font);
 
     [[nodiscard]] int scroll_value() const;
-    void set_scroll_value(int val);
-    void scroll_to_token(uint32_t token_id);
+    void set_scroll_value(int val) const;
+    void scroll_to_token(uint32_t token_id) const;
     void copy_selection_to_clipboard() const;
 
     [[nodiscard]] bool has_selection() const noexcept { return !normalized_selection().is_empty(); }
@@ -100,12 +100,12 @@ private:
     CharPosition sel_end_;
 
     void on_document_changed(const std::shared_ptr<const AlignedDocument>& doc);
-    void on_active_token_changed(uint32_t token_id);
-    void on_hovered_token_changed(uint32_t token_id);
+    void on_active_token_changed(uint32_t token_id) const;
+    void on_hovered_token_changed(uint32_t token_id) const;
 
     void rebuild_paragraph_data();
     void layout_all();
-    void update_scroll_range();
+    void update_scroll_range() const;
 
     [[nodiscard]] size_t find_paragraph_at_y(qreal doc_y) const;
     [[nodiscard]] std::optional<std::pair<size_t, int>> char_at_pos(const QPoint& viewport_pos, bool clamp = false) const;

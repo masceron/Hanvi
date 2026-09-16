@@ -9,7 +9,7 @@ RulePopup::RulePopup(QWidget* parent) :
 
     connect(ui->close_popup, &QPushButton::clicked, this, [this]
     {
-       accept();
+        accept();
     });
 }
 

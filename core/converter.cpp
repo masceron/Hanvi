@@ -74,19 +74,23 @@ static bool should_append_space(const QStringView& input, const int current_end_
 
         QChar prev_char = current_char_source;
 
-        if (prev_char.isNull() && current_end_idx > 0) {
+        if (prev_char.isNull() && current_end_idx > 0)
+        {
             prev_char = input[current_end_idx - 1];
         }
 
-        if (!prev_char.isNull()) {
-            auto is_ascii_alphanumeric = [](const QChar& c) {
+        if (!prev_char.isNull())
+        {
+            auto is_ascii_alphanumeric = [](const QChar& c)
+            {
                 const ushort code = c.unicode();
                 return (code >= '0' && code <= '9') ||
-                       (code >= 'A' && code <= 'Z') ||
-                       (code >= 'a' && code <= 'z');
+                    (code >= 'A' && code <= 'Z') ||
+                    (code >= 'a' && code <= 'z');
             };
 
-            if (is_ascii_alphanumeric(prev_char) && is_ascii_alphanumeric(next_char)) {
+            if (is_ascii_alphanumeric(prev_char) && is_ascii_alphanumeric(next_char))
+            {
                 return false;
             }
         }
@@ -220,7 +224,8 @@ static std::optional<RuleMatch> find_matching_rule(const QStringView& text, cons
     return best_match;
 }
 
-static void convert_recursive_aligned(const QStringView& input, int start_offset, uint32_t& token_counter, bool& cap_next,
+static void convert_recursive_aligned(const QStringView& input, int start_offset, uint32_t& token_counter,
+                                      bool& cap_next,
                                       Progress& progress, AlignedDocument& doc)
 {
     int i = 0;
