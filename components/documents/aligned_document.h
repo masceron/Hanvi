@@ -19,7 +19,7 @@ struct Token {
     const Rule* rule = nullptr;
     bool has_trailing_space = false;
 
-    [[nodiscard]] const QString& text(LanguageRole role) const noexcept {
+    [[nodiscard]] const QString& text(const LanguageRole role) const noexcept {
         switch (role) {
             case LanguageRole::Chinese: return cn;
             case LanguageRole::SinoVietnamese: return sv;
@@ -95,7 +95,7 @@ struct DocumentSelection {
 
     [[nodiscard]] bool is_empty() const noexcept { return start == end; }
     [[nodiscard]] DocumentSelection normalized() const noexcept {
-        return (start <= end) ? *this : DocumentSelection{end, start};
+        return start <= end ? *this : DocumentSelection{.start = end, .end = start};
     }
 };
 

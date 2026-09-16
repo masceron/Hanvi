@@ -4,6 +4,7 @@
 #include <QScrollBar>
 #include <QGuiApplication>
 #include <QClipboard>
+#include <QCursor>
 #include <algorithm>
 
 TokenCanvas::TokenCanvas(QWidget* parent)
@@ -79,6 +80,29 @@ void TokenCanvas::set_scroll_value(const int val) const
     verticalScrollBar()->setValue(val);
 }
 
+QString TokenCanvas::full_text() const
+{
+    QString result;
+    for (size_t p = 0; p < layouts_.size(); ++p)
+    {
+        result += layouts_[p].text;
+        if (p + 1 < layouts_.size())
+        {
+            result += u'\n';
+        }
+    }
+    return result;
+}
+
+void TokenCanvas::copy_all_to_clipboard() const
+{
+    const QString text = full_text();
+    if (!text.isEmpty())
+    {
+        QGuiApplication::clipboard()->setText(text);
+    }
+}
+
 void TokenCanvas::copy_selection_to_clipboard() const
 {
     if (!has_selection()) return;
@@ -118,8 +142,17 @@ void TokenCanvas::on_active_token_changed(uint32_t /*token_id*/) const
     viewport()->update();
 }
 
-void TokenCanvas::on_hovered_token_changed(uint32_t /*token_id*/) const
+void TokenCanvas::on_hovered_token_changed(const uint32_t token_id) const
 {
+    if (token_id != 0 && isVisible())
+    {
+        const bool mouse_over = viewport()->underMouse() ||
+                                viewport()->rect().contains(viewport()->mapFromGlobal(QCursor::pos()));
+        if (!mouse_over)
+        {
+            scroll_to_token(token_id);
+        }
+    }
     viewport()->update();
 }
 

@@ -137,7 +137,7 @@ add_custom_command(TARGET HanviCLI POST_BUILD
 set(DIST_DIR "${CMAKE_BINARY_DIR}/Hanvi")
 
 set(ARCHIVE_NAME "Hanvi.7z")
-add_custom_target(MakePortableZip ALL
+add_custom_target(MakePortableZip
         DEPENDS Hanvi HanviCLI
 )
 

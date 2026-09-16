@@ -85,7 +85,7 @@ TrieNode* TrieNode::find_child(const QChar ch) const {
 
     //Most nodes have only one child on average for CN-VN conversion.
     if (header->count == 1) {
-        return (begin->first == ch) ? begin->second : nullptr;
+        return begin->first == ch ? begin->second : nullptr;
     }
 
     const auto* end = header->entries() + header->count;
@@ -423,7 +423,7 @@ Match Dictionary::find(const QStringView& text, const int startPos) const
         }
         else if (auto* phrases = node->get_phrases()) {
             if (!phrases->isEmpty()) {
-                if ((i - startPos + 1) > best_len_found) {
+                if (i - startPos + 1 > best_len_found) {
                     best_len_found = i - startPos + 1;
                     translated = &phrases->first();
                     priority = PHRASE;
@@ -432,7 +432,7 @@ Match Dictionary::find(const QStringView& text, const int startPos) const
         }
     }
 
-    return {best_len_found, priority, rules, translated};
+    return {.length = best_len_found, .priority = priority, .rules = rules, .translation = translated};
 }
 
 void Dictionary::insert_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end)
@@ -447,7 +447,7 @@ void Dictionary::insert_rule(const QString& start, const QString& end, const QSt
         node = next;
     }
 
-    node->add_rule({start, end, t_start, t_end});
+    node->add_rule({.original_start = start, .original_end = end, .translation_start = t_start, .translation_end = t_end});
 }
 
 const Rule* Dictionary::find_exact_rule(const QString& start, const QString& end) const
@@ -464,7 +464,7 @@ const Rule* Dictionary::find_exact_rule(const QString& start, const QString& end
         });
         if (it != rule_vector.end())
         {
-            return &(*it);
+            return &*it;
         }
     }
     return nullptr;
