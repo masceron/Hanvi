@@ -44,15 +44,16 @@ namespace
         {
             if (count() == 0)
             {
-                return QTabBar::sizeHint();
+                return {0, 32};
             }
 
             int total_width = 0;
             for (int i = 0; i < count(); ++i)
             {
-                total_width += tabSizeHint(i).width();
+                const int w = tabRect(i).isValid() ? tabRect(i).width() : 0;
+                total_width += std::max(w, tabSizeHint(i).width());
             }
-            return {total_width + 4, 32};
+            return {total_width + 8, 32};
         }
 
         [[nodiscard]] QSize minimumSizeHint() const override
@@ -70,6 +71,12 @@ namespace
         void tabRemoved(const int index) override
         {
             QTabBar::tabRemoved(index);
+            updateGeometry();
+        }
+
+        void tabLayoutChange() override
+        {
+            QTabBar::tabLayoutChange();
             updateGeometry();
         }
     };
@@ -316,8 +323,7 @@ MainWindow::MainWindow(QWidget* parent) :
         {
             const QFileInfo fi(name);
             const QString title = fi.fileName();
-            auto* cur = current_tab();
-            if (cur && cur->input_text.isEmpty())
+            if (auto* cur = current_tab(); cur && cur->input_text.isEmpty())
             {
                 cur->title = title;
                 cur->file_name = name;
@@ -738,7 +744,7 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
         }
         else if (msg->message == WM_NCHITTEST)
         {
-            POINT pt = {GET_X_LPARAM(msg->lParam), GET_Y_LPARAM(msg->lParam)};
+            POINT pt = {.x = GET_X_LPARAM(msg->lParam), .y = GET_Y_LPARAM(msg->lParam)};
             RECT rc;
             GetWindowRect(reinterpret_cast<HWND>(winId()), &rc);
 
@@ -792,7 +798,14 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
                 }
             }
 
-            const QPoint local_pos = mapFromGlobal(QPoint(pt.x, pt.y));
+            POINT client_pt = pt;
+            ScreenToClient(reinterpret_cast<HWND>(winId()), &client_pt);
+            const qreal dpr = devicePixelRatioF();
+            const QPoint local_pos(
+                static_cast<int>(std::round(client_pt.x / dpr)),
+                static_cast<int>(std::round(client_pt.y / dpr))
+            );
+
             if (tab_container && tab_container->geometry().contains(local_pos))
             {
                 const QPoint tab_c_pos = tab_container->mapFrom(this, local_pos);
@@ -804,21 +817,8 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
                     return true;
                 }
 
-                if (child == tab_bar)
-                {
-                    const QPoint tab_bar_pos = tab_bar->mapFrom(this, local_pos);
-                    QWidget* tab_child = tab_bar->childAt(tab_bar_pos);
-                    if (tab_child && tab_child != tab_bar)
-                    {
-                        *result = HTCLIENT;
-                        return true;
-                    }
-                    if (tab_bar->tabAt(tab_bar_pos) == -1)
-                    {
-                        *result = HTCAPTION;
-                        return true;
-                    }
-                }
+                *result = HTCLIENT;
+                return true;
             }
 
             *result = HTCLIENT;
@@ -882,6 +882,7 @@ int MainWindow::create_new_tab(const QString& title, const QString& text, const 
     {
         tab_bar->setTabToolTip(new_index, file_path);
     }
+    tab_bar->setCurrentIndex(new_index);
     tab_bar->blockSignals(false);
 
     setup_tab_close_button(new_index);
@@ -905,7 +906,7 @@ void MainWindow::close_tab(const int index)
     int new_active = active_tab_index;
     if (index == active_tab_index)
     {
-        new_active = (index == static_cast<int>(tabs.size()) - 1) ? index - 1 : index;
+        new_active = index == static_cast<int>(tabs.size()) - 1 ? index - 1 : index;
     }
     else if (index < active_tab_index)
     {
@@ -939,6 +940,13 @@ void MainWindow::switch_to_tab(const int index)
 
     save_current_tab_state();
     active_tab_index = index;
+
+    if (tab_bar->currentIndex() != index)
+    {
+        tab_bar->blockSignals(true);
+        tab_bar->setCurrentIndex(index);
+        tab_bar->blockSignals(false);
+    }
 
     auto* cur = tabs[index].get();
 
@@ -985,9 +993,9 @@ void MainWindow::save_current_tab_state()
     if (!cur) return;
 
     cur->saved_scroll = {
-        ui->cn_input->scroll_value(),
-        ui->sv_output->scroll_value(),
-        ui->vn_output->scroll_value()
+        .cn = ui->cn_input->scroll_value(),
+        .sv = ui->sv_output->scroll_value(),
+        .vn = ui->vn_output->scroll_value()
     };
 }
 
@@ -1079,7 +1087,7 @@ void MainWindow::convert_and_display(const bool scroll_back)
                     size() && novel_tab->pages[novel_tab->current_page].length() > 0)
                 {
                     ui->progress_bar->setValue(
-                        static_cast<int>((progress * 100) / novel_tab->pages[novel_tab->current_page].length()));
+                        static_cast<int>(progress * 100 / novel_tab->pages[novel_tab->current_page].length()));
                 }
             });
         };
@@ -1104,7 +1112,7 @@ void MainWindow::convert_to_file()
             const auto* cur = current_tab();
             if (cur && cur->input_text.length() > 0)
             {
-                ui->progress_bar->setValue(static_cast<int>((progress * 100) / cur->input_text.length()));
+                ui->progress_bar->setValue(static_cast<int>(progress * 100 / cur->input_text.length()));
             }
         });
     };
@@ -1134,7 +1142,7 @@ void MainWindow::update_display()
             ui->cn_input->set_scroll_value(cur->saved_scroll.cn);
             ui->sv_output->set_scroll_value(cur->saved_scroll.sv);
             ui->vn_output->set_scroll_value(cur->saved_scroll.vn);
-            cur->saved_scroll = {0, 0, 0};
+            cur->saved_scroll = {.cn = 0, .sv = 0, .vn = 0};
 
             if (!cur->saved_token_cn.isEmpty())
             {

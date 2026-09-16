@@ -56,7 +56,7 @@ NodePool::~NodePool() {
 
 TrieNode::~TrieNode() {
     if (children_block) {
-        ::operator delete(children_block);
+        operator delete(children_block);
     }
 
     free_data();
@@ -112,7 +112,7 @@ void TrieNode::add_child(QChar ch, TrieNode* node) {
     if (!header) {
         constexpr size_t initial_cap = 2;
         constexpr size_t size_bytes = sizeof(ChildHeader) + initial_cap * sizeof(std::pair<QChar, TrieNode*>);
-        void* mem = ::operator new(size_bytes);
+        void* mem = operator new(size_bytes);
         header = new (mem) ChildHeader;
         header->capacity = static_cast<uint16_t>(initial_cap);
         header->count = 0;
@@ -122,7 +122,7 @@ void TrieNode::add_child(QChar ch, TrieNode* node) {
         const size_t new_cap = header->capacity * 2;
         const size_t size_bytes = sizeof(ChildHeader) + new_cap * sizeof(std::pair<QChar, TrieNode*>);
 
-        void* mem = ::operator new(size_bytes);
+        void* mem = operator new(size_bytes);
         auto* new_header = new (mem) ChildHeader;
         new_header->capacity = static_cast<uint16_t>(new_cap);
         new_header->count = header->count;
