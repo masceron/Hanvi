@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 project(Hanvi)
 
+if (NOT WIN32)
+    message(FATAL_ERROR "Hanvi only supports Windows.")
+endif ()
+
 set(CMAKE_CXX_STANDARD 23)
 
 set(CMAKE_AUTOMOC ON)
@@ -98,17 +102,13 @@ set(APP_SOURCES main.cpp
         components/namesetchooser.ui
 )
 
-if (WIN32)
-    add_executable(Hanvi WIN32 ${APP_SOURCES} resources/icon.rc)
-else ()
-    add_executable(Hanvi ${APP_SOURCES})
-endif ()
+add_executable(Hanvi WIN32 ${APP_SOURCES} resources/icon.rc)
 
 target_include_directories(Hanvi PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/components"
         "${CMAKE_CURRENT_SOURCE_DIR}"
 )
-target_link_libraries(Hanvi PRIVATE CoreLogic Qt::Core Qt::Sql Qt::Gui Qt::Widgets Qt::Concurrent)
+target_link_libraries(Hanvi PRIVATE CoreLogic Qt::Core Qt::Sql Qt::Gui Qt::Widgets Qt::Concurrent dwmapi)
 
 add_executable(HanviCLI main_cli.cpp)
 target_link_libraries(HanviCLI PRIVATE CoreLogic Qt::Core Qt::Sql Qt::Concurrent)
@@ -119,14 +119,12 @@ add_custom_command(TARGET Hanvi POST_BUILD
         "$<TARGET_FILE_DIR:Hanvi>/dict.db"
 )
 
-if (WIN32)
-    if (NOT WINDEPLOYQT_EXECUTABLE)
-        find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${Qt6_DIR}/bin")
-    endif ()
+if (NOT WINDEPLOYQT_EXECUTABLE)
+    find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${Qt6_DIR}/bin")
+endif ()
 
-    if (NOT WINDEPLOYQT_EXECUTABLE)
-        message(FATAL_ERROR "Windeployqt not found.")
-    endif ()
+if (NOT WINDEPLOYQT_EXECUTABLE)
+    message(FATAL_ERROR "Windeployqt not found.")
 endif ()
 
 add_custom_command(TARGET Hanvi POST_BUILD
@@ -136,11 +134,7 @@ add_custom_command(TARGET HanviCLI POST_BUILD
         COMMAND "${WINDEPLOYQT_EXECUTABLE}" --dir "${CMAKE_BINARY_DIR}" --no-translations --no-compiler-runtime "$<TARGET_FILE_NAME:HanviCLI>"
 )
 
-if (WIN32)
-    set(DIST_DIR "${CMAKE_BINARY_DIR}/Hanvi")
-else ()
-    set(DIST_DIR "${CMAKE_BINARY_DIR}/Hanvi v1.0")
-endif ()
+set(DIST_DIR "${CMAKE_BINARY_DIR}/Hanvi")
 
 set(ARCHIVE_NAME "Hanvi.7z")
 add_custom_target(MakePortableZip ALL
@@ -156,16 +150,10 @@ add_custom_command(TARGET MakePortableZip POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/dict.db" "${DIST_DIR}"
 )
 
-if (WIN32)
-    if (NOT WINDEPLOYQT_EXECUTABLE)
-        find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${Qt6_DIR}/bin")
-    endif ()
-
-    add_custom_command(TARGET MakePortableZip POST_BUILD
-            COMMAND "${WINDEPLOYQT_EXECUTABLE}" --dir "${DIST_DIR}" --no-translations --compiler-runtime "${DIST_DIR}/$<TARGET_FILE_NAME:Hanvi>"
-            COMMAND "${WINDEPLOYQT_EXECUTABLE}" --dir "${DIST_DIR}" --no-translations --compiler-runtime "${DIST_DIR}/$<TARGET_FILE_NAME:HanviCLI>"
-    )
-endif ()
+add_custom_command(TARGET MakePortableZip POST_BUILD
+        COMMAND "${WINDEPLOYQT_EXECUTABLE}" --dir "${DIST_DIR}" --no-translations --compiler-runtime "${DIST_DIR}/$<TARGET_FILE_NAME:Hanvi>"
+        COMMAND "${WINDEPLOYQT_EXECUTABLE}" --dir "${DIST_DIR}" --no-translations --compiler-runtime "${DIST_DIR}/$<TARGET_FILE_NAME:HanviCLI>"
+)
 
 add_custom_command(TARGET MakePortableZip POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E rm -f "${CMAKE_BINARY_DIR}/${ARCHIVE_NAME}"

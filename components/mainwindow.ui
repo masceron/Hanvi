@@ -295,31 +295,6 @@
     </item>
    </layout>
   </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>1093</width>
-     <height>33</height>
-    </rect>
-   </property>
-   <widget class="QMenu" name="menuLoad">
-    <property name="title">
-     <string>Load</string>
-    </property>
-    <addaction name="read_from_clipboard"/>
-    <addaction name="read_from_file"/>
-   </widget>
-   <widget class="QMenu" name="menuSave">
-    <property name="title">
-     <string>Save</string>
-    </property>
-    <addaction name="save_to_file"/>
-   </widget>
-   <addaction name="menuLoad"/>
-   <addaction name="menuSave"/>
-  </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="read_from_clipboard">
    <property name="text">
