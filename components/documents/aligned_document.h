@@ -49,7 +49,37 @@ inline bool is_opener_char(const QChar c) noexcept {
            c == u'【' || c == u'《' || c == u'（';
 }
 
-inline bool should_insert_space_before(const QString& text, const QString& tok_str, bool& in_quote) noexcept {
+inline bool is_digit(const QChar c) noexcept {
+    const ushort code = c.unicode();
+    return (code >= '0' && code <= '9') ||
+           (code >= 0xFF10 && code <= 0xFF19) ||
+           c.isDigit();
+}
+
+inline bool is_latin_or_digit(const QChar c) noexcept {
+    const ushort code = c.unicode();
+    if ((code >= '0' && code <= '9') ||
+        (code >= 'A' && code <= 'Z') ||
+        (code >= 'a' && code <= 'z')) {
+        return true;
+    }
+    if ((code >= 0xFF10 && code <= 0xFF19) ||
+        (code >= 0xFF21 && code <= 0xFF3A) ||
+        (code >= 0xFF41 && code <= 0xFF5A)) {
+        return true;
+    }
+    if (c.isDigit()) {
+        return true;
+    }
+    if (QChar::script(c.unicode()) == QChar::Script_Latin) {
+        return true;
+    }
+    return false;
+}
+
+inline bool should_insert_space_before(const QString& text, const QString& tok_str, bool& in_quote,
+                                       const Token* prev_tok = nullptr, const Token* cur_tok = nullptr,
+                                       const Token* prev_prev_tok = nullptr) noexcept {
     if (text.isEmpty()) return false;
     if (text.endsWith(u' ')) return false;
 
@@ -75,6 +105,20 @@ inline bool should_insert_space_before(const QString& text, const QString& tok_s
     // If this token is a closer / punctuation, no space before it
     if (is_closer_char(first_char)) {
         return false;
+    }
+
+    // If both adjacent tokens in source text are Latin scripts or digits, no space between them
+    if (prev_tok != nullptr && cur_tok != nullptr &&
+        !prev_tok->cn.isEmpty() && !cur_tok->cn.isEmpty()) {
+        if (is_latin_or_digit(prev_tok->cn.back()) && is_latin_or_digit(cur_tok->cn.front())) {
+            return false;
+        }
+        // Handle decimal point or comma between digits (e.g. 3.14 or 15,000)
+        if ((prev_tok->cn == u"." || prev_tok->cn == u",") &&
+            prev_prev_tok != nullptr && !prev_prev_tok->cn.isEmpty() &&
+            is_digit(prev_prev_tok->cn.back()) && is_digit(cur_tok->cn.front())) {
+            return false;
+        }
     }
 
     return true;
