@@ -469,7 +469,7 @@ void MainWindow::setup_hamburger_menu(QPushButton* btn)
     connect(open_action, &QAction::triggered, ui->read_from_file, &QAction::trigger);
 
     auto* paste_action = menu->addAction("Read from Clipboard");
-    paste_action->setShortcut(QKeySequence("Ctrl+Q"));
+    paste_action->setShortcut(QKeySequence("Ctrl+V"));
     paste_action->setShortcutContext(Qt::WindowShortcut);
     this->addAction(paste_action);
     connect(paste_action, &QAction::triggered, ui->read_from_clipboard, &QAction::trigger);

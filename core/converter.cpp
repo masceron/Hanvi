@@ -49,6 +49,24 @@ static QString get_sv(const QStringView& cn)
     return sv_reading;
 }
 
+static QChar normalize_char(const QChar c) noexcept
+{
+    if (const QChar mapped = punctuations.value(c); !mapped.isNull())
+    {
+        return mapped;
+    }
+    const ushort code = c.unicode();
+    if (code >= 0xFF21 && code <= 0xFF3A)
+    {
+        return QChar(code - 0xFEE0);
+    }
+    if (code >= 0xFF41 && code <= 0xFF5A)
+    {
+        return QChar(code - 0xFEE0);
+    }
+    return c;
+}
+
 static bool should_append_space(const QStringView& input, const int current_end_idx,
                                 const QChar current_char_source = QChar())
 {
@@ -81,17 +99,17 @@ static bool should_append_space(const QStringView& input, const int current_end_
 
         if (!prev_char.isNull())
         {
-            auto is_ascii_alphanumeric = [](const QChar& c)
-            {
-                const ushort code = c.unicode();
-                return (code >= '0' && code <= '9') ||
-                    (code >= 'A' && code <= 'Z') ||
-                    (code >= 'a' && code <= 'z');
-            };
-
-            if (is_ascii_alphanumeric(prev_char) && is_ascii_alphanumeric(next_char))
+            if (Typography::is_latin_or_digit(prev_char) && Typography::is_latin_or_digit(next_char))
             {
                 return false;
+            }
+
+            if ((prev_char == u'.' || prev_char == u',') && Typography::is_digit(next_char))
+            {
+                if (current_end_idx >= 2 && Typography::is_digit(input[current_end_idx - 2]))
+                {
+                    return false;
+                }
             }
         }
     }
@@ -426,6 +444,60 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
 
     process_single_char:
         {
+            if (Typography::is_latin_or_digit(ch))
+            {
+                int start_idx = i;
+                int end_idx = i + 1;
+                while (end_idx < input.length())
+                {
+                    const QChar next = input[end_idx];
+                    if (Typography::is_latin_or_digit(next))
+                    {
+                        end_idx++;
+                    }
+                    else if ((next == u'.' || next == u',') &&
+                             end_idx + 1 < input.length() &&
+                             Typography::is_digit(input[end_idx - 1]) &&
+                             Typography::is_digit(input[end_idx + 1]))
+                    {
+                        end_idx++;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                const int len = end_idx - start_idx;
+                QString word = input.sliced(start_idx, len).toString();
+                QString sv_word;
+                sv_word.reserve(len);
+                for (int k = start_idx; k < end_idx; ++k)
+                {
+                    sv_word.append(normalize_char(input[k]));
+                }
+                QString vn_word = sv_word;
+
+                if (cap_next && !vn_word.isEmpty())
+                {
+                    if (vn_word[0].isLower()) vn_word[0] = vn_word[0].toUpper();
+                    if (!sv_word.isEmpty() && sv_word[0].isLower()) sv_word[0] = sv_word[0].toUpper();
+                    cap_next = false;
+                }
+
+                Token tok;
+                tok.id = ++token_counter;
+                tok.cn = std::move(word);
+                tok.sv = std::move(sv_word);
+                tok.vn = std::move(vn_word);
+
+                i += len;
+                progress.update(len);
+
+                doc.paragraphs.back().tokens.push_back(std::move(tok));
+                continue;
+            }
+
             QString source_text = input[i];
             QString translated_text;
             QString sv_text;
@@ -700,6 +772,57 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
 
     process_single_char:
         {
+            if (Typography::is_latin_or_digit(ch))
+            {
+                int start_idx = i;
+                int end_idx = i + 1;
+                while (end_idx < input.length())
+                {
+                    const QChar next = input[end_idx];
+                    if (Typography::is_latin_or_digit(next))
+                    {
+                        end_idx++;
+                    }
+                    else if ((next == u'.' || next == u',') &&
+                             end_idx + 1 < input.length() &&
+                             Typography::is_digit(input[end_idx - 1]) &&
+                             Typography::is_digit(input[end_idx + 1]))
+                    {
+                        end_idx++;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                const int len = end_idx - start_idx;
+                QString word;
+                word.reserve(len);
+                for (int k = start_idx; k < end_idx; ++k)
+                {
+                    word.append(normalize_char(input[k]));
+                }
+
+                if (cap_next && !word.isEmpty())
+                {
+                    if (word[0].isLower()) word[0] = word[0].toUpper();
+                    cap_next = false;
+                }
+
+                out.text += word;
+                i += len;
+                out.length_consumed += len;
+
+                if (should_append_space(input, i) && !out.text.endsWith(' '))
+                {
+                    out.text += u" ";
+                }
+
+                progress.update(len);
+                continue;
+            }
+
             QString translated_text;
             bool is_punctuator = false;
 

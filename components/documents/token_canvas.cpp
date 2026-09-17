@@ -199,6 +199,8 @@ void TokenCanvas::rebuild_paragraph_data()
         else
         {
             bool in_quote = false;
+            const Token* last_tok = nullptr;
+            const Token* prev_last_tok = nullptr;
             for (size_t t = 0; t < tokens.size(); ++t)
             {
                 const auto& tok = tokens[t];
@@ -215,7 +217,7 @@ void TokenCanvas::rebuild_paragraph_data()
                     continue;
                 }
 
-                if (Typography::should_insert_space_before(pl.text, tok_str, in_quote))
+                if (Typography::should_insert_space_before(pl.text, tok_str, in_quote, last_tok, &tok, prev_last_tok))
                 {
                     pl.text += u' ';
                 }
@@ -234,6 +236,8 @@ void TokenCanvas::rebuild_paragraph_data()
                 }
 
                 pl.spans.push_back(span);
+                prev_last_tok = last_tok;
+                last_tok = &tok;
             }
         }
 
