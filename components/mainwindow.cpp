@@ -166,6 +166,12 @@ MainWindow::MainWindow(QWidget* parent) :
     tab_bar->setFixedHeight(32);
     tab_bar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
+    QFont tab_font = tab_bar->font();
+    tab_font.setFamilies({"Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI"});
+    tab_font.setPointSizeF(9.5);
+    tab_font.setWeight(QFont::Normal);
+    tab_bar->setFont(tab_font);
+
     auto* add_tab_btn = new QPushButton(tab_container);
     add_tab_btn->setObjectName("add_tab_btn");
     QIcon add_icon;

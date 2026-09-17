@@ -118,6 +118,11 @@ add_custom_command(TARGET Hanvi POST_BUILD
         "${CMAKE_CURRENT_SOURCE_DIR}/dict.db"
         "$<TARGET_FILE_DIR:Hanvi>/dict.db"
 )
+add_custom_command(TARGET Hanvi POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/NotoSansSC.ttf"
+        "$<TARGET_FILE_DIR:Hanvi>/NotoSansSC.ttf"
+)
 
 if (NOT WINDEPLOYQT_EXECUTABLE)
     find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${Qt6_DIR}/bin")
