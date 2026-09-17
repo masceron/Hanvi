@@ -109,7 +109,7 @@ void nameset_db_insert(const QString& key, const QString& value)
                     VALUES (:original, :set_id, :translated)
                     ON CONFLICT (set_id, original)
                     DO UPDATE SET translated = excluded.translated)"
-        );
+    );
 
     q.bindValue(":original", key);
     q.bindValue(":set_id", current_name_set_id);

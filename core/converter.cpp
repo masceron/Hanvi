@@ -219,19 +219,25 @@ static std::optional<RuleMatch> find_matching_rule(const QStringView& text, cons
 
             if (!best_match.has_value())
             {
-                best_match = RuleMatch{.rule = &rule, .abs_start_of_end_token = abs_start_of_end, .total_end_pos = total_end};
+                best_match = RuleMatch{
+                    .rule = &rule, .abs_start_of_end_token = abs_start_of_end, .total_end_pos = total_end
+                };
             }
             else
             {
                 if (total_end > best_match->total_end_pos)
                 {
-                    best_match = RuleMatch{.rule = &rule, .abs_start_of_end_token = abs_start_of_end, .total_end_pos = total_end};
+                    best_match = RuleMatch{
+                        .rule = &rule, .abs_start_of_end_token = abs_start_of_end, .total_end_pos = total_end
+                    };
                 }
                 else if (total_end == best_match->total_end_pos)
                 {
                     if (rule.original_end.length() > best_match->rule->original_end.length())
                     {
-                        best_match = RuleMatch{.rule = &rule, .abs_start_of_end_token = abs_start_of_end, .total_end_pos = total_end};
+                        best_match = RuleMatch{
+                            .rule = &rule, .abs_start_of_end_token = abs_start_of_end, .total_end_pos = total_end
+                        };
                     }
                 }
             }
@@ -456,9 +462,9 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
                         end_idx++;
                     }
                     else if ((next == u'.' || next == u',') &&
-                             end_idx + 1 < input.length() &&
-                             Typography::is_digit(input[end_idx - 1]) &&
-                             Typography::is_digit(input[end_idx + 1]))
+                        end_idx + 1 < input.length() &&
+                        Typography::is_digit(input[end_idx - 1]) &&
+                        Typography::is_digit(input[end_idx + 1]))
                     {
                         end_idx++;
                     }
@@ -784,9 +790,9 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                         end_idx++;
                     }
                     else if ((next == u'.' || next == u',') &&
-                             end_idx + 1 < input.length() &&
-                             Typography::is_digit(input[end_idx - 1]) &&
-                             Typography::is_digit(input[end_idx + 1]))
+                        end_idx + 1 < input.length() &&
+                        Typography::is_digit(input[end_idx - 1]) &&
+                        Typography::is_digit(input[end_idx + 1]))
                     {
                         end_idx++;
                     }

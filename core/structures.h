@@ -17,7 +17,8 @@ struct Rule
 struct TrieNode;
 struct NodeData;
 
-class NodePool {
+class NodePool
+{
 public:
     NodePool() = default;
 
@@ -38,7 +39,8 @@ private:
     char* current_block_ptr = nullptr;
 };
 
-struct TrieNode {
+struct TrieNode
+{
     // Tagged pointer for data.
     // Tags (Low 2 bits):
     // 00: nullptr (No data)
@@ -71,22 +73,24 @@ struct TrieNode {
     void remove_phrases();
 
 private:
-    void ensure_complex(); 
+    void ensure_complex();
     void free_data();
 };
 
-struct Match {
+struct Match
+{
     int length;
     Priority priority;
     std::vector<Rule>* rules;
     const QString* translation;
 };
 
-class Dictionary {
+class Dictionary
+{
 public:
     explicit Dictionary();
     ~Dictionary();
-    
+
     Dictionary(const Dictionary&) = delete;
     Dictionary& operator=(const Dictionary&) = delete;
     Dictionary(Dictionary&& other) noexcept;
@@ -111,7 +115,7 @@ public:
 private:
     TrieNode* root;
     NodePool pool;
-    
+
     [[nodiscard]] TrieNode* walk_node(const QStringView& key) const;
 };
 

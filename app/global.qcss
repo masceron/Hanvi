@@ -212,7 +212,7 @@ QTabBar::tab {
     min-width: 100px;
     max-width: 240px;
     font-size: 9.5pt;
-    font-family: "Segoe UI", sans-serif;
+    font-family: "Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
 }
 
 QTabBar::tab:selected {

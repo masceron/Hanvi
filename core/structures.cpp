@@ -8,7 +8,8 @@ static constexpr uintptr_t TAG_NAME = 0x1;
 static constexpr uintptr_t TAG_PHRASE = 0x2;
 static constexpr uintptr_t TAG_COMPLEX = 0x3;
 
-struct NodeData {
+struct NodeData
+{
     std::unique_ptr<QString> name;
     std::unique_ptr<QStringList> phrases;
     std::vector<Rule> rules;
@@ -18,112 +19,138 @@ using ChildEntry = std::pair<QChar, TrieNode*>;
 
 namespace
 {
-    struct alignas(ChildEntry) ChildHeader {
+    struct alignas(ChildEntry) ChildHeader
+    {
         uint16_t capacity;
         uint16_t count;
-        ChildEntry* entries() {
+
+        ChildEntry* entries()
+        {
             return reinterpret_cast<ChildEntry*>(this + 1);
         }
 
-        [[nodiscard]] const ChildEntry* entries() const {
+        [[nodiscard]] const ChildEntry* entries() const
+        {
             return reinterpret_cast<const ChildEntry*>(this + 1);
         }
     };
 }
 
-TrieNode* NodePool::allocate() {
-    if (current_block_offset + sizeof(TrieNode) > BLOCK_SIZE) {
+TrieNode* NodePool::allocate()
+{
+    if (current_block_offset + sizeof(TrieNode) > BLOCK_SIZE)
+    {
         auto new_block = std::make_unique<char[]>(BLOCK_SIZE);
         current_block_ptr = new_block.get();
         blocks.push_back(std::move(new_block));
         current_block_offset = 0;
     }
 
-    const auto node = new (current_block_ptr + current_block_offset) TrieNode();
+    const auto node = new(current_block_ptr + current_block_offset) TrieNode();
     current_block_offset += sizeof(TrieNode);
     return node;
 }
 
-void NodePool::clear() {
+void NodePool::clear()
+{
     blocks.clear();
     current_block_offset = BLOCK_SIZE;
     current_block_ptr = nullptr;
 }
 
-NodePool::~NodePool() {
+NodePool::~NodePool()
+{
     clear();
 }
 
-TrieNode::~TrieNode() {
-    if (children_block) {
+TrieNode::~TrieNode()
+{
+    if (children_block)
+    {
         operator delete(children_block);
     }
 
     free_data();
 }
 
-void TrieNode::free_data() {
+void TrieNode::free_data()
+{
     const uintptr_t tag = data & TAG_MASK;
 
-    if (const auto ptr = reinterpret_cast<void*>(data & ~TAG_MASK)) {
-        if (tag == TAG_NAME) {
+    if (const auto ptr = reinterpret_cast<void*>(data & ~TAG_MASK))
+    {
+        if (tag == TAG_NAME)
+        {
             delete static_cast<QString*>(ptr);
-        } else if (tag == TAG_PHRASE) {
+        }
+        else if (tag == TAG_PHRASE)
+        {
             delete static_cast<QStringList*>(ptr);
-        } else if (tag == TAG_COMPLEX) {
+        }
+        else if (tag == TAG_COMPLEX)
+        {
             delete static_cast<NodeData*>(ptr);
         }
     }
     data = TAG_NULL;
 }
 
-TrieNode* TrieNode::find_child(const QChar ch) const {
+TrieNode* TrieNode::find_child(const QChar ch) const
+{
     if (!children_block) return nullptr;
 
     const auto* header = static_cast<ChildHeader*>(children_block);
     const auto* begin = header->entries();
 
     //Most nodes have only one child on average for CN-VN conversion.
-    if (header->count == 1) {
+    if (header->count == 1)
+    {
         return begin->first == ch ? begin->second : nullptr;
     }
 
     const auto* end = header->entries() + header->count;
-    if (header->count <= 8) {
-        for (const auto* it = begin; it != end; ++it) {
+    if (header->count <= 8)
+    {
+        for (const auto* it = begin; it != end; ++it)
+        {
             if (it->first == ch) return it->second;
         }
         return nullptr;
     }
     const auto it = std::lower_bound(begin, end, ch,
-        [](const std::pair<QChar, TrieNode*>& p, const QChar val) {
-            return p.first < val;
-        });
+                                     [](const std::pair<QChar, TrieNode*>& p, const QChar val)
+                                     {
+                                         return p.first < val;
+                                     });
 
-    if (it != end && it->first == ch) {
+    if (it != end && it->first == ch)
+    {
         return it->second;
     }
     return nullptr;
 }
 
-void TrieNode::add_child(QChar ch, TrieNode* node) {
+void TrieNode::add_child(QChar ch, TrieNode* node)
+{
     auto header = static_cast<ChildHeader*>(children_block);
 
-    if (!header) {
+    if (!header)
+    {
         constexpr size_t initial_cap = 2;
         constexpr size_t size_bytes = sizeof(ChildHeader) + initial_cap * sizeof(std::pair<QChar, TrieNode*>);
         void* mem = operator new(size_bytes);
-        header = new (mem) ChildHeader;
+        header = new(mem) ChildHeader;
         header->capacity = static_cast<uint16_t>(initial_cap);
         header->count = 0;
         children_block = header;
     }
-    else if (header->count == header->capacity) {
+    else if (header->count == header->capacity)
+    {
         const size_t new_cap = header->capacity * 2;
         const size_t size_bytes = sizeof(ChildHeader) + new_cap * sizeof(std::pair<QChar, TrieNode*>);
 
         void* mem = operator new(size_bytes);
-        auto* new_header = new (mem) ChildHeader;
+        auto* new_header = new(mem) ChildHeader;
         new_header->capacity = static_cast<uint16_t>(new_cap);
         new_header->count = header->count;
 
@@ -138,11 +165,13 @@ void TrieNode::add_child(QChar ch, TrieNode* node) {
     auto* end = header->entries() + header->count;
 
     const auto it = std::lower_bound(begin, end, ch,
-        [](const std::pair<QChar, TrieNode*>& p, const QChar val) {
-            return p.first < val;
-        });
+                                     [](const std::pair<QChar, TrieNode*>& p, const QChar val)
+                                     {
+                                         return p.first < val;
+                                     });
 
-    if (it != end) {
+    if (it != end)
+    {
         std::move_backward(it, end, end + 1);
     }
 
@@ -150,39 +179,46 @@ void TrieNode::add_child(QChar ch, TrieNode* node) {
     header->count++;
 }
 
-QString* TrieNode::get_name() const {
+QString* TrieNode::get_name() const
+{
     const uintptr_t tag = data & TAG_MASK;
     const uintptr_t ptr_val = data & ~TAG_MASK;
 
     if (tag == TAG_NAME) return reinterpret_cast<QString*>(ptr_val);
-    if (tag == TAG_COMPLEX) {
+    if (tag == TAG_COMPLEX)
+    {
         const auto* c = reinterpret_cast<NodeData*>(ptr_val);
         return c->name.get();
     }
     return nullptr;
 }
 
-QStringList* TrieNode::get_phrases() const {
+QStringList* TrieNode::get_phrases() const
+{
     const uintptr_t tag = data & TAG_MASK;
     const uintptr_t ptr_val = data & ~TAG_MASK;
 
     if (tag == TAG_PHRASE) return reinterpret_cast<QStringList*>(ptr_val);
-    if (tag == TAG_COMPLEX) {
+    if (tag == TAG_COMPLEX)
+    {
         const auto* c = reinterpret_cast<NodeData*>(ptr_val);
         return c->phrases.get();
     }
     return nullptr;
 }
 
-std::vector<Rule>* TrieNode::get_rules() const {
-    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_COMPLEX) {
+std::vector<Rule>* TrieNode::get_rules() const
+{
+    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_COMPLEX)
+    {
         auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
         return &c->rules;
     }
     return nullptr;
 }
 
-void TrieNode::ensure_complex() {
+void TrieNode::ensure_complex()
+{
     const uintptr_t tag = data & TAG_MASK;
     const uintptr_t ptr_val = data & ~TAG_MASK;
 
@@ -190,45 +226,56 @@ void TrieNode::ensure_complex() {
 
     auto* complex = new NodeData();
 
-    if (tag == TAG_NAME) {
+    if (tag == TAG_NAME)
+    {
         complex->name = std::unique_ptr<QString>(reinterpret_cast<QString*>(ptr_val));
-    } else if (tag == TAG_PHRASE) {
+    }
+    else if (tag == TAG_PHRASE)
+    {
         complex->phrases = std::unique_ptr<QStringList>(reinterpret_cast<QStringList*>(ptr_val));
     }
 
     data = reinterpret_cast<uintptr_t>(complex) | TAG_COMPLEX;
 }
 
-void TrieNode::set_name(const QString& value) {
-    if (data == TAG_NULL) {
+void TrieNode::set_name(const QString& value)
+{
+    if (data == TAG_NULL)
+    {
         data = reinterpret_cast<uintptr_t>(new QString(value)) | TAG_NAME;
         return;
     }
 
-    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_NAME) {
+    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_NAME)
+    {
         *reinterpret_cast<QString*>(data & ~TAG_MASK) = value;
     }
-    else {
+    else
+    {
         ensure_complex();
         auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
         c->name = std::make_unique<QString>(value);
     }
 }
 
-void TrieNode::add_phrase(const QString& value) {
-    if (data == TAG_NULL) {
+void TrieNode::add_phrase(const QString& value)
+{
+    if (data == TAG_NULL)
+    {
         auto* list = new QStringList();
         list->prepend(value);
         data = reinterpret_cast<uintptr_t>(list) | TAG_PHRASE;
         return;
     }
 
-    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_PHRASE) {
+    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_PHRASE)
+    {
         auto* list = reinterpret_cast<QStringList*>(data & ~TAG_MASK);
         list->removeAll(value);
         list->prepend(value);
     }
-    else {
+    else
+    {
         ensure_complex();
         auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
         if (!c->phrases) c->phrases = std::make_unique<QStringList>();
@@ -237,63 +284,84 @@ void TrieNode::add_phrase(const QString& value) {
     }
 }
 
-void TrieNode::set_phrases(const QStringList& list_val) {
-     if (data == TAG_NULL) {
+void TrieNode::set_phrases(const QStringList& list_val)
+{
+    if (data == TAG_NULL)
+    {
         data = reinterpret_cast<uintptr_t>(new QStringList(list_val)) | TAG_PHRASE;
         return;
     }
 
     const uintptr_t tag = data & TAG_MASK;
-    if (tag == TAG_PHRASE) {
+    if (tag == TAG_PHRASE)
+    {
         *reinterpret_cast<QStringList*>(data & ~TAG_MASK) = list_val;
-    } else {
+    }
+    else
+    {
         ensure_complex();
         auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
         c->phrases = std::make_unique<QStringList>(list_val);
     }
 }
 
-void TrieNode::add_rule(const Rule& rule) {
+void TrieNode::add_rule(const Rule& rule)
+{
     ensure_complex();
     auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
     c->rules.push_back(rule);
 
-    std::ranges::sort(c->rules, [](const Rule& a, const Rule& b) {
+    std::ranges::sort(c->rules, [](const Rule& a, const Rule& b)
+    {
         return a.original_end.length() > b.original_end.length();
     });
 }
 
-void TrieNode::remove_name() {
-    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_NAME) {
+void TrieNode::remove_name()
+{
+    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_NAME)
+    {
         delete reinterpret_cast<QString*>(data & ~TAG_MASK);
         data = TAG_NULL;
-    } else if (tag == TAG_COMPLEX) {
+    }
+    else if (tag == TAG_COMPLEX)
+    {
         auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
         c->name.reset();
     }
 }
 
-void TrieNode::remove_phrases() {
-    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_PHRASE) {
+void TrieNode::remove_phrases()
+{
+    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_PHRASE)
+    {
         delete reinterpret_cast<QStringList*>(data & ~TAG_MASK);
         data = TAG_NULL;
-    } else if (tag == TAG_COMPLEX) {
+    }
+    else if (tag == TAG_COMPLEX)
+    {
         auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
         c->phrases.reset();
     }
 }
 
-Dictionary::Dictionary() {
+Dictionary::Dictionary()
+{
     root = pool.allocate();
 }
 
-Dictionary::~Dictionary() {
-    if (root) {
-        auto destroy_recursive = [&](auto&& self, TrieNode* n) -> void {
+Dictionary::~Dictionary()
+{
+    if (root)
+    {
+        auto destroy_recursive = [&](auto&& self, TrieNode* n) -> void
+        {
             if (!n) return;
-            if (n->children_block) {
+            if (n->children_block)
+            {
                 const auto h = static_cast<ChildHeader*>(n->children_block);
-                for (int i = 0; i < h->count; ++i) {
+                for (int i = 0; i < h->count; ++i)
+                {
                     self(self, h->entries()[i].second);
                 }
             }
@@ -309,14 +377,20 @@ Dictionary::Dictionary(Dictionary&& other) noexcept
     other.root = nullptr;
 }
 
-Dictionary& Dictionary::operator=(Dictionary&& other) noexcept {
-    if (this != &other) {
-        if (root) {
-            auto destroy_recursive = [&](auto&& self, TrieNode* n) -> void {
+Dictionary& Dictionary::operator=(Dictionary&& other) noexcept
+{
+    if (this != &other)
+    {
+        if (root)
+        {
+            auto destroy_recursive = [&](auto&& self, TrieNode* n) -> void
+            {
                 if (!n) return;
-                if (n->children_block) {
+                if (n->children_block)
+                {
                     auto* h = static_cast<ChildHeader*>(n->children_block);
-                    for (int i = 0; i < h->count; ++i) {
+                    for (int i = 0; i < h->count; ++i)
+                    {
                         self(self, h->entries()[i].second);
                     }
                 }
@@ -336,19 +410,23 @@ Dictionary& Dictionary::operator=(Dictionary&& other) noexcept {
 void Dictionary::insert(const QString& key, const QString& value, const Priority priority)
 {
     TrieNode* node = root;
-    for (const QChar ch : key) {
+    for (const QChar ch : key)
+    {
         TrieNode* next = node->find_child(ch);
-        if (!next) {
+        if (!next)
+        {
             next = pool.allocate();
             node->add_child(ch, next);
         }
         node = next;
     }
 
-    if (priority == NAME) {
+    if (priority == NAME)
+    {
         node->set_name(value);
     }
-    else {
+    else
+    {
         node->add_phrase(value);
     }
 }
@@ -356,21 +434,26 @@ void Dictionary::insert(const QString& key, const QString& value, const Priority
 void Dictionary::insert_bulk(const QString& key, const Priority priority, const QString& value)
 {
     TrieNode* node = root;
-    for (const QChar ch : key) {
+    for (const QChar ch : key)
+    {
         TrieNode* next = node->find_child(ch);
-        if (!next) {
+        if (!next)
+        {
             next = pool.allocate();
             node->add_child(ch, next);
         }
         node = next;
     }
 
-    if (priority == NAME) {
+    if (priority == NAME)
+    {
         node->set_name(value);
     }
-    else {
+    else
+    {
         QStringList list;
-        for (const auto items = value.split('\x1F'); const auto& item : items) {
+        for (const auto items = value.split('\x1F'); const auto& item : items)
+        {
             list.append(item);
         }
         node->set_phrases(list);
@@ -381,11 +464,12 @@ std::pair<QString*, QStringList*> Dictionary::find_exact(const QStringView& key)
 {
     const TrieNode* node = walk_node(key);
 
-    if (!node) {
+    if (!node)
+    {
         return {nullptr, nullptr};
     }
 
-    return { node->get_name(), node->get_phrases() };
+    return {node->get_name(), node->get_phrases()};
 }
 
 void Dictionary::reorder(const QString& key, const QStringList& new_order) const
@@ -405,7 +489,8 @@ Match Dictionary::find(const QStringView& text, const int startPos) const
 
     std::vector<Rule>* rules = nullptr;
 
-    for (int i = startPos; i < text.length(); ++i) {
+    for (int i = startPos; i < text.length(); ++i)
+    {
         const QChar ch = text[i];
 
         node = node->find_child(ch);
@@ -416,14 +501,18 @@ Match Dictionary::find(const QStringView& text, const int startPos) const
             rules = r;
         }
 
-        if (auto* name = node->get_name()) {
+        if (auto* name = node->get_name())
+        {
             best_len_found = i - startPos + 1;
             translated = name;
             priority = NAME;
         }
-        else if (auto* phrases = node->get_phrases()) {
-            if (!phrases->isEmpty()) {
-                if (i - startPos + 1 > best_len_found) {
+        else if (auto* phrases = node->get_phrases())
+        {
+            if (!phrases->isEmpty())
+            {
+                if (i - startPos + 1 > best_len_found)
+                {
                     best_len_found = i - startPos + 1;
                     translated = &phrases->first();
                     priority = PHRASE;
@@ -438,16 +527,20 @@ Match Dictionary::find(const QStringView& text, const int startPos) const
 void Dictionary::insert_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end)
 {
     TrieNode* node = root;
-    for (const QChar ch : start) {
+    for (const QChar ch : start)
+    {
         TrieNode* next = node->find_child(ch);
-        if (!next) {
+        if (!next)
+        {
             next = pool.allocate();
             node->add_child(ch, next);
         }
         node = next;
     }
 
-    node->add_rule({.original_start = start, .original_end = end, .translation_start = t_start, .translation_end = t_end});
+    node->add_rule({
+        .original_start = start, .original_end = end, .translation_start = t_start, .translation_end = t_end
+    });
 }
 
 const Rule* Dictionary::find_exact_rule(const QString& start, const QString& end) const
@@ -475,12 +568,15 @@ void Dictionary::remove_rule(const QString& start, const QString& end) const
     const TrieNode* node = walk_node(start);
     if (!node) return;
 
-    if (auto* rules = node->get_rules()) {
-        const auto it = std::ranges::remove_if(*rules, [&](const Rule& r) {
+    if (auto* rules = node->get_rules())
+    {
+        const auto it = std::ranges::remove_if(*rules, [&](const Rule& r)
+        {
             return r.translation_end == end;
         }).begin();
 
-        if (it != rules->end()) {
+        if (it != rules->end())
+        {
             rules->erase(it, rules->end());
         }
     }
@@ -491,12 +587,15 @@ void Dictionary::edit_rule(const QString& start, const QString& end, const QStri
     const TrieNode* node = walk_node(start);
     if (!node) return;
 
-    if (auto* rules = node->get_rules()) {
-        const auto it = std::ranges::find_if(*rules, [&](const Rule& r) {
+    if (auto* rules = node->get_rules())
+    {
+        const auto it = std::ranges::find_if(*rules, [&](const Rule& r)
+        {
             return r.original_end == end;
         });
 
-        if (it != rules->end()) {
+        if (it != rules->end())
+        {
             it->translation_start = t_start;
             it->translation_end = t_end;
         }
@@ -506,7 +605,8 @@ void Dictionary::edit_rule(const QString& start, const QString& end, const QStri
 TrieNode* Dictionary::walk_node(const QStringView& key) const
 {
     TrieNode* node = root;
-    for (const QChar ch : key) {
+    for (const QChar ch : key)
+    {
         node = node->find_child(ch);
         if (!node) return nullptr;
     }
@@ -518,9 +618,12 @@ void Dictionary::remove(const QString& key, const Priority priority) const
     TrieNode* node = walk_node(key);
     if (!node) return;
 
-    if (priority == NAME) {
+    if (priority == NAME)
+    {
         node->remove_name();
-    } else if (priority == PHRASE) {
+    }
+    else if (priority == PHRASE)
+    {
         node->remove_phrases();
     }
 }
@@ -530,9 +633,11 @@ void Dictionary::remove_meaning(const QString& key, const QString& value) const
     TrieNode* node = walk_node(key);
     if (!node) return;
 
-    if (const auto list = node->get_phrases()) {
+    if (const auto list = node->get_phrases())
+    {
         list->removeAll(value);
-        if (list->isEmpty()) {
+        if (list->isEmpty())
+        {
             node->remove_phrases();
         }
     }
