@@ -4,7 +4,6 @@
 #include <QScrollBar>
 #include <QGuiApplication>
 #include <QClipboard>
-#include <QCursor>
 #include <algorithm>
 
 TokenCanvas::TokenCanvas(QWidget* parent)
@@ -12,8 +11,8 @@ TokenCanvas::TokenCanvas(QWidget* parent)
 {
     viewport()->setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
-    setFrameShape(StyledPanel);
-    setFrameShadow(Plain);
+    setFrameShape(QFrame::StyledPanel);
+    setFrameShadow(QFrame::Plain);
     font_ = font();
     font_.setPixelSize(16);
 }
@@ -96,7 +95,8 @@ QString TokenCanvas::full_text() const
 
 void TokenCanvas::copy_all_to_clipboard() const
 {
-    if (const QString text = full_text(); !text.isEmpty())
+    const QString text = full_text();
+    if (!text.isEmpty())
     {
         QGuiApplication::clipboard()->setText(text);
     }
@@ -111,10 +111,10 @@ void TokenCanvas::copy_selection_to_clipboard() const
     for (size_t p = start.paragraph; p <= end.paragraph && p < layouts_.size(); ++p)
     {
         const auto& pl = layouts_[p];
-        const int start_c = p == start.paragraph ? start.char_index : 0;
+        const int start_c = (p == start.paragraph) ? start.char_index : 0;
+        const int end_c = (p == end.paragraph) ? end.char_index : static_cast<int>(pl.text.length());
 
-        if (const int end_c = p == end.paragraph ? end.char_index : static_cast<int>(pl.text.length()); start_c < end_c
-            && start_c < pl.text.length())
+        if (start_c < end_c && start_c < pl.text.length())
         {
             result += pl.text.mid(start_c, end_c - start_c);
         }
@@ -141,17 +141,8 @@ void TokenCanvas::on_active_token_changed(uint32_t /*token_id*/) const
     viewport()->update();
 }
 
-void TokenCanvas::on_hovered_token_changed(const uint32_t token_id) const
+void TokenCanvas::on_hovered_token_changed(uint32_t /*token_id*/) const
 {
-    if (token_id != 0 && isVisible())
-    {
-        const bool mouse_over = viewport()->underMouse() ||
-            viewport()->rect().contains(viewport()->mapFromGlobal(QCursor::pos()));
-        if (!mouse_over)
-        {
-            scroll_to_token(token_id);
-        }
-    }
     viewport()->update();
 }
 
@@ -170,7 +161,7 @@ void TokenCanvas::rebuild_paragraph_data()
     const auto& doc = session_->document();
     layouts_.reserve(doc->paragraphs.size());
 
-    for (const auto& [tokens] : doc->paragraphs)
+    for (const auto & [tokens] : doc->paragraphs)
     {
         ParagraphLayout pl;
 
@@ -199,8 +190,6 @@ void TokenCanvas::rebuild_paragraph_data()
         else
         {
             bool in_quote = false;
-            const Token* last_tok = nullptr;
-            const Token* prev_last_tok = nullptr;
             for (size_t t = 0; t < tokens.size(); ++t)
             {
                 const auto& tok = tokens[t];
@@ -217,7 +206,7 @@ void TokenCanvas::rebuild_paragraph_data()
                     continue;
                 }
 
-                if (Typography::should_insert_space_before(pl.text, tok_str, in_quote, last_tok, &tok, prev_last_tok))
+                if (Typography::should_insert_space_before(pl.text, tok_str, in_quote))
                 {
                     pl.text += u' ';
                 }
@@ -236,8 +225,6 @@ void TokenCanvas::rebuild_paragraph_data()
                 }
 
                 pl.spans.push_back(span);
-                prev_last_tok = last_tok;
-                last_tok = &tok;
             }
         }
 
@@ -308,8 +295,8 @@ void TokenCanvas::update_scroll_range() const
 void TokenCanvas::resizeEvent(QResizeEvent* event)
 {
     QAbstractScrollArea::resizeEvent(event);
-    if (const int current_avail_width = viewport()->width() - static_cast<int>(margin_ * 2.0);
-        current_avail_width != last_layout_width_)
+    const int current_avail_width = viewport()->width() - static_cast<int>(margin_ * 2.0);
+    if (current_avail_width != last_layout_width_)
     {
         layout_all();
     }
@@ -324,10 +311,10 @@ size_t TokenCanvas::find_paragraph_at_y(qreal doc_y) const
     if (layouts_.empty()) return 0;
 
     const auto it = std::lower_bound(layouts_.begin(), layouts_.end(), doc_y,
-                                     [](const ParagraphLayout& pl, qreal y)
-                                     {
-                                         return pl.y + pl.height < y;
-                                     });
+                               [](const ParagraphLayout& pl, qreal y)
+                               {
+                                   return (pl.y + pl.height) < y;
+                               });
 
     if (it == layouts_.end()) return layouts_.size() - 1;
     return std::distance(layouts_.begin(), it);
@@ -368,8 +355,8 @@ std::optional<std::pair<size_t, int>> TokenCanvas::char_at_pos(const QPoint& vie
     QTextLine matched_line;
     for (int l = 0; l < pl.text_layout->lineCount(); ++l)
     {
-        if (QTextLine line = pl.text_layout->lineAt(l);
-            local_y >= line.y() && local_y <= line.y() + line.height() * line_scale)
+        QTextLine line = pl.text_layout->lineAt(l);
+        if (local_y >= line.y() && local_y <= (line.y() + line.height() * line_scale))
         {
             matched_line = line;
             break;
@@ -394,13 +381,14 @@ std::optional<std::pair<size_t, int>> TokenCanvas::char_at_pos(const QPoint& vie
     return std::make_pair(p_idx, cursor_pos);
 }
 
-const TokenCanvas::TokenSpan* TokenCanvas::token_at_char(const size_t p_idx, const int char_pos) const
+const TokenCanvas::TokenSpan* TokenCanvas::token_at_char(size_t p_idx, int char_pos) const
 {
     if (p_idx >= layouts_.size()) return nullptr;
-    for (const auto& pl = layouts_[p_idx]; const auto& span : pl.spans)
+    const auto& pl = layouts_[p_idx];
+    for (const auto& span : pl.spans)
     {
         if (span.length == 0) continue;
-        if (char_pos >= span.start_char && char_pos < span.start_char + span.length)
+        if (char_pos >= span.start_char && char_pos < (span.start_char + span.length))
         {
             return &span;
         }
@@ -440,8 +428,8 @@ void TokenCanvas::paintEvent(QPaintEvent* event)
         // 1. Character selection range (blue highlight)
         if (has_sel && p >= start.paragraph && p <= end.paragraph)
         {
-            const int start_c = p == start.paragraph ? start.char_index : 0;
-            const int end_c = p == end.paragraph
+            const int start_c = (p == start.paragraph) ? start.char_index : 0;
+            const int end_c = (p == end.paragraph)
                                   ? end.char_index
                                   : static_cast<int>(text.length());
 
@@ -616,30 +604,30 @@ void TokenCanvas::contextMenuEvent(QContextMenuEvent* event)
     // 1. If text is selected on this canvas
     if (has_selection())
     {
-        const auto [start, end] = normalized_selection();
+        const auto norm = normalized_selection();
         QString selected_text;
 
-        for (size_t p = start.paragraph; p <= end.paragraph && p < layouts_.size(); ++p)
+        for (size_t p = norm.start.paragraph; p <= norm.end.paragraph && p < layouts_.size(); ++p)
         {
             const auto& pl = layouts_[p];
-            const int start_c = p == start.paragraph ? start.char_index : 0;
-            if (const int end_c = p == end.paragraph ? end.char_index : static_cast<int>(pl.text.length());
-                start_c < end_c && start_c < pl.text.length())
+            const int start_c = (p == norm.start.paragraph) ? norm.start.char_index : 0;
+            const int end_c = (p == norm.end.paragraph) ? norm.end.char_index : static_cast<int>(pl.text.length());
+            if (start_c < end_c && start_c < pl.text.length())
             {
                 selected_text += pl.text.mid(start_c, end_c - start_c);
             }
         }
 
         // Check if any rule tokens are selected
-        for (size_t p = start.paragraph; p <= end.paragraph && p < layouts_.size(); ++p)
+        for (size_t p = norm.start.paragraph; p <= norm.end.paragraph && p < layouts_.size(); ++p)
         {
             const auto& pl = layouts_[p];
-            const int start_c = p == start.paragraph ? start.char_index : 0;
-            const int end_c = p == end.paragraph ? end.char_index : static_cast<int>(pl.text.length());
+            const int start_c = (p == norm.start.paragraph) ? norm.start.char_index : 0;
+            const int end_c = (p == norm.end.paragraph) ? norm.end.char_index : static_cast<int>(pl.text.length());
 
             for (const auto& span : pl.spans)
             {
-                if (span.length > 0 && span.start_char < end_c && span.start_char + span.length > start_c)
+                if (span.length > 0 && span.start_char < end_c && (span.start_char + span.length) > start_c)
                 {
                     const auto* tok = doc->find_token(span.token_id);
                     if (tok && tok->is_rule())
@@ -662,15 +650,15 @@ void TokenCanvas::contextMenuEvent(QContextMenuEvent* event)
         if (role_ == LanguageRole::SinoVietnamese)
         {
             QString chinese_text;
-            for (size_t p = start.paragraph; p <= end.paragraph && p < layouts_.size(); ++p)
+            for (size_t p = norm.start.paragraph; p <= norm.end.paragraph && p < layouts_.size(); ++p)
             {
                 const auto& pl = layouts_[p];
-                const int start_c = p == start.paragraph ? start.char_index : 0;
-                const int end_c = p == end.paragraph ? end.char_index : static_cast<int>(pl.text.length());
+                const int start_c = (p == norm.start.paragraph) ? norm.start.char_index : 0;
+                const int end_c = (p == norm.end.paragraph) ? norm.end.char_index : static_cast<int>(pl.text.length());
 
                 for (const auto& span : pl.spans)
                 {
-                    if (span.length > 0 && span.start_char < end_c && span.start_char + span.length > start_c)
+                    if (span.length > 0 && span.start_char < end_c && (span.start_char + span.length) > start_c)
                     {
                         const auto* tok = doc->find_token(span.token_id);
                         if (!tok) continue;
@@ -678,14 +666,14 @@ void TokenCanvas::contextMenuEvent(QContextMenuEvent* event)
                         const int inter_start = std::max(start_c, span.start_char) - span.start_char;
                         const int inter_end = std::min(end_c, span.start_char + span.length) - span.start_char;
                         const QString span_text = pl.text.mid(span.start_char, span.length);
+                        const QStringList words = span_text.split(u' ', Qt::SkipEmptyParts);
 
-                        if (const QStringList words = span_text.split(u' ', Qt::SkipEmptyParts);
-                            words.size() == tok->cn.length())
+                        if (words.size() == tok->cn.length())
                         {
                             int cur = 0;
                             for (int w = 0; w < words.size(); ++w)
                             {
-                                const int w_len = static_cast<int>(words[w].length());
+                                const int w_len = words[w].length();
                                 const int w_start = cur;
                                 const int w_end = cur + w_len;
                                 if (w_end > inter_start && w_start < inter_end)
@@ -712,15 +700,15 @@ void TokenCanvas::contextMenuEvent(QContextMenuEvent* event)
 
         // Vietnamese: map selected tokens to their full Chinese text
         QString chinese_text;
-        for (size_t p = start.paragraph; p <= end.paragraph && p < layouts_.size(); ++p)
+        for (size_t p = norm.start.paragraph; p <= norm.end.paragraph && p < layouts_.size(); ++p)
         {
             const auto& pl = layouts_[p];
-            const int start_c = p == start.paragraph ? start.char_index : 0;
-            const int end_c = p == end.paragraph ? end.char_index : static_cast<int>(pl.text.length());
+            const int start_c = (p == norm.start.paragraph) ? norm.start.char_index : 0;
+            const int end_c = (p == norm.end.paragraph) ? norm.end.char_index : static_cast<int>(pl.text.length());
 
             for (const auto& span : pl.spans)
             {
-                if (span.length > 0 && span.start_char < end_c && span.start_char + span.length > start_c)
+                if (span.length > 0 && span.start_char < end_c && (span.start_char + span.length) > start_c)
                 {
                     if (const auto* tok = doc->find_token(span.token_id))
                     {
@@ -783,7 +771,7 @@ void TokenCanvas::scroll_to_token(const uint32_t token_id) const
 {
     if (!session_ || !session_->has_document()) return;
 
-    for (const auto& pl : layouts_)
+    for (const auto & pl : layouts_)
     {
         for (const auto& span : pl.spans)
         {
@@ -794,14 +782,14 @@ void TokenCanvas::scroll_to_token(const uint32_t token_id) const
                 const qreal line_scale = line_height_percent_ / 100.0;
                 for (int l = 0; l < pl.text_layout->lineCount(); ++l)
                 {
-                    if (QTextLine line = pl.text_layout->lineAt(l); span.start_char >= line.textStart() &&
-                        span.start_char < line.textStart() + line.textLength())
+                    QTextLine line = pl.text_layout->lineAt(l);
+                    if (span.start_char >= line.textStart() &&
+                        span.start_char < (line.textStart() + line.textLength()))
                     {
                         const qreal target_y = pl.y + line.y() * line_scale;
                         const int view_h = viewport()->height();
 
-                        if (const int current_scroll = verticalScrollBar()->value(); target_y < current_scroll ||
-                            target_y > current_scroll + view_h - 40)
+                        if (const int current_scroll = verticalScrollBar()->value(); target_y < current_scroll || target_y > (current_scroll + view_h - 40))
                         {
                             verticalScrollBar()->setValue(static_cast<int>(target_y - view_h / 3));
                         }
