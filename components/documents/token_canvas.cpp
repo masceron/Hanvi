@@ -49,14 +49,14 @@ void TokenCanvas::set_session(DocumentSession* session)
     }
 }
 
-void TokenCanvas::set_role(LanguageRole role)
+void TokenCanvas::set_role(const LanguageRole role)
 {
     if (role_ == role) return;
     role_ = role;
     rebuild_paragraph_data();
 }
 
-void TokenCanvas::set_line_height_percent(int percent)
+void TokenCanvas::set_line_height_percent(const int percent)
 {
     if (line_height_percent_ == percent) return;
     line_height_percent_ = percent;
@@ -306,12 +306,12 @@ void TokenCanvas::resizeEvent(QResizeEvent* event)
     }
 }
 
-size_t TokenCanvas::find_paragraph_at_y(qreal doc_y) const
+size_t TokenCanvas::find_paragraph_at_y(const qreal doc_y) const
 {
     if (layouts_.empty()) return 0;
 
     const auto it = std::lower_bound(layouts_.begin(), layouts_.end(), doc_y,
-                               [](const ParagraphLayout& pl, qreal y)
+                               [](const ParagraphLayout& pl, const qreal y)
                                {
                                    return (pl.y + pl.height) < y;
                                });
@@ -320,7 +320,7 @@ size_t TokenCanvas::find_paragraph_at_y(qreal doc_y) const
     return std::distance(layouts_.begin(), it);
 }
 
-std::optional<std::pair<size_t, int>> TokenCanvas::char_at_pos(const QPoint& viewport_pos, bool clamp) const
+std::optional<std::pair<size_t, int>> TokenCanvas::char_at_pos(const QPoint& viewport_pos, const bool clamp) const
 {
     if (layouts_.empty()) return std::nullopt;
 
@@ -381,7 +381,7 @@ std::optional<std::pair<size_t, int>> TokenCanvas::char_at_pos(const QPoint& vie
     return std::make_pair(p_idx, cursor_pos);
 }
 
-const TokenCanvas::TokenSpan* TokenCanvas::token_at_char(size_t p_idx, int char_pos) const
+const TokenCanvas::TokenSpan* TokenCanvas::token_at_char(const size_t p_idx, const int char_pos) const
 {
     if (p_idx >= layouts_.size()) return nullptr;
     const auto& pl = layouts_[p_idx];
