@@ -62,6 +62,33 @@ namespace
         }
 
     protected:
+        void mousePressEvent(QMouseEvent* event) override
+        {
+            if (event->button() == Qt::MiddleButton)
+            {
+                middle_pressed_tab = tabAt(event->position().toPoint());
+                event->accept();
+                return;
+            }
+            QTabBar::mousePressEvent(event);
+        }
+
+        void mouseReleaseEvent(QMouseEvent* event) override
+        {
+            if (event->button() == Qt::MiddleButton)
+            {
+                if (const int release_index = tabAt(event->position().toPoint());
+                    release_index != -1 && release_index == middle_pressed_tab)
+                {
+                    emit tabCloseRequested(release_index);
+                }
+                middle_pressed_tab = -1;
+                event->accept();
+                return;
+            }
+            QTabBar::mouseReleaseEvent(event);
+        }
+
         void tabInserted(const int index) override
         {
             QTabBar::tabInserted(index);
@@ -79,6 +106,9 @@ namespace
             QTabBar::tabLayoutChange();
             updateGeometry();
         }
+
+    private:
+        int middle_pressed_tab = -1;
     };
 }
 
@@ -223,12 +253,14 @@ MainWindow::MainWindow(QWidget* parent) :
 
     ui->verticalLayout->insertWidget(0, tab_container);
 
-    connect(tab_bar, &QTabBar::currentChanged, this, [this](int index)
+    connect(tab_bar, &QTabBar::currentChanged, this, [this](const int index)
     {
         switch_to_tab(index);
     });
 
-    connect(tab_bar, &QTabBar::tabMoved, this, [this](int from, int to)
+    connect(tab_bar, &QTabBar::tabCloseRequested, this, &MainWindow::close_tab);
+
+    connect(tab_bar, &QTabBar::tabMoved, this, [this](const int from, const int to)
     {
         if (from == to || from < 0 || to < 0 ||
             from >= static_cast<int>(tabs.size()) || to >= static_cast<int>(tabs.size()))
