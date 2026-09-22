@@ -120,42 +120,24 @@ static bool should_append_space(const QStringView& input, const int current_end_
 static int is_optimal_phrase(const QStringView& text, const int current_pos, const int current_len)
 {
     const int threshold = std::max(current_len, 3);
-    const int limit = std::min(static_cast<int>(text.length()), current_pos + threshold);
+
+    const int limit = current_pos + current_len;
 
     for (int next_start = current_pos + 1; next_start < limit; ++next_start)
     {
-        const auto sub = text.mid(next_start);
-        int match_len = 0;
-        int match_priority = 0;
-
         if (current_name_set_id != -1)
         {
-            if (const auto [len, prio, _, trans] = name_set_dictionary.find(sub, 0); len > 0)
+            if (const Match match = name_set_dictionary.find(text, next_start); match.length > 0)
             {
-                match_len = len;
-                match_priority = prio;
+                return next_start;
             }
         }
 
-        if (match_len == 0)
+        if (const Match match = dictionary.find(text, next_start); match.priority == NAME || match.length > threshold)
         {
-            const auto [len, prio, _, trans] = dictionary.find(sub, 0);
-            match_len = len;
-            match_priority = prio;
-        }
-
-        if (match_len > 0)
-        {
-            if (const int overlap_end = next_start + match_len; overlap_end > current_pos + current_len)
-            {
-                if (match_priority == NAME || match_len > current_len)
-                {
-                    return next_start;
-                }
-            }
+            return next_start;
         }
     }
-
     return -1;
 }
 
@@ -172,41 +154,69 @@ namespace
 static std::optional<RuleMatch> find_matching_rule(const QStringView& text, const int current_pos,
                                                    const std::vector<Rule>& rules)
 {
-    const int limit = std::min(static_cast<int>(text.length()), current_pos + 50);
-    const QStringView search_area = text.mid(current_pos, limit - current_pos);
+    static constexpr QStringView stoppers(u"，。：；！？“”’.,，;:!?)]}>\"'");
+    int limit = std::min(static_cast<int>(text.length()), current_pos + 25);
 
+    for (int i = current_pos; i < limit; ++i)
+    {
+        if (const QChar ch = text[i]; stoppers.contains(ch))
+        {
+            limit = i;
+            break;
+        }
+    }
+
+    const QStringView search_area = text.sliced(current_pos, limit - current_pos);
     std::optional<RuleMatch> best_match = std::nullopt;
 
     for (const auto& rule : rules)
     {
         const int start_len = static_cast<int>(rule.original_start.length());
-        const int rule_end_len = static_cast<int>(rule.original_end.length());
-
         if (search_area.length() <= start_len) continue;
 
         int search_offset = start_len;
-        while (search_offset < search_area.length())
+
+        while (true)
         {
             const int relative_end_idx = static_cast<int>(search_area.indexOf(rule.original_end, search_offset));
+
             if (relative_end_idx == -1) break;
 
             const int abs_start_of_end = current_pos + relative_end_idx;
-            const int candidate_inner_start = current_pos + start_len;
-            const int candidate_inner_len = abs_start_of_end - candidate_inner_start;
+            const int rule_end_len = static_cast<int>(rule.original_end.length());
 
             bool is_safe = true;
-            for (int scan = 0; scan < candidate_inner_len;)
-            {
-                auto [found_len, priority, sub_rules, _] = dictionary.find(
-                    text.mid(candidate_inner_start + scan, candidate_inner_len - scan), 0);
 
-                if (found_len > 0 && priority == PHRASE && candidate_inner_start + scan + found_len >
-                    abs_start_of_end)
+            const int lookback_limit = std::max(current_pos + start_len, abs_start_of_end - 6);
+
+            for (int k = abs_start_of_end; k >= lookback_limit; --k)
+            {
+                auto check_overlap = [&](const auto& dict, const Priority target_prio)
+                {
+                    Match m = dict.find(text, k);
+                    if (m.length > 0 && m.priority == target_prio)
+                    {
+                        if (k + m.length > abs_start_of_end)
+                        {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                if (current_name_set_id != -1)
+                {
+                    if (check_overlap(name_set_dictionary, NAME))
+                    {
+                        is_safe = false;
+                        break;
+                    }
+                }
+                if (check_overlap(dictionary, NAME))
                 {
                     is_safe = false;
                     break;
                 }
-                scan += found_len > 0 ? found_len : 1;
             }
 
             if (!is_safe)
@@ -671,45 +681,52 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
             {
                 const Rule* rule = rule_match->rule;
                 int start_len = static_cast<int>(rule->original_start.length());
-                int inner_start_idx = i + start_len;
-                int inner_len = rule_match->abs_start_of_end_token - inner_start_idx;
-                int end_len = static_cast<int>(rule->original_end.length());
 
-                progress.update(start_len);
+                bool phrase_overrides_rule = (length > 0 && priority == PHRASE &&
+                    length > start_len);
 
-                QString t_start = rule->translation_start;
-                if (cap_next && !t_start.isEmpty())
+                if (!phrase_overrides_rule)
                 {
-                    if (t_start[0].isLower()) t_start[0] = t_start[0].toUpper();
-                    cap_next = false;
+                    int inner_start_idx = i + start_len;
+                    int inner_len = rule_match->abs_start_of_end_token - inner_start_idx;
+                    int end_len = static_cast<int>(rule->original_end.length());
+
+                    progress.update(start_len);
+
+                    QString t_start = rule->translation_start;
+                    if (cap_next && !t_start.isEmpty())
+                    {
+                        if (t_start[0].isLower()) t_start[0] = t_start[0].toUpper();
+                        cap_next = false;
+                    }
+
+                    auto [text, _] = convert_recursive_plain(input.sliced(inner_start_idx, inner_len), cap_next,
+                                                             progress);
+
+                    progress.update(end_len);
+
+                    if (!t_start.isEmpty())
+                    {
+                        out.text += t_start + " ";
+                    }
+
+                    out.text += text;
+
+                    if (!rule->translation_end.isEmpty())
+                    {
+                        if (!out.text.endsWith(' ')) out.text += u" ";
+                        out.text += rule->translation_end;
+                    }
+
+                    i += start_len + inner_len + end_len;
+                    out.length_consumed += start_len + inner_len + end_len;
+
+                    if (should_append_space(input, i) && !out.text.endsWith(' '))
+                    {
+                        out.text += u" ";
+                    }
+                    continue;
                 }
-
-                auto [text, _] = convert_recursive_plain(input.sliced(inner_start_idx, inner_len), cap_next,
-                                                         progress);
-
-                progress.update(end_len);
-
-                if (!t_start.isEmpty())
-                {
-                    out.text += t_start + " ";
-                }
-
-                out.text += text;
-
-                if (!rule->translation_end.isEmpty())
-                {
-                    if (!out.text.endsWith(' ')) out.text += u" ";
-                    out.text += rule->translation_end;
-                }
-
-                i += start_len + inner_len + end_len;
-                out.length_consumed += start_len + inner_len + end_len;
-
-                if (should_append_space(input, i) && !out.text.endsWith(' '))
-                {
-                    out.text += u" ";
-                }
-                continue;
             }
         }
 
