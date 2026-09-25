@@ -15,12 +15,11 @@
 #include <QMenu>
 
 #if defined(Q_OS_WIN)
-#include <windows.h>
 #include <windowsx.h>
 #include <dwmapi.h>
 #endif
 
-#include "ui_MainWindow.h"
+#include "ui_mainwindow.h"
 #include "../core/io.h"
 #include "mainwindow.h"
 #include "rulepopup.h"
@@ -491,8 +490,12 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->read_from_clipboard->setShortcut(QKeySequence());
     ui->save_to_file->setShortcut(QKeySequence());
 
-
     create_new_tab("Untitled");
+
+    m_powerNotify = RegisterSuspendResumeNotification(
+        reinterpret_cast<HANDLE>(winId()),
+        DEVICE_NOTIFY_WINDOW_HANDLE
+    );
 }
 
 void MainWindow::setup_hamburger_menu(QPushButton* btn)
@@ -626,6 +629,38 @@ void MainWindow::update_max_restore_button() const
     max_btn->setIconSize(QSize(16, 16));
 }
 
+void MainWindow::triggerDpiRecovery() {
+    QTimer::singleShot(500, this, [this]() {
+        const auto hwnd = reinterpret_cast<HWND>(winId());
+        if (!hwnd) return;
+
+        const int screenW = GetSystemMetrics(SM_CXSCREEN);
+        const int screenH = GetSystemMetrics(SM_CYSCREEN);
+
+        SendNotifyMessageW(HWND_BROADCAST, WM_DISPLAYCHANGE, 32, MAKELPARAM(screenW, screenH));
+
+        if (windowHandle()) {
+            if (QScreen *primary = QGuiApplication::primaryScreen(); primary && windowHandle()->screen() != primary) {
+                windowHandle()->setScreen(primary);
+            }
+        }
+
+        const UINT realDpi = GetDpiForWindow(hwnd);
+        RECT rc;
+        GetWindowRect(hwnd, &rc);
+        SendMessageW(hwnd, WM_DPICHANGED, MAKEWPARAM(realDpi, realDpi), reinterpret_cast<LPARAM>(&rc));
+
+        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+
+        const QFont f = QApplication::font();
+        QApplication::setFont(f);
+
+        this->updateGeometry();
+        this->repaint();
+    });
+}
+
 void MainWindow::changeEvent(QEvent* event)
 {
     if (event->type() == QEvent::WindowStateChange)
@@ -740,7 +775,12 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
 {
     if (eventType == "windows_generic_MSG")
     {
-        if (const auto* msg = static_cast<MSG*>(message); msg->message == WM_NCCALCSIZE)
+        if (const auto *msg = static_cast<MSG *>(message);
+            msg->message == WM_POWERBROADCAST && (msg->wParam == PBT_APMRESUMEAUTOMATIC || msg->wParam == PBT_APMRESUMESUSPEND))
+        {
+            triggerDpiRecovery();
+        }
+        else if (msg->message == WM_NCCALCSIZE)
         {
             if (msg->wParam == TRUE)
             {
@@ -766,7 +806,7 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
         else if (msg->message == WM_GETMINMAXINFO)
         {
             auto* mmi = reinterpret_cast<MINMAXINFO*>(msg->lParam);
-            HMONITOR hMonitor = MonitorFromWindow(reinterpret_cast<HWND>(winId()), MONITOR_DEFAULTTONEAREST);
+            const auto hMonitor = MonitorFromWindow(reinterpret_cast<HWND>(winId()), MONITOR_DEFAULTTONEAREST);
             MONITORINFO mi;
             mi.cbSize = sizeof(mi);
             if (GetMonitorInfo(hMonitor, &mi))
@@ -781,7 +821,7 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
         }
         else if (msg->message == WM_NCHITTEST)
         {
-            POINT pt = {.x = GET_X_LPARAM(msg->lParam), .y = GET_Y_LPARAM(msg->lParam)};
+            const POINT pt = {.x = GET_X_LPARAM(msg->lParam), .y = GET_Y_LPARAM(msg->lParam)};
             RECT rc;
             GetWindowRect(reinterpret_cast<HWND>(winId()), &rc);
 
@@ -1090,6 +1130,11 @@ void MainWindow::update_pagination_controls() const
 
 MainWindow::~MainWindow()
 {
+    if (m_powerNotify) {
+        UnregisterSuspendResumeNotification(m_powerNotify);
+        m_powerNotify = nullptr;
+    }
+
     qApp->removeEventFilter(this);
     delete ui;
 }

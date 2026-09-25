@@ -4,6 +4,7 @@
 #include <QFutureWatcher>
 #include <memory>
 #include <vector>
+#include <windows.h>
 
 class AlignedDocument;
 class DocumentSession;
@@ -92,4 +93,7 @@ private:
     void setup_tab_close_button(int index);
     void setup_hamburger_menu(QPushButton* btn);
     void update_max_restore_button() const;
+
+    void triggerDpiRecovery();
+    HPOWERNOTIFY m_powerNotify = nullptr;
 };
