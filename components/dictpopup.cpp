@@ -282,24 +282,30 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
     if (current_name_set_id != -1)
     {
         ui->use_current_nameset->setChecked(true);
-        if (const auto [set_name, _] = name_set_dictionary.find_exact(selected_chinese_text); set_name != nullptr)
+        if (const auto res_set = name_set_dictionary.find_exact(selected_chinese_text); res_set.name != nullptr)
         {
             set_name_found = true;
             ui->use_current_nameset->setCheckState(Qt::CheckState::Checked);
-            ui->current_name->setText(*set_name);
+            ui->current_name->setText(*res_set.name);
         }
     }
 
-    const auto [global_name, phrases] = dictionary.find_exact(selected_chinese_text);
-    if (!set_name_found && global_name != nullptr)
+    const auto res = dictionary.find_exact(selected_chinese_text);
+    if (!set_name_found && res.name != nullptr)
     {
-        ui->current_name->setText(*global_name);
+        ui->current_name->setText(*res.name);
         ui->use_current_nameset->setChecked(false);
     }
 
-    if (phrases != nullptr && !phrases->empty())
+    if (res.single_phrase != nullptr)
     {
-        for (const auto& name : *phrases)
+        auto* item = new QListWidgetItem(*res.single_phrase);
+        item->setFlags(item->flags() & ~Qt::ItemIsEditable);
+        ui->list_phrases->addItem(item);
+    }
+    else if (res.phrases != nullptr && !res.phrases->isEmpty())
+    {
+        for (const auto& name : *res.phrases)
         {
             auto* item = new QListWidgetItem(name);
             item->setFlags(item->flags() & ~Qt::ItemIsEditable);

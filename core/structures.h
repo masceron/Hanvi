@@ -33,7 +33,29 @@ public:
     ~NodePool();
 
 private:
-    static constexpr size_t BLOCK_SIZE = 4096;
+    static constexpr size_t BLOCK_SIZE = 65520;
+    std::vector<std::unique_ptr<char[]>> blocks;
+    size_t current_block_offset = BLOCK_SIZE;
+    char* current_block_ptr = nullptr;
+};
+
+class StringPool
+{
+public:
+    StringPool() = default;
+    ~StringPool();
+
+    StringPool(StringPool&&) noexcept = default;
+    StringPool& operator=(StringPool&&) noexcept = default;
+
+    StringPool(const StringPool&) = delete;
+    StringPool& operator=(const StringPool&) = delete;
+
+    QString* allocate(const QString& val);
+    void clear();
+
+private:
+    static constexpr size_t BLOCK_SIZE = 65520;
     std::vector<std::unique_ptr<char[]>> blocks;
     size_t current_block_offset = BLOCK_SIZE;
     char* current_block_ptr = nullptr;
@@ -41,14 +63,11 @@ private:
 
 struct TrieNode
 {
-    // Tagged pointer for data.
-    // Tags (Low 2 bits):
-    // 00: nullptr (No data)
-    // 01: QString* (Name translation only)
-    // 10: QStringList* (Phrase translations only)
-    // 11: ComplexNodeData* (Rules, or mixed data)
     uintptr_t data = 0;
-    void* children_block = nullptr;
+    TrieNode* first_child = nullptr;
+    QChar single_child_char;
+    uint16_t child_count = 0;
+    uint32_t reserved = 0;
 
     TrieNode() = default;
 
@@ -61,10 +80,14 @@ struct TrieNode
     void add_child(QChar ch, TrieNode* node);
 
     [[nodiscard]] QString* get_name() const;
+    [[nodiscard]] const QString* get_first_phrase() const;
     [[nodiscard]] QStringList* get_phrases() const;
     [[nodiscard]] std::vector<Rule>* get_rules() const;
 
     void set_name(const QString& value);
+    void set_name_ptr(QString* ptr);
+    void set_single_phrase(const QString& value);
+    void set_single_phrase_ptr(QString* ptr);
     void add_phrase(const QString& value);
     void set_phrases(const QStringList& list_val);
     void add_rule(const Rule& rule);
@@ -75,6 +98,20 @@ struct TrieNode
 private:
     void ensure_complex();
     void free_data();
+};
+
+struct ExactResult
+{
+    QString* name = nullptr;
+    QString* single_phrase = nullptr;
+    QStringList* phrases = nullptr;
+
+    [[nodiscard]] const QString* phrase() const noexcept
+    {
+        if (single_phrase) return single_phrase;
+        if (phrases && !phrases->isEmpty()) return &phrases->first();
+        return nullptr;
+    }
 };
 
 struct Match
@@ -97,7 +134,7 @@ public:
     Dictionary& operator=(Dictionary&& other) noexcept;
 
     [[nodiscard]] Match find(const QStringView& text, int startPos) const;
-    [[nodiscard]] std::pair<QString*, QStringList*> find_exact(const QStringView& key) const;
+    [[nodiscard]] ExactResult find_exact(const QStringView& key) const;
 
     void insert(const QString& key, const QString& value, Priority priority);
     void insert_bulk(const QString& key, Priority priority, const QString& value);
@@ -115,6 +152,7 @@ public:
 private:
     TrieNode* root;
     NodePool pool;
+    StringPool string_pool;
 
     [[nodiscard]] TrieNode* walk_node(const QStringView& key) const;
 };
