@@ -407,24 +407,24 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
                     const auto try_string = input.sliced(i, try_len);
                     if (current_name_set_id != -1)
                     {
-                        if (auto [set_name, _] = name_set_dictionary.find_exact(try_string); set_name)
+                        if (const auto res_set = name_set_dictionary.find_exact(try_string); res_set.name)
                         {
                             length = try_len;
-                            translation = set_name;
+                            translation = res_set.name;
                             break;
                         }
                     }
-                    auto [exact_name, exact_phrases] = dictionary.find_exact(try_string);
-                    if (exact_name)
+                    const auto res = dictionary.find_exact(try_string);
+                    if (res.name)
                     {
                         length = try_len;
-                        translation = exact_name;
+                        translation = res.name;
                         break;
                     }
-                    if (exact_phrases && !exact_phrases->isEmpty())
+                    if (const auto* phrase = res.phrase())
                     {
                         length = try_len;
-                        translation = &exact_phrases->first();
+                        translation = phrase;
                         break;
                     }
                 }
@@ -744,24 +744,24 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                     const auto try_string = input.sliced(i, try_len);
                     if (current_name_set_id != -1)
                     {
-                        if (auto [set_name, _] = name_set_dictionary.find_exact(try_string); set_name)
+                        if (const auto res_set = name_set_dictionary.find_exact(try_string); res_set.name)
                         {
                             length = try_len;
-                            translation = set_name;
+                            translation = res_set.name;
                             break;
                         }
                     }
-                    auto [exact_name, exact_phrases] = dictionary.find_exact(try_string);
-                    if (exact_name)
+                    const auto res = dictionary.find_exact(try_string);
+                    if (res.name)
                     {
                         length = try_len;
-                        translation = exact_name;
+                        translation = res.name;
                         break;
                     }
-                    if (exact_phrases && !exact_phrases->isEmpty())
+                    if (const auto* phrase = res.phrase())
                     {
                         length = try_len;
-                        translation = &exact_phrases->first();
+                        translation = phrase;
                         break;
                     }
                 }

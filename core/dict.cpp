@@ -17,7 +17,6 @@ static void init_db()
 
     QSqlQuery query(db);
     query.exec("PRAGMA foreign_keys = ON;");
-    query.exec("VACUUM;");
 }
 
 static void load_global_data(const std::function<void()>& on_finished)
