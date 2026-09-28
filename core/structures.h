@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QStringList>
+#include <QStringView>
 #include <memory>
 #include <vector>
 
@@ -15,15 +16,33 @@ struct Rule
 };
 
 struct TrieNode;
-struct NodeData;
 
 class NodePool
 {
 public:
     NodePool() = default;
 
-    NodePool(NodePool&&) = default;
-    NodePool& operator=(NodePool&&) = default;
+    NodePool(NodePool&& other) noexcept
+        : blocks(std::move(other.blocks)),
+          current_block_offset(other.current_block_offset),
+          current_block_ptr(other.current_block_ptr)
+    {
+        other.current_block_offset = BLOCK_SIZE;
+        other.current_block_ptr = nullptr;
+    }
+
+    NodePool& operator=(NodePool&& other) noexcept
+    {
+        if (this != &other)
+        {
+            blocks = std::move(other.blocks);
+            current_block_offset = other.current_block_offset;
+            current_block_ptr = other.current_block_ptr;
+            other.current_block_offset = BLOCK_SIZE;
+            other.current_block_ptr = nullptr;
+        }
+        return *this;
+    }
 
     NodePool(const NodePool&) = delete;
     NodePool& operator=(const NodePool&) = delete;
@@ -39,26 +58,45 @@ private:
     char* current_block_ptr = nullptr;
 };
 
-class StringPool
+class TextArena
 {
 public:
-    StringPool() = default;
-    ~StringPool();
+    TextArena() = default;
+    ~TextArena() = default;
 
-    StringPool(StringPool&&) noexcept = default;
-    StringPool& operator=(StringPool&&) noexcept = default;
+    TextArena(TextArena&& other) noexcept
+        : blocks(std::move(other.blocks)),
+          current_block_offset(other.current_block_offset),
+          current_block_ptr(other.current_block_ptr)
+    {
+        other.current_block_offset = BLOCK_SIZE;
+        other.current_block_ptr = nullptr;
+    }
 
-    StringPool(const StringPool&) = delete;
-    StringPool& operator=(const StringPool&) = delete;
+    TextArena& operator=(TextArena&& other) noexcept
+    {
+        if (this != &other)
+        {
+            blocks = std::move(other.blocks);
+            current_block_offset = other.current_block_offset;
+            current_block_ptr = other.current_block_ptr;
+            other.current_block_offset = BLOCK_SIZE;
+            other.current_block_ptr = nullptr;
+        }
+        return *this;
+    }
 
-    QString* allocate(const QString& val);
+    TextArena(const TextArena&) = delete;
+    TextArena& operator=(const TextArena&) = delete;
+
+    const char16_t* allocate(const QStringView& str);
     void clear();
 
 private:
-    static constexpr size_t BLOCK_SIZE = 65520;
-    std::vector<std::unique_ptr<char[]>> blocks;
+    static constexpr size_t BLOCK_SIZE = 2 * 1024 * 1024;
+    std::vector<std::unique_ptr<char16_t[]>> blocks;
     size_t current_block_offset = BLOCK_SIZE;
-    char* current_block_ptr = nullptr;
+    char16_t* current_block_ptr = nullptr;
 };
 
 struct TrieNode
@@ -79,17 +117,13 @@ struct TrieNode
     [[nodiscard]] TrieNode* find_child(QChar ch) const;
     void add_child(QChar ch, TrieNode* node);
 
-    [[nodiscard]] QString* get_name() const;
-    [[nodiscard]] const QString* get_first_phrase() const;
-    [[nodiscard]] QStringList* get_phrases() const;
+    [[nodiscard]] QStringView get_name() const;
+    [[nodiscard]] QStringView get_first_phrase() const;
+    [[nodiscard]] QStringView get_full_phrase() const;
     [[nodiscard]] std::vector<Rule>* get_rules() const;
 
-    void set_name(const QString& value);
-    void set_name_ptr(QString* ptr);
-    void set_single_phrase(const QString& value);
-    void set_single_phrase_ptr(QString* ptr);
-    void add_phrase(const QString& value);
-    void set_phrases(const QStringList& list_val);
+    void set_name_ptr(const char16_t* ptr);
+    void set_phrase_ptr(const char16_t* ptr);
     void add_rule(const Rule& rule);
 
     void remove_name();
@@ -102,15 +136,15 @@ private:
 
 struct ExactResult
 {
-    QString* name = nullptr;
-    QString* single_phrase = nullptr;
-    QStringList* phrases = nullptr;
+    QStringView name;
+    QStringView full_phrase;
 
-    [[nodiscard]] const QString* phrase() const noexcept
+    [[nodiscard]] QStringView phrase() const noexcept
     {
-        if (single_phrase) return single_phrase;
-        if (phrases && !phrases->isEmpty()) return &phrases->first();
-        return nullptr;
+        if (full_phrase.isNull() || full_phrase.isEmpty()) return {};
+        const auto* raw = full_phrase.utf16();
+        const uint16_t first_len = raw[-1];
+        return QStringView(raw, first_len);
     }
 };
 
@@ -119,7 +153,7 @@ struct Match
     int length;
     Priority priority;
     std::vector<Rule>* rules;
-    const QString* translation;
+    QStringView translation;
 };
 
 class Dictionary
@@ -152,7 +186,7 @@ public:
 private:
     TrieNode* root;
     NodePool pool;
-    StringPool string_pool;
+    mutable TextArena text_arena;
 
     [[nodiscard]] TrieNode* walk_node(const QStringView& key) const;
 };

@@ -1,19 +1,18 @@
 #include "structures.h"
 #include <algorithm>
+#include <cstring>
 #include <ranges>
 
-static constexpr uintptr_t TAG_MASK = 0x7;
+static constexpr uintptr_t TAG_MASK = 0x3;
 static constexpr uintptr_t TAG_NULL = 0x0;
 static constexpr uintptr_t TAG_NAME = 0x1;
 static constexpr uintptr_t TAG_PHRASE = 0x2;
-static constexpr uintptr_t TAG_MULTI_PHRASE = 0x3;
-static constexpr uintptr_t TAG_COMPLEX = 0x4;
+static constexpr uintptr_t TAG_COMPLEX = 0x3;
 
-struct NodeData
+struct ComplexNodeData
 {
-    std::unique_ptr<QString> name;
-    std::unique_ptr<QString> single_phrase;
-    std::unique_ptr<QStringList> phrases;
+    const char16_t* name = nullptr;
+    const char16_t* phrase = nullptr;
     std::vector<Rule> rules;
 };
 
@@ -84,51 +83,49 @@ NodePool::~NodePool()
     clear();
 }
 
-QString* StringPool::allocate(const QString& val)
+const char16_t* TextArena::allocate(const QStringView& str)
 {
-    if (current_block_offset + sizeof(QString) > BLOCK_SIZE)
+    const size_t len = str.length();
+    int sep = -1;
+    for (size_t i = 0; i < len; ++i)
     {
-        auto new_block = std::make_unique<char[]>(BLOCK_SIZE);
-        current_block_ptr = new_block.get();
-        blocks.push_back(std::move(new_block));
-        current_block_offset = 0;
-    }
-
-    auto* ptr = reinterpret_cast<QString*>(current_block_ptr + current_block_offset);
-    new(ptr) QString(val);
-    current_block_offset += sizeof(QString);
-    return ptr;
-}
-
-void StringPool::clear()
-{
-    if (blocks.empty()) return;
-
-    for (size_t b = 0; b + 1 < blocks.size(); ++b)
-    {
-        auto* qstr = reinterpret_cast<QString*>(blocks[b].get());
-        constexpr size_t count = BLOCK_SIZE / sizeof(QString);
-        for (size_t i = 0; i < count; ++i)
+        if (str[i] == u'\x1F')
         {
-            qstr[i].~QString();
+            sep = static_cast<int>(i);
+            break;
         }
     }
+    const uint16_t first_len = (sep >= 0) ? static_cast<uint16_t>(sep) : static_cast<uint16_t>(len);
+    const uint16_t total_len = static_cast<uint16_t>(len);
 
-    auto* last_qstr = reinterpret_cast<QString*>(blocks.back().get());
-    const size_t last_count = current_block_offset / sizeof(QString);
-    for (size_t i = 0; i < last_count; ++i)
+    size_t offset = (current_block_offset + 2 + 3) & ~size_t(3);
+
+    if (current_block_ptr == nullptr || offset + total_len + 1 > BLOCK_SIZE)
     {
-        last_qstr[i].~QString();
+        const size_t alloc_size = std::max(BLOCK_SIZE, size_t(8 + total_len + 1));
+        auto new_block = std::make_unique<char16_t[]>(alloc_size);
+        current_block_ptr = new_block.get();
+        blocks.push_back(std::move(new_block));
+        offset = 4;
     }
 
+    current_block_ptr[offset - 2] = static_cast<char16_t>(total_len);
+    current_block_ptr[offset - 1] = static_cast<char16_t>(first_len);
+    if (total_len > 0)
+    {
+        std::memcpy(current_block_ptr + offset, str.utf16(), total_len * sizeof(char16_t));
+    }
+    current_block_ptr[offset + total_len] = u'\0';
+
+    current_block_offset = offset + total_len + 1;
+    return current_block_ptr + offset;
+}
+
+void TextArena::clear()
+{
     blocks.clear();
     current_block_offset = BLOCK_SIZE;
     current_block_ptr = nullptr;
-}
-
-StringPool::~StringPool()
-{
-    clear();
 }
 
 TrieNode::~TrieNode()
@@ -144,17 +141,9 @@ TrieNode::~TrieNode()
 void TrieNode::free_data()
 {
     const uintptr_t tag = data & TAG_MASK;
-
-    if (const auto ptr = reinterpret_cast<void*>(data & ~TAG_MASK))
+    if (tag == TAG_COMPLEX)
     {
-        if (tag == TAG_MULTI_PHRASE)
-        {
-            delete static_cast<QStringList*>(ptr);
-        }
-        else if (tag == TAG_COMPLEX)
-        {
-            delete static_cast<NodeData*>(ptr);
-        }
+        delete reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK);
     }
     data = TAG_NULL;
 }
@@ -285,59 +274,80 @@ void TrieNode::add_child(QChar ch, TrieNode* node)
     child_count = header->count;
 }
 
-QString* TrieNode::get_name() const
+QStringView TrieNode::get_name() const
 {
     const uintptr_t tag = data & TAG_MASK;
     const uintptr_t ptr_val = data & ~TAG_MASK;
 
-    if (tag == TAG_NAME) return reinterpret_cast<QString*>(ptr_val);
+    if (tag == TAG_NAME)
+    {
+        const auto* raw = reinterpret_cast<const char16_t*>(ptr_val);
+        const uint16_t total_len = raw[-2];
+        return QStringView(raw, total_len);
+    }
     if (tag == TAG_COMPLEX)
     {
-        const auto* c = reinterpret_cast<NodeData*>(ptr_val);
-        return c->name.get();
+        const auto* c = reinterpret_cast<const ComplexNodeData*>(ptr_val);
+        if (c->name)
+        {
+            const uint16_t total_len = c->name[-2];
+            return QStringView(c->name, total_len);
+        }
     }
-    return nullptr;
+    return {};
 }
 
-const QString* TrieNode::get_first_phrase() const
+QStringView TrieNode::get_first_phrase() const
 {
     const uintptr_t tag = data & TAG_MASK;
     const uintptr_t ptr_val = data & ~TAG_MASK;
 
-    if (tag == TAG_PHRASE) return reinterpret_cast<const QString*>(ptr_val);
-    if (tag == TAG_MULTI_PHRASE)
+    if (tag == TAG_PHRASE)
     {
-        const auto* list = reinterpret_cast<const QStringList*>(ptr_val);
-        return list->isEmpty() ? nullptr : &list->first();
+        const auto* raw = reinterpret_cast<const char16_t*>(ptr_val);
+        const uint16_t first_len = raw[-1];
+        return QStringView(raw, first_len);
     }
     if (tag == TAG_COMPLEX)
     {
-        const auto* c = reinterpret_cast<const NodeData*>(ptr_val);
-        if (c->single_phrase) return c->single_phrase.get();
-        if (c->phrases && !c->phrases->isEmpty()) return &c->phrases->first();
+        const auto* c = reinterpret_cast<const ComplexNodeData*>(ptr_val);
+        if (c->phrase)
+        {
+            const uint16_t first_len = c->phrase[-1];
+            return QStringView(c->phrase, first_len);
+        }
     }
-    return nullptr;
+    return {};
 }
 
-QStringList* TrieNode::get_phrases() const
+QStringView TrieNode::get_full_phrase() const
 {
     const uintptr_t tag = data & TAG_MASK;
     const uintptr_t ptr_val = data & ~TAG_MASK;
 
-    if (tag == TAG_MULTI_PHRASE) return reinterpret_cast<QStringList*>(ptr_val);
+    if (tag == TAG_PHRASE)
+    {
+        const auto* raw = reinterpret_cast<const char16_t*>(ptr_val);
+        const uint16_t total_len = raw[-2];
+        return QStringView(raw, total_len);
+    }
     if (tag == TAG_COMPLEX)
     {
-        const auto* c = reinterpret_cast<NodeData*>(ptr_val);
-        return c->phrases.get();
+        const auto* c = reinterpret_cast<const ComplexNodeData*>(ptr_val);
+        if (c->phrase)
+        {
+            const uint16_t total_len = c->phrase[-2];
+            return QStringView(c->phrase, total_len);
+        }
     }
-    return nullptr;
+    return {};
 }
 
 std::vector<Rule>* TrieNode::get_rules() const
 {
     if (const uintptr_t tag = data & TAG_MASK; tag == TAG_COMPLEX)
     {
-        auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
+        auto* c = reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK);
         return &c->rules;
     }
     return nullptr;
@@ -346,218 +356,55 @@ std::vector<Rule>* TrieNode::get_rules() const
 void TrieNode::ensure_complex()
 {
     const uintptr_t tag = data & TAG_MASK;
-    const uintptr_t ptr_val = data & ~TAG_MASK;
-
     if (tag == TAG_COMPLEX) return;
 
-    auto* complex = new NodeData();
+    auto* complex = new ComplexNodeData();
+    const uintptr_t ptr_val = data & ~TAG_MASK;
 
     if (tag == TAG_NAME)
     {
-        complex->name = std::make_unique<QString>(*reinterpret_cast<QString*>(ptr_val));
-        *reinterpret_cast<QString*>(ptr_val) = QString();
+        complex->name = reinterpret_cast<const char16_t*>(ptr_val);
     }
     else if (tag == TAG_PHRASE)
     {
-        complex->single_phrase = std::make_unique<QString>(*reinterpret_cast<QString*>(ptr_val));
-        *reinterpret_cast<QString*>(ptr_val) = QString();
-    }
-    else if (tag == TAG_MULTI_PHRASE)
-    {
-        complex->phrases = std::unique_ptr<QStringList>(reinterpret_cast<QStringList*>(ptr_val));
+        complex->phrase = reinterpret_cast<const char16_t*>(ptr_val);
     }
 
     data = reinterpret_cast<uintptr_t>(complex) | TAG_COMPLEX;
 }
 
-void TrieNode::set_name(const QString& value)
+void TrieNode::set_name_ptr(const char16_t* ptr)
 {
-    if (data == TAG_NULL)
-    {
-        data = reinterpret_cast<uintptr_t>(new QString(value)) | TAG_NAME;
-        return;
-    }
-
-    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_NAME)
-    {
-        *reinterpret_cast<QString*>(data & ~TAG_MASK) = value;
-    }
-    else
-    {
-        ensure_complex();
-        auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
-        c->name = std::make_unique<QString>(value);
-    }
-}
-
-void TrieNode::set_name_ptr(QString* ptr)
-{
-    if (data == TAG_NULL)
+    const uintptr_t tag = data & TAG_MASK;
+    if (tag == TAG_NULL || tag == TAG_NAME)
     {
         data = reinterpret_cast<uintptr_t>(ptr) | TAG_NAME;
         return;
     }
 
-    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_NAME)
-    {
-        *reinterpret_cast<QString*>(data & ~TAG_MASK) = *ptr;
-    }
-    else
-    {
-        ensure_complex();
-        auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
-        c->name = std::make_unique<QString>(*ptr);
-    }
+    ensure_complex();
+    auto* c = reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK);
+    c->name = ptr;
 }
 
-void TrieNode::set_single_phrase(const QString& value)
+void TrieNode::set_phrase_ptr(const char16_t* ptr)
 {
-    if (data == TAG_NULL)
-    {
-        data = reinterpret_cast<uintptr_t>(new QString(value)) | TAG_PHRASE;
-        return;
-    }
-
     const uintptr_t tag = data & TAG_MASK;
-    if (tag == TAG_PHRASE)
-    {
-        *reinterpret_cast<QString*>(data & ~TAG_MASK) = value;
-    }
-    else if (tag == TAG_MULTI_PHRASE)
-    {
-        delete reinterpret_cast<QStringList*>(data & ~TAG_MASK);
-        data = reinterpret_cast<uintptr_t>(new QString(value)) | TAG_PHRASE;
-    }
-    else
-    {
-        ensure_complex();
-        auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
-        c->phrases.reset();
-        c->single_phrase = std::make_unique<QString>(value);
-    }
-}
-
-void TrieNode::set_single_phrase_ptr(QString* ptr)
-{
-    if (data == TAG_NULL)
+    if (tag == TAG_NULL || tag == TAG_PHRASE)
     {
         data = reinterpret_cast<uintptr_t>(ptr) | TAG_PHRASE;
         return;
     }
 
-    const uintptr_t tag = data & TAG_MASK;
-    if (tag == TAG_PHRASE)
-    {
-        *reinterpret_cast<QString*>(data & ~TAG_MASK) = *ptr;
-    }
-    else if (tag == TAG_MULTI_PHRASE)
-    {
-        delete reinterpret_cast<QStringList*>(data & ~TAG_MASK);
-        data = reinterpret_cast<uintptr_t>(ptr) | TAG_PHRASE;
-    }
-    else
-    {
-        ensure_complex();
-        auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
-        c->phrases.reset();
-        c->single_phrase = std::make_unique<QString>(*ptr);
-    }
-}
-
-void TrieNode::add_phrase(const QString& value)
-{
-    if (data == TAG_NULL)
-    {
-        data = reinterpret_cast<uintptr_t>(new QString(value)) | TAG_PHRASE;
-        return;
-    }
-
-    const uintptr_t tag = data & TAG_MASK;
-    if (tag == TAG_PHRASE)
-    {
-        auto* old_str = reinterpret_cast<QString*>(data & ~TAG_MASK);
-        if (*old_str == value) return;
-        auto* list = new QStringList();
-        list->append(value);
-        list->append(*old_str);
-        *old_str = QString();
-        data = reinterpret_cast<uintptr_t>(list) | TAG_MULTI_PHRASE;
-    }
-    else if (tag == TAG_MULTI_PHRASE)
-    {
-        auto* list = reinterpret_cast<QStringList*>(data & ~TAG_MASK);
-        list->removeAll(value);
-        list->prepend(value);
-    }
-    else
-    {
-        ensure_complex();
-        auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
-        if (!c->phrases && !c->single_phrase)
-        {
-            c->single_phrase = std::make_unique<QString>(value);
-        }
-        else if (c->single_phrase)
-        {
-            if (*c->single_phrase != value)
-            {
-                c->phrases = std::make_unique<QStringList>();
-                c->phrases->append(value);
-                c->phrases->append(*c->single_phrase);
-                c->single_phrase.reset();
-            }
-        }
-        else
-        {
-            c->phrases->removeAll(value);
-            c->phrases->prepend(value);
-        }
-    }
-}
-
-void TrieNode::set_phrases(const QStringList& list_val)
-{
-    if (list_val.isEmpty())
-    {
-        remove_phrases();
-        return;
-    }
-
-    if (list_val.size() == 1)
-    {
-        set_single_phrase(list_val.first());
-        return;
-    }
-
-    if (data == TAG_NULL)
-    {
-        data = reinterpret_cast<uintptr_t>(new QStringList(list_val)) | TAG_MULTI_PHRASE;
-        return;
-    }
-
-    const uintptr_t tag = data & TAG_MASK;
-    if (tag == TAG_PHRASE)
-    {
-        *reinterpret_cast<QString*>(data & ~TAG_MASK) = QString();
-        data = reinterpret_cast<uintptr_t>(new QStringList(list_val)) | TAG_MULTI_PHRASE;
-    }
-    else if (tag == TAG_MULTI_PHRASE)
-    {
-        *reinterpret_cast<QStringList*>(data & ~TAG_MASK) = list_val;
-    }
-    else
-    {
-        ensure_complex();
-        auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
-        c->single_phrase.reset();
-        c->phrases = std::make_unique<QStringList>(list_val);
-    }
+    ensure_complex();
+    auto* c = reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK);
+    c->phrase = ptr;
 }
 
 void TrieNode::add_rule(const Rule& rule)
 {
     ensure_complex();
-    auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
+    auto* c = reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK);
     c->rules.push_back(rule);
 
     std::ranges::sort(c->rules, [](const Rule& a, const Rule& b)
@@ -571,14 +418,12 @@ void TrieNode::remove_name()
     const uintptr_t tag = data & TAG_MASK;
     if (tag == TAG_NAME)
     {
-        auto* str = reinterpret_cast<QString*>(data & ~TAG_MASK);
-        *str = QString();
         data = TAG_NULL;
     }
     else if (tag == TAG_COMPLEX)
     {
-        auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
-        c->name.reset();
+        auto* c = reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK);
+        c->name = nullptr;
     }
 }
 
@@ -587,20 +432,12 @@ void TrieNode::remove_phrases()
     const uintptr_t tag = data & TAG_MASK;
     if (tag == TAG_PHRASE)
     {
-        auto* str = reinterpret_cast<QString*>(data & ~TAG_MASK);
-        *str = QString();
-        data = TAG_NULL;
-    }
-    else if (tag == TAG_MULTI_PHRASE)
-    {
-        delete reinterpret_cast<QStringList*>(data & ~TAG_MASK);
         data = TAG_NULL;
     }
     else if (tag == TAG_COMPLEX)
     {
-        auto* c = reinterpret_cast<NodeData*>(data & ~TAG_MASK);
-        c->single_phrase.reset();
-        c->phrases.reset();
+        auto* c = reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK);
+        c->phrase = nullptr;
     }
 }
 
@@ -636,7 +473,7 @@ Dictionary::~Dictionary()
 }
 
 Dictionary::Dictionary(Dictionary&& other) noexcept
-    : root(other.root), pool(std::move(other.pool)), string_pool(std::move(other.string_pool))
+    : root(other.root), pool(std::move(other.pool)), text_arena(std::move(other.text_arena))
 {
     other.root = nullptr;
 }
@@ -669,7 +506,7 @@ Dictionary& Dictionary::operator=(Dictionary&& other) noexcept
         }
 
         pool = std::move(other.pool);
-        string_pool = std::move(other.string_pool);
+        text_arena = std::move(other.text_arena);
         root = other.root;
 
         other.root = nullptr;
@@ -693,11 +530,31 @@ void Dictionary::insert(const QString& key, const QString& value, const Priority
 
     if (priority == NAME)
     {
-        node->set_name_ptr(string_pool.allocate(value));
+        node->set_name_ptr(text_arena.allocate(value));
     }
     else
     {
-        node->add_phrase(value);
+        const auto existing_full = node->get_full_phrase();
+        if (existing_full.isNull() || existing_full.isEmpty())
+        {
+            node->set_phrase_ptr(text_arena.allocate(value));
+        }
+        else
+        {
+            const auto list = existing_full.split(u'\x1F');
+            QStringList str_list;
+            str_list.reserve(list.size() + 1);
+            str_list.append(value);
+            for (const auto& item : list)
+            {
+                if (item != value)
+                {
+                    str_list.append(item.toString());
+                }
+            }
+            const QString combined = str_list.join(u'\x1F');
+            node->set_phrase_ptr(text_arena.allocate(combined));
+        }
     }
 }
 
@@ -715,56 +572,25 @@ void Dictionary::insert_bulk(const QString& key, const Priority priority, const 
         node = next;
     }
 
+    const char16_t* ptr = text_arena.allocate(value);
     if (priority == NAME)
     {
-        node->set_name_ptr(string_pool.allocate(value));
+        node->set_name_ptr(ptr);
     }
     else
     {
-        if (value.contains(u'\x1F'))
-        {
-            QStringList list = value.split(u'\x1F');
-            node->set_phrases(list);
-        }
-        else
-        {
-            node->set_single_phrase_ptr(string_pool.allocate(value));
-        }
+        node->set_phrase_ptr(ptr);
     }
 }
 
 ExactResult Dictionary::find_exact(const QStringView& key) const
 {
     const TrieNode* node = walk_node(key);
-
-    if (!node)
-    {
-        return {};
-    }
-
-    const uintptr_t tag = node->data & TAG_MASK;
-    const uintptr_t ptr_val = node->data & ~TAG_MASK;
+    if (!node) return {};
 
     ExactResult result;
-    if (tag == TAG_NAME)
-    {
-        result.name = reinterpret_cast<QString*>(ptr_val);
-    }
-    else if (tag == TAG_PHRASE)
-    {
-        result.single_phrase = reinterpret_cast<QString*>(ptr_val);
-    }
-    else if (tag == TAG_MULTI_PHRASE)
-    {
-        result.phrases = reinterpret_cast<QStringList*>(ptr_val);
-    }
-    else if (tag == TAG_COMPLEX)
-    {
-        auto* c = reinterpret_cast<NodeData*>(ptr_val);
-        result.name = c->name.get();
-        result.single_phrase = c->single_phrase.get();
-        result.phrases = c->phrases.get();
-    }
+    result.name = node->get_name();
+    result.full_phrase = node->get_full_phrase();
     return result;
 }
 
@@ -773,14 +599,50 @@ void Dictionary::reorder(const QString& key, const QStringList& new_order) const
     TrieNode* node = walk_node(key);
     if (!node) return;
 
-    node->set_phrases(new_order);
+    if (new_order.isEmpty())
+    {
+        node->remove_phrases();
+        return;
+    }
+
+    const QString combined = new_order.join(u'\x1F');
+    node->set_phrase_ptr(text_arena.allocate(combined));
+}
+
+void Dictionary::remove_meaning(const QString& key, const QString& value) const
+{
+    TrieNode* node = walk_node(key);
+    if (!node) return;
+
+    const auto existing_full = node->get_full_phrase();
+    if (existing_full.isNull() || existing_full.isEmpty()) return;
+
+    const auto list = existing_full.split(u'\x1F');
+    QStringList remaining;
+    for (const auto& item : list)
+    {
+        if (item != value)
+        {
+            remaining.append(item.toString());
+        }
+    }
+
+    if (remaining.isEmpty())
+    {
+        node->remove_phrases();
+    }
+    else
+    {
+        const QString combined = remaining.join(u'\x1F');
+        node->set_phrase_ptr(text_arena.allocate(combined));
+    }
 }
 
 Match Dictionary::find(const QStringView& text, const int startPos) const
 {
     const TrieNode* node = root;
     int best_len_found = 0;
-    const QString* translated = nullptr;
+    QStringView translated;
     Priority priority = NONE;
 
     std::vector<Rule>* rules = nullptr;
@@ -797,13 +659,13 @@ Match Dictionary::find(const QStringView& text, const int startPos) const
             rules = r;
         }
 
-        if (auto* name = node->get_name())
+        if (const auto name = node->get_name(); !name.isNull())
         {
             best_len_found = i - startPos + 1;
             translated = name;
             priority = NAME;
         }
-        else if (const auto* phrase = node->get_first_phrase())
+        else if (const auto phrase = node->get_first_phrase(); !phrase.isNull())
         {
             if (i - startPos + 1 > best_len_found)
             {
@@ -918,47 +780,5 @@ void Dictionary::remove(const QString& key, const Priority priority) const
     else if (priority == PHRASE)
     {
         node->remove_phrases();
-    }
-}
-
-void Dictionary::remove_meaning(const QString& key, const QString& value) const
-{
-    TrieNode* node = walk_node(key);
-    if (!node) return;
-
-    const uintptr_t tag = node->data & TAG_MASK;
-    const uintptr_t ptr_val = node->data & ~TAG_MASK;
-
-    if (tag == TAG_PHRASE)
-    {
-        if (*reinterpret_cast<QString*>(ptr_val) == value)
-        {
-            node->remove_phrases();
-        }
-    }
-    else if (tag == TAG_MULTI_PHRASE)
-    {
-        auto* list = reinterpret_cast<QStringList*>(ptr_val);
-        list->removeAll(value);
-        if (list->isEmpty())
-        {
-            node->remove_phrases();
-        }
-    }
-    else if (tag == TAG_COMPLEX)
-    {
-        auto* c = reinterpret_cast<NodeData*>(ptr_val);
-        if (c->single_phrase && *c->single_phrase == value)
-        {
-            c->single_phrase.reset();
-        }
-        if (c->phrases)
-        {
-            c->phrases->removeAll(value);
-            if (c->phrases->isEmpty())
-            {
-                c->phrases.reset();
-            }
-        }
     }
 }
