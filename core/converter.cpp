@@ -302,7 +302,7 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
                 tok.id = ++token_counter;
                 tok.cn = input.sliced(i, match.length).toString();
                 tok.sv = std::move(sv);
-                tok.vn = *match.translation;
+                tok.vn = match.translation.toString();
 
                 i += match.length;
                 progress.update(match.length);
@@ -327,7 +327,7 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
             tok.id = ++token_counter;
             tok.cn = input.sliced(i, length).toString();
             tok.sv = std::move(sv);
-            tok.vn = *translation;
+            tok.vn = translation.toString();
 
             i += length;
             progress.update(length);
@@ -400,14 +400,14 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
                 int max_allowed_len = conflict_start - i;
 
                 length = 0;
-                translation = nullptr;
+                translation = {};
 
                 for (int try_len = max_allowed_len; try_len >= 1; --try_len)
                 {
                     const auto try_string = input.sliced(i, try_len);
                     if (current_name_set_id != -1)
                     {
-                        if (const auto res_set = name_set_dictionary.find_exact(try_string); res_set.name)
+                        if (const auto res_set = name_set_dictionary.find_exact(try_string); !res_set.name.isNull())
                         {
                             length = try_len;
                             translation = res_set.name;
@@ -415,13 +415,13 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
                         }
                     }
                     const auto res = dictionary.find_exact(try_string);
-                    if (res.name)
+                    if (!res.name.isNull())
                     {
                         length = try_len;
                         translation = res.name;
                         break;
                     }
-                    if (const auto* phrase = res.phrase())
+                    if (const auto phrase = res.phrase(); !phrase.isNull())
                     {
                         length = try_len;
                         translation = phrase;
@@ -436,7 +436,7 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
             }
 
             QString sv = get_sv(input.sliced(i, length));
-            QString trans = *translation;
+            QString trans = translation.toString();
 
             if (cap_next)
             {
@@ -631,7 +631,7 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
         {
             if (Match match = name_set_dictionary.find(input, i); match.length > 0 && match.priority == NAME)
             {
-                QString trans = *match.translation;
+                QString trans = match.translation.toString();
                 if (cap_next)
                 {
                     cap_next = false;
@@ -656,7 +656,7 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
 
         if (length > 0 && priority == NAME)
         {
-            QString trans = *translation;
+            QString trans = translation.toString();
             if (cap_next)
             {
                 cap_next = false;
@@ -737,14 +737,14 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                 int max_allowed_len = conflict_start - i;
 
                 length = 0;
-                translation = nullptr;
+                translation = {};
 
                 for (int try_len = max_allowed_len; try_len >= 1; --try_len)
                 {
                     const auto try_string = input.sliced(i, try_len);
                     if (current_name_set_id != -1)
                     {
-                        if (const auto res_set = name_set_dictionary.find_exact(try_string); res_set.name)
+                        if (const auto res_set = name_set_dictionary.find_exact(try_string); !res_set.name.isNull())
                         {
                             length = try_len;
                             translation = res_set.name;
@@ -752,13 +752,13 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                         }
                     }
                     const auto res = dictionary.find_exact(try_string);
-                    if (res.name)
+                    if (!res.name.isNull())
                     {
                         length = try_len;
                         translation = res.name;
                         break;
                     }
-                    if (const auto* phrase = res.phrase())
+                    if (const auto phrase = res.phrase(); !phrase.isNull())
                     {
                         length = try_len;
                         translation = phrase;
@@ -772,7 +772,7 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                 goto process_single_char;
             }
 
-            QString trans = *translation;
+            QString trans = translation.toString();
             if (cap_next)
             {
                 if (!trans.isEmpty() && trans[0].isLower()) trans[0] = trans[0].toUpper();
