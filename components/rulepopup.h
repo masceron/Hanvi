@@ -3,9 +3,8 @@
 
 #include <QDialog>
 
-#include "core/structures.h"
 
-
+struct Rule;
 QT_BEGIN_NAMESPACE
 
 namespace Ui

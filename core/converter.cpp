@@ -466,8 +466,7 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
                 int end_idx = i + 1;
                 while (end_idx < input.length())
                 {
-                    const QChar next = input[end_idx];
-                    if (Typography::is_latin_or_digit(next))
+                    if (const QChar next = input[end_idx]; Typography::is_latin_or_digit(next))
                     {
                         end_idx++;
                     }
@@ -801,8 +800,7 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                 int end_idx = i + 1;
                 while (end_idx < input.length())
                 {
-                    const QChar next = input[end_idx];
-                    if (Typography::is_latin_or_digit(next))
+                    if (const QChar next = input[end_idx]; Typography::is_latin_or_digit(next))
                     {
                         end_idx++;
                     }
