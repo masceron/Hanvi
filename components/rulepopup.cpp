@@ -1,5 +1,6 @@
 #include "rulepopup.h"
 #include "ui_RulePopup.h"
+#include <../core/structures.h>
 
 RulePopup::RulePopup(QWidget* parent) :
     QDialog(parent), ui(new Ui::RulePopup)

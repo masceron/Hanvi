@@ -4,7 +4,10 @@
 #include <QFutureWatcher>
 #include <memory>
 #include <vector>
+
+#ifdef Q_OS_WIN
 #include <windows.h>
+#endif
 
 class AlignedDocument;
 class DocumentSession;
@@ -62,7 +65,7 @@ public:
 protected:
     void changeEvent(QEvent* event) override;
     bool eventFilter(QObject* obj, QEvent* event) override;
-#if defined(Q_OS_WIN)
+#ifdef Q_OS_WIN
     bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
 #endif
 

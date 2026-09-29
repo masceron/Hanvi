@@ -14,7 +14,7 @@
 void write_std_out(const QString& text)
 {
     QTextStream out(stdout);
-#if defined(Q_OS_WIN)
+#ifdef Q_OS_WIN
     out.setEncoding(QStringConverter::Utf8);
 #endif
     out << text;

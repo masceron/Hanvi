@@ -14,7 +14,7 @@
 #include <QWindow>
 #include <QMenu>
 
-#if defined(Q_OS_WIN)
+#ifdef Q_OS_WIN
 #include <windowsx.h>
 #include <dwmapi.h>
 #endif
@@ -151,7 +151,7 @@ MainWindow::MainWindow(QWidget* parent) :
     ui->setupUi(this);
     setWindowTitle("Hanvi");
 
-#if defined(Q_OS_WIN)
+#ifdef Q_OS_WIN
     const auto hwnd = reinterpret_cast<HWND>(winId());
     const DWORD style = GetWindowLong(hwnd, GWL_STYLE);
     SetWindowLong(hwnd, GWL_STYLE, WS_THICKFRAME | style | WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX);
@@ -770,7 +770,7 @@ bool MainWindow::eventFilter(QObject* obj, QEvent* event)
     return QMainWindow::eventFilter(obj, event);
 }
 
-#if defined(Q_OS_WIN)
+#ifdef Q_OS_WIN
 bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr* result)
 {
     if (eventType == "windows_generic_MSG")

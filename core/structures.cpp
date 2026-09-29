@@ -1,6 +1,5 @@
 #include "structures.h"
 #include <algorithm>
-#include <cstring>
 #include <ranges>
 
 static constexpr uintptr_t TAG_MASK = 0x3;
@@ -9,12 +8,14 @@ static constexpr uintptr_t TAG_NAME = 0x1;
 static constexpr uintptr_t TAG_PHRASE = 0x2;
 static constexpr uintptr_t TAG_COMPLEX = 0x3;
 
-struct ComplexNodeData
-{
-    const char16_t* name = nullptr;
-    const char16_t* phrase = nullptr;
-    std::vector<Rule> rules;
-};
+namespace {
+    struct ComplexNodeData
+    {
+        const char16_t* name = nullptr;
+        const char16_t* phrase = nullptr;
+        std::vector<Rule> rules;
+    };
+}
 
 namespace
 {
@@ -36,21 +37,21 @@ namespace
         [[nodiscard]] TrieNode** nodes()
         {
             const size_t char_bytes = capacity * sizeof(QChar);
-            const size_t aligned_offset = (sizeof(ChildHeader) + char_bytes + 7) & ~size_t(7);
+            const size_t aligned_offset = (sizeof(ChildHeader) + char_bytes + 7) & ~static_cast<size_t>(7);
             return reinterpret_cast<TrieNode**>(reinterpret_cast<char*>(this) + aligned_offset);
         }
 
         [[nodiscard]] TrieNode* const* nodes() const
         {
             const size_t char_bytes = capacity * sizeof(QChar);
-            const size_t aligned_offset = (sizeof(ChildHeader) + char_bytes + 7) & ~size_t(7);
+            const size_t aligned_offset = (sizeof(ChildHeader) + char_bytes + 7) & ~static_cast<size_t>(7);
             return reinterpret_cast<TrieNode* const*>(reinterpret_cast<const char*>(this) + aligned_offset);
         }
 
         static size_t allocation_size(const size_t cap)
         {
             const size_t char_bytes = cap * sizeof(QChar);
-            const size_t aligned_offset = (sizeof(ChildHeader) + char_bytes + 7) & ~size_t(7);
+            const size_t aligned_offset = (sizeof(ChildHeader) + char_bytes + 7) & ~static_cast<size_t>(7);
             return aligned_offset + cap * sizeof(TrieNode*);
         }
     };
@@ -95,14 +96,14 @@ const char16_t* TextArena::allocate(const QStringView& str)
             break;
         }
     }
-    const uint16_t first_len = (sep >= 0) ? static_cast<uint16_t>(sep) : static_cast<uint16_t>(len);
-    const uint16_t total_len = static_cast<uint16_t>(len);
+    const uint16_t first_len = sep >= 0 ? static_cast<uint16_t>(sep) : static_cast<uint16_t>(len);
+    const auto total_len = static_cast<uint16_t>(len);
 
-    size_t offset = (current_block_offset + 2 + 3) & ~size_t(3);
+    size_t offset = (current_block_offset + 2 + 3) & ~static_cast<size_t>(3);
 
     if (current_block_ptr == nullptr || offset + total_len + 1 > BLOCK_SIZE)
     {
-        const size_t alloc_size = std::max(BLOCK_SIZE, size_t(8 + total_len + 1));
+        const size_t alloc_size = std::max(BLOCK_SIZE, static_cast<size_t>(8 + total_len + 1));
         auto new_block = std::make_unique<char16_t[]>(alloc_size);
         current_block_ptr = new_block.get();
         blocks.push_back(std::move(new_block));
@@ -283,7 +284,7 @@ QStringView TrieNode::get_name() const
     {
         const auto* raw = reinterpret_cast<const char16_t*>(ptr_val);
         const uint16_t total_len = raw[-2];
-        return QStringView(raw, total_len);
+        return {raw, total_len};
     }
     if (tag == TAG_COMPLEX)
     {
@@ -291,7 +292,7 @@ QStringView TrieNode::get_name() const
         if (c->name)
         {
             const uint16_t total_len = c->name[-2];
-            return QStringView(c->name, total_len);
+            return {c->name, total_len};
         }
     }
     return {};
@@ -306,15 +307,14 @@ QStringView TrieNode::get_first_phrase() const
     {
         const auto* raw = reinterpret_cast<const char16_t*>(ptr_val);
         const uint16_t first_len = raw[-1];
-        return QStringView(raw, first_len);
+        return {raw, first_len};
     }
     if (tag == TAG_COMPLEX)
     {
-        const auto* c = reinterpret_cast<const ComplexNodeData*>(ptr_val);
-        if (c->phrase)
+        if (const auto* c = reinterpret_cast<const ComplexNodeData*>(ptr_val); c->phrase)
         {
             const uint16_t first_len = c->phrase[-1];
-            return QStringView(c->phrase, first_len);
+            return {c->phrase, first_len};
         }
     }
     return {};
@@ -329,15 +329,14 @@ QStringView TrieNode::get_full_phrase() const
     {
         const auto* raw = reinterpret_cast<const char16_t*>(ptr_val);
         const uint16_t total_len = raw[-2];
-        return QStringView(raw, total_len);
+        return {raw, total_len};
     }
     if (tag == TAG_COMPLEX)
     {
-        const auto* c = reinterpret_cast<const ComplexNodeData*>(ptr_val);
-        if (c->phrase)
+        if (const auto* c = reinterpret_cast<const ComplexNodeData*>(ptr_val); c->phrase)
         {
             const uint16_t total_len = c->phrase[-2];
-            return QStringView(c->phrase, total_len);
+            return {c->phrase, total_len};
         }
     }
     return {};
@@ -727,7 +726,7 @@ void Dictionary::remove_rule(const QString& start, const QString& end) const
     {
         const auto it = std::ranges::remove_if(*rules, [&](const Rule& r)
         {
-            return r.translation_end == end;
+            return r.original_end == end;
         }).begin();
 
         if (it != rules->end())
