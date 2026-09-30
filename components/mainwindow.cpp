@@ -396,7 +396,7 @@ MainWindow::MainWindow(QWidget* parent) :
             &MainWindow::update_display);
     connect(&plain_watcher, &QFutureWatcher<QString>::finished, this, [this]
     {
-        auto* cur = current_tab();
+        const auto* cur = current_tab();
         const QString save_path = cur ? cur->file_name : "";
         if (!save_path.isEmpty() && !save_to_file(save_path, plain_watcher.result()))
         {
@@ -886,7 +886,7 @@ bool MainWindow::nativeEvent(const QByteArray& eventType, void* message, qintptr
             if (tab_container && tab_container->geometry().contains(local_pos))
             {
                 const QPoint tab_c_pos = tab_container->mapFrom(this, local_pos);
-                QWidget* child = tab_container->childAt(tab_c_pos);
+                const QWidget* child = tab_container->childAt(tab_c_pos);
 
                 if (!child || child == tab_container)
                 {
@@ -1025,7 +1025,7 @@ void MainWindow::switch_to_tab(const int index)
         tab_bar->blockSignals(false);
     }
 
-    auto* cur = tabs[index].get();
+    const auto* cur = tabs[index].get();
 
     setWindowTitle(cur->title.isEmpty() ? "Hanvi" : cur->title + " - Hanvi");
 
