@@ -2,6 +2,12 @@
 #include "structures.h"
 #include "dict.h"
 #include <optional>
+#include <QCoreApplication>
+#include <QFile>
+#include <QDir>
+#include <QDebug>
+#include <mutex>
+#include <SimpleConverter.hpp>
 
 #include "documents/aligned_document.h"
 
@@ -85,7 +91,9 @@ static QChar normalize_char(const QChar c) noexcept
 }
 
 static bool should_append_space(const QStringView& input, const int current_end_idx,
-                                const QChar current_char_source = QChar())
+                                const QChar current_char_source = QChar(),
+                                const bool in_quote = false,
+                                const bool in_single_quote = false)
 {
     static constexpr QStringView openers(u"“‘([<{");
     if (!current_char_source.isNull())
@@ -94,15 +102,37 @@ static bool should_append_space(const QStringView& input, const int current_end_
         {
             return false;
         }
+        if (current_char_source == u'"' && in_quote)
+        {
+            return false;
+        }
+        if (current_char_source == u'\'' && in_single_quote)
+        {
+            return false;
+        }
     }
 
-    static constexpr QStringView closers(u".,，;:!?)]}>\"'”’，。：；！？");
+    static constexpr QStringView closers(u".,;:!?)]}>”’…");
 
     if (current_end_idx < input.length())
     {
         const QChar next_char = input[current_end_idx];
 
-        if (closers.contains(next_char))
+        if (next_char == u'"')
+        {
+            if (in_quote)
+            {
+                return false;
+            }
+        }
+        else if (next_char == u'\'')
+        {
+            if (in_single_quote)
+            {
+                return false;
+            }
+        }
+        else if (closers.contains(next_char))
         {
             return false;
         }
@@ -625,7 +655,7 @@ namespace
     };
 }
 
-static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Progress& progress)
+static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Progress& progress, bool& in_quote, bool& in_single_quote)
 {
     PlainResult out;
     int i = 0;
@@ -638,6 +668,8 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
         {
             out.text += u"\n";
             cap_next = true;
+            in_quote = false;
+            in_single_quote = false;
             i++;
             out.length_consumed++;
 
@@ -672,7 +704,7 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
 
                 progress.update(match.length);
 
-                if (should_append_space(input, i) && !out.text.endsWith(' '))
+                if (should_append_space(input, i, QChar(), in_quote, in_single_quote) && !out.text.endsWith(' '))
                 {
                     out.text += u" ";
                 }
@@ -694,7 +726,7 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
             i += length;
             out.length_consumed += length;
 
-            if (should_append_space(input, i) && !out.text.endsWith(' '))
+            if (should_append_space(input, i, QChar(), in_quote, in_single_quote) && !out.text.endsWith(' '))
             {
                 out.text += u" ";
             }
@@ -730,7 +762,7 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                     }
 
                     auto [text, _] = convert_recursive_plain(input.sliced(inner_start_idx, inner_len), cap_next,
-                                                             progress);
+                                                             progress, in_quote, in_single_quote);
 
                     progress.update(end_len);
 
@@ -750,7 +782,7 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                     i += start_len + inner_len + end_len;
                     out.length_consumed += start_len + inner_len + end_len;
 
-                    if (should_append_space(input, i) && !out.text.endsWith(' '))
+                    if (should_append_space(input, i, QChar(), in_quote, in_single_quote) && !out.text.endsWith(' '))
                     {
                         out.text += u" ";
                     }
@@ -812,7 +844,7 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
             i += length;
             out.length_consumed += length;
 
-            if (should_append_space(input, i) && !out.text.endsWith(' '))
+            if (should_append_space(input, i, QChar(), in_quote, in_single_quote) && !out.text.endsWith(' '))
             {
                 out.text += u" ";
             }
@@ -865,7 +897,7 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                 i += len;
                 out.length_consumed += len;
 
-                if (should_append_space(input, i) && !out.text.endsWith(' '))
+                if (should_append_space(input, i, QChar(), in_quote, in_single_quote) && !out.text.endsWith(' '))
                 {
                     out.text += u" ";
                 }
@@ -911,12 +943,51 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                 cap_next = false;
             }
 
+            if ((translated_text == u"\"" && in_quote) || (translated_text == u"'" && in_single_quote))
+            {
+                if (out.text.endsWith(u' '))
+                {
+                    out.text.chop(1);
+                }
+            }
+
             out.text += translated_text;
             i += char_len;
             out.length_consumed += char_len;
 
             const QChar last_char = is_surrogate ? input[i - 1] : ch;
-            if (!translated_text.isEmpty() && should_append_space(input, i, last_char) && !out.text.endsWith(' '))
+
+            if (translated_text == u"\"")
+            {
+                if (!in_quote)
+                {
+                    in_quote = true;
+                }
+                else
+                {
+                    in_quote = false;
+                    if (should_append_space(input, i, last_char, in_quote, in_single_quote) && !out.text.endsWith(' '))
+                    {
+                        out.text += u" ";
+                    }
+                }
+            }
+            else if (translated_text == u"'")
+            {
+                if (!in_single_quote)
+                {
+                    in_single_quote = true;
+                }
+                else
+                {
+                    in_single_quote = false;
+                    if (should_append_space(input, i, last_char, in_quote, in_single_quote) && !out.text.endsWith(' '))
+                    {
+                        out.text += u" ";
+                    }
+                }
+            }
+            else if (!translated_text.isEmpty() && should_append_space(input, i, last_char, in_quote, in_single_quote) && !out.text.endsWith(' '))
             {
                 out.text += u" ";
             }
@@ -930,7 +1001,118 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
 QString convert_plain(const QStringView& input, const std::function<void(int)>& progress_callback)
 {
     bool cap_next = true;
+    bool in_quote = false;
+    bool in_single_quote = false;
     Progress progress(progress_callback);
-    auto [text, _] = convert_recursive_plain(input, cap_next, progress);
+    auto [text, _] = convert_recursive_plain(input, cap_next, progress, in_quote, in_single_quote);
     return text.trimmed();
 }
+
+static QString get_opencc_config_path()
+{
+    const QString app_dir = QCoreApplication::applicationDirPath();
+    QString candidate = app_dir + "/opencc/t2s.json";
+    if (QFile::exists(candidate))
+    {
+        return candidate;
+    }
+    candidate = app_dir + "/t2s.json";
+    if (QFile::exists(candidate))
+    {
+        return candidate;
+    }
+    if (QFile::exists("opencc/t2s.json"))
+    {
+        return QDir("opencc/t2s.json").absolutePath();
+    }
+    return {};
+}
+
+QString to_simplified_chinese(const QString& input)
+{
+    if (input.isEmpty()) return input;
+
+    static std::once_flag init_flag;
+    static std::unique_ptr<opencc::SimpleConverter> converter;
+
+    std::call_once(init_flag, [] {
+        const QString config_path = get_opencc_config_path();
+        if (!config_path.isEmpty())
+        {
+            try
+            {
+                converter = std::make_unique<opencc::SimpleConverter>(config_path.toStdString());
+            }
+            catch (const std::exception& e)
+            {
+                qWarning() << "Failed to initialize OpenCC:" << e.what();
+                converter.reset();
+            }
+        }
+        else
+        {
+            qWarning() << "OpenCC t2s.json not found in application directory or search paths.";
+        }
+    });
+
+    if (!converter)
+    {
+        return input;
+    }
+
+    try
+    {
+        std::string utf8_in = input.toStdString();
+        std::string utf8_out = converter->Convert(utf8_in);
+        return QString::fromStdString(utf8_out);
+    }
+    catch (const std::exception& e)
+    {
+        qWarning() << "OpenCC conversion error:" << e.what();
+        return input;
+    }
+}
+
+QString normalize_text(const QString& input)
+{
+    if (input.isEmpty()) return input;
+
+    QString text = to_simplified_chinese(input);
+
+    for (int i = 0; i < text.size(); ++i)
+    {
+        const QChar c = text[i];
+        if (c.isHighSurrogate() && i + 1 < text.size() && text[i + 1].isLowSurrogate())
+        {
+            ++i;
+            continue;
+        }
+
+        if (const QChar mapped = punctuations.value(c); !mapped.isNull())
+        {
+            text[i] = mapped;
+            continue;
+        }
+
+        const ushort code = c.unicode();
+        if (code >= 0xFF21 && code <= 0xFF3A) // Ａ-Ｚ
+        {
+            text[i] = QChar(code - 0xFEE0);
+        }
+        else if (code >= 0xFF41 && code <= 0xFF5A) // ａ-ｚ
+        {
+            text[i] = QChar(code - 0xFEE0);
+        }
+        else if (code >= 0xFF10 && code <= 0xFF19) // ０-９
+        {
+            text[i] = QChar(code - 0xFEE0);
+        }
+        else if (code == 0x3000) // fullwidth space
+        {
+            text[i] = u' ';
+        }
+    }
+
+    return text;
+}
+

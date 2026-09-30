@@ -70,6 +70,7 @@ QString AlignedDocument::get_text_range(const DocumentSelection& selection, cons
                                  : tokens.size();
 
         bool in_quote = false;
+        bool in_single_quote = false;
         const Token* last_tok = nullptr;
         const Token* prev_last_tok = nullptr;
 
@@ -82,7 +83,7 @@ QString AlignedDocument::get_text_range(const DocumentSelection& selection, cons
 
             if (role != LanguageRole::Chinese)
             {
-                if (Typography::should_insert_space_before(result, tok_str, in_quote, last_tok, &tok, prev_last_tok))
+                if (Typography::should_insert_space_before(result, tok_str, in_quote, in_single_quote, last_tok, &tok, prev_last_tok))
                 {
                     result += u' ';
                 }

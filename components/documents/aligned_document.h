@@ -43,17 +43,13 @@ namespace Typography
         return c == u'.' || c == u',' || c == u'!' || c == u'?' ||
             c == u':' || c == u';' || c == u'…' ||
             c == u')' || c == u']' || c == u'}' || c == u'>' ||
-            c == u'”' || c == u'’' || c == u'」' || c == u'』' ||
-            c == u'】' || c == u'》' || c == u'）' ||
-            c == u'。' || c == u'，' || c == u'！' || c == u'？' ||
-            c == u'：' || c == u'；';
+            c == u'”' || c == u'’';
     }
 
     inline bool is_opener_char(const QChar c) noexcept
     {
         return c == u'(' || c == u'[' || c == u'{' || c == u'<' ||
-            c == u'“' || c == u'‘' || c == u'「' || c == u'『' ||
-            c == u'【' || c == u'《' || c == u'（';
+            c == u'“' || c == u'‘';
     }
 
     inline bool is_digit(const QChar c) noexcept
@@ -91,6 +87,7 @@ namespace Typography
     }
 
     inline bool should_insert_space_before(const QString& text, const QString& tok_str, bool& in_quote,
+                                           bool& in_single_quote,
                                            const Token* prev_tok = nullptr, const Token* cur_tok = nullptr,
                                            const Token* prev_prev_tok = nullptr) noexcept
     {
@@ -120,9 +117,22 @@ namespace Typography
                 return false;
             }
         }
+        if (tok_str == u"'")
+        {
+            if (!in_single_quote)
+            {
+                in_single_quote = true;
+                return !is_opener_char(prev_char) && prev_char != u'"';
+            }
+            else
+            {
+                in_single_quote = false;
+                return false;
+            }
+        }
 
         // If previous character is an opener or opening quote, no space
-        if (is_opener_char(prev_char) || (prev_char == u'"' && in_quote))
+        if (is_opener_char(prev_char) || (prev_char == u'"' && in_quote) || (prev_char == u'\'' && in_single_quote))
         {
             return false;
         }
@@ -151,6 +161,14 @@ namespace Typography
         }
 
         return true;
+    }
+
+    inline bool should_insert_space_before(const QString& text, const QString& tok_str, bool& in_quote,
+                                           const Token* prev_tok = nullptr, const Token* cur_tok = nullptr,
+                                           const Token* prev_prev_tok = nullptr) noexcept
+    {
+        bool dummy_single_quote = false;
+        return should_insert_space_before(text, tok_str, in_quote, dummy_single_quote, prev_tok, cur_tok, prev_prev_tok);
     }
 } // namespace Typography
 

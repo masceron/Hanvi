@@ -7,3 +7,6 @@ class AlignedDocument;
 std::shared_ptr<AlignedDocument> convert(const QStringView& input,
                                          const std::function<void(int)>& progress_callback = nullptr);
 QString convert_plain(const QStringView& input, const std::function<void(int)>& progress_callback = nullptr);
+
+QString to_simplified_chinese(const QString& input);
+QString normalize_text(const QString& input);

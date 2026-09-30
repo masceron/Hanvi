@@ -43,13 +43,13 @@ int main(int argc, char* argv[])
     parser.addOption(name_set_used);
 
     const QCommandLineOption output_option_folder(QStringList() << "o" << "output",
-                                                  "Write all files to <folder>.", "folder");
+                                                   "Write all files to <folder>.", "folder");
     parser.addOption(output_option_folder);
 
     const QCommandLineOption job_number(QStringList() << "j" << "jobs",
                                         "Number of conversion jobs, default 0 (all).", "jobs", "0");
-
     parser.addOption(job_number);
+
     parser.process(app);
 
     if (!parser.isSet(input_option_folder) || !parser.isSet(output_option_folder))
@@ -142,7 +142,7 @@ int main(int argc, char* argv[])
             const QString content = in.readAll();
             in_file.close();
 
-            const QString result = convert_plain(content);
+            const QString result = convert_plain(normalize_text(content));
             const QString out_name = file_info.baseName() + "_converted.txt";
             const QString out_path = out_dir.filePath(out_name);
 
