@@ -262,8 +262,21 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
 {
     ui->original->setText(selected_chinese_text);
     QString sv_reading;
-    for (const auto& ch : selected_chinese_text)
+    int idx = 0;
+    while (idx < selected_chinese_text.length())
     {
+        const QChar ch = selected_chinese_text[idx];
+        if (ch.isHighSurrogate() && idx + 1 < selected_chinese_text.length() && selected_chinese_text[idx + 1].isLowSurrogate())
+        {
+            sv_reading.append(selected_chinese_text.sliced(idx, 2));
+            idx += 2;
+            if (idx < selected_chinese_text.length() && !(selected_chinese_text[idx].isHighSurrogate() && idx + 1 < selected_chinese_text.length() && selected_chinese_text[idx + 1].isLowSurrogate()))
+            {
+                sv_reading.append(" ");
+            }
+            continue;
+        }
+
         if (sv_readings.contains(ch))
         {
             sv_reading.append(sv_readings[ch]);
@@ -273,8 +286,12 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
             sv_reading.append(ch);
         }
         sv_reading.append(" ");
+        idx++;
     }
-    sv_reading.resize(sv_reading.size() - 1);
+    if (!sv_reading.isEmpty() && sv_reading.endsWith(' '))
+    {
+        sv_reading.resize(sv_reading.size() - 1);
+    }
     ui->sv_reading->setText(sv_reading);
 
     bool set_name_found = false;

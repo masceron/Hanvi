@@ -100,6 +100,12 @@ namespace Typography
         const QChar prev_char = text.back();
         const QChar first_char = tok_str[0];
 
+        // Do not insert space between consecutive surrogate pairs (e.g. emojis)
+        if (prev_char.isLowSurrogate() && first_char.isHighSurrogate())
+        {
+            return false;
+        }
+
         // Quotation mark handling
         if (tok_str == u"\"")
         {

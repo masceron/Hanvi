@@ -28,8 +28,21 @@ namespace
 static QString get_sv(const QStringView& cn)
 {
     QString sv_reading;
-    for (const auto& ch : cn)
+    int idx = 0;
+    while (idx < cn.length())
     {
+        const QChar ch = cn[idx];
+        if (ch.isHighSurrogate() && idx + 1 < cn.length() && cn[idx + 1].isLowSurrogate())
+        {
+            sv_reading.append(cn.sliced(idx, 2));
+            idx += 2;
+            if (idx < cn.length() && !(cn[idx].isHighSurrogate() && idx + 1 < cn.length() && cn[idx + 1].isLowSurrogate()))
+            {
+                sv_reading.append(" ");
+            }
+            continue;
+        }
+
         if (sv_readings.contains(ch))
         {
             sv_reading.append(sv_readings[ch]);
@@ -43,8 +56,12 @@ static QString get_sv(const QStringView& cn)
             else sv_reading.append(ch);
         }
         sv_reading.append(" ");
+        idx++;
     }
-    if (!sv_reading.isEmpty()) sv_reading.resize(sv_reading.size() - 1);
+    if (!sv_reading.isEmpty() && sv_reading.endsWith(' '))
+    {
+        sv_reading.resize(sv_reading.size() - 1);
+    }
 
     return sv_reading;
 }
@@ -99,6 +116,11 @@ static bool should_append_space(const QStringView& input, const int current_end_
 
         if (!prev_char.isNull())
         {
+            if (prev_char.isLowSurrogate() && next_char.isHighSurrogate())
+            {
+                return false;
+            }
+
             if (Typography::is_latin_or_digit(prev_char) && Typography::is_latin_or_digit(next_char))
             {
                 return false;
@@ -513,12 +535,20 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
                 continue;
             }
 
-            QString source_text = input[i];
+            const bool is_surrogate = ch.isHighSurrogate() && (i + 1 < input.length()) && input[i + 1].isLowSurrogate();
+            const int char_len = is_surrogate ? 2 : 1;
+
+            QString source_text = input.sliced(i, char_len).toString();
             QString translated_text;
             QString sv_text;
             bool is_punctuator = false;
 
-            if (sv_readings.contains(ch))
+            if (is_surrogate)
+            {
+                translated_text = source_text;
+                sv_text = source_text;
+            }
+            else if (sv_readings.contains(ch))
             {
                 translated_text = sv_readings[ch];
                 sv_text = translated_text;
@@ -543,7 +573,7 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
                 }
             }
 
-            if (!is_punctuator && cap_next && !translated_text.isEmpty())
+            if (!is_punctuator && cap_next && !translated_text.isEmpty() && !is_surrogate)
             {
                 if (translated_text[0].isLower()) translated_text[0] = translated_text[0].toUpper();
                 if (!sv_text.isEmpty() && sv_text[0].isLower()) sv_text[0] = sv_text[0].toUpper();
@@ -556,8 +586,8 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
             tok.sv = std::move(sv_text);
             tok.vn = std::move(translated_text);
 
-            i += 1;
-            progress.update(1);
+            i += char_len;
+            progress.update(char_len);
 
             doc.paragraphs.back().tokens.push_back(std::move(tok));
         }
@@ -844,10 +874,17 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                 continue;
             }
 
+            const bool is_surrogate = ch.isHighSurrogate() && (i + 1 < input.length()) && input[i + 1].isLowSurrogate();
+            const int char_len = is_surrogate ? 2 : 1;
+
             QString translated_text;
             bool is_punctuator = false;
 
-            if (sv_readings.contains(ch))
+            if (is_surrogate)
+            {
+                translated_text = input.sliced(i, 2).toString();
+            }
+            else if (sv_readings.contains(ch))
             {
                 translated_text = sv_readings[ch];
             }
@@ -868,22 +905,23 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                 }
             }
 
-            if (!is_punctuator && cap_next && !translated_text.isEmpty())
+            if (!is_punctuator && cap_next && !translated_text.isEmpty() && !is_surrogate)
             {
                 if (translated_text[0].isLower()) translated_text[0] = translated_text[0].toUpper();
                 cap_next = false;
             }
 
             out.text += translated_text;
-            i += 1;
-            out.length_consumed += 1;
+            i += char_len;
+            out.length_consumed += char_len;
 
-            if (!translated_text.isEmpty() && should_append_space(input, i, ch) && !out.text.endsWith(' '))
+            const QChar last_char = is_surrogate ? input[i - 1] : ch;
+            if (!translated_text.isEmpty() && should_append_space(input, i, last_char) && !out.text.endsWith(' '))
             {
                 out.text += u" ";
             }
 
-            progress.update(1);
+            progress.update(char_len);
         }
     }
     return out;
