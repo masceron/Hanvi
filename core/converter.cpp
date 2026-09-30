@@ -3,7 +3,6 @@
 #include "dict.h"
 #include <optional>
 #include <QCoreApplication>
-#include <QFile>
 #include <QDir>
 #include <QDebug>
 #include <mutex>
@@ -245,7 +244,7 @@ static std::optional<RuleMatch> find_matching_rule(const QStringView& text, cons
             {
                 auto check_overlap = [&](const auto& dict, const Priority target_prio)
                 {
-                    Match m = dict.find(text, k);
+                    const Match m = dict.find(text, k);
                     if (m.length > 0 && m.priority == target_prio)
                     {
                         if (k + m.length > abs_start_of_end)
@@ -1036,8 +1035,7 @@ QString to_simplified_chinese(const QString& input)
     static std::unique_ptr<opencc::SimpleConverter> converter;
 
     std::call_once(init_flag, [] {
-        const QString config_path = get_opencc_config_path();
-        if (!config_path.isEmpty())
+        if (const QString config_path = get_opencc_config_path(); !config_path.isEmpty())
         {
             try
             {
@@ -1062,8 +1060,8 @@ QString to_simplified_chinese(const QString& input)
 
     try
     {
-        std::string utf8_in = input.toStdString();
-        std::string utf8_out = converter->Convert(utf8_in);
+        const std::string utf8_in = input.toStdString();
+        const std::string utf8_out = converter->Convert(utf8_in);
         return QString::fromStdString(utf8_out);
     }
     catch (const std::exception& e)
