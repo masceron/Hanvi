@@ -34,10 +34,10 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     endif ()
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     if (CMAKE_BUILD_TYPE MATCHES "Release")
-        add_compile_options(-O3 -fomit-frame-pointer -fno-exceptions
+        add_compile_options(-O3 -fomit-frame-pointer
                 -flto=full -ffunction-sections
-                -fdata-sections -Wall -Wextra -Werror
-                -pedantic-errors -DNDEBUG -mtune=generic -march=x86-64-v3)
+                -fdata-sections -Wall -Wextra
+                -DNDEBUG -mtune=generic -march=x86-64-v3)
         add_link_options(-flto=full -s -Wl,--gc-sections -Wl,--icf=all)
     endif ()
 else ()
@@ -51,6 +51,41 @@ find_package(Qt6 COMPONENTS
         Widgets
         Concurrent
         REQUIRED)
+
+if (WIN32)
+    get_filename_component(COMPILER_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    set(COMPILER_RUNTIMES "")
+    foreach(_dll libc++.dll libunwind.dll libwinpthread-1.dll libstdc++-6.dll libgcc_s_seh-1.dll)
+        if (EXISTS "${COMPILER_BIN_DIR}/${_dll}")
+            list(APPEND COMPILER_RUNTIMES "${COMPILER_BIN_DIR}/${_dll}")
+        endif ()
+    endforeach()
+endif ()
+
+include(FetchContent)
+set(BUILD_DOCUMENTATION OFF CACHE BOOL "" FORCE)
+set(BUILD_PYTHON OFF CACHE BOOL "" FORCE)
+set(ENABLE_BENCHMARK OFF CACHE BOOL "" FORCE)
+set(ENABLE_COVERAGE OFF CACHE BOOL "" FORCE)
+set(ENABLE_GTEST OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(OPENCC_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+
+FetchContent_Declare(
+    OpenCC
+    GIT_REPOSITORY https://github.com/BYVoid/OpenCC.git
+    GIT_TAG        ver.1.4.2
+)
+FetchContent_MakeAvailable(OpenCC)
+
+if (WIN32 AND COMPILER_RUNTIMES)
+    add_custom_target(copy_compiler_runtimes_to_opencc
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${COMPILER_RUNTIMES} "${opencc_BINARY_DIR}/src/tools"
+    )
+    if (TARGET Dictionaries)
+        add_dependencies(Dictionaries copy_compiler_runtimes_to_opencc)
+    endif ()
+endif ()
 
 set(CORE
         core/converter.h
@@ -71,8 +106,11 @@ add_library(CoreLogic STATIC ${CORE})
 target_include_directories(CoreLogic PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}"
         "${CMAKE_CURRENT_SOURCE_DIR}/components"
+        "${opencc_SOURCE_DIR}/src"
+        "${opencc_BINARY_DIR}/src"
 )
-target_link_libraries(CoreLogic PRIVATE Qt::Core Qt::Widgets Qt::Sql Qt::Concurrent)
+target_link_libraries(CoreLogic PRIVATE Qt::Core Qt::Widgets Qt::Sql Qt::Concurrent libopencc)
+target_compile_definitions(CoreLogic PUBLIC Opencc_BUILT_AS_STATIC)
 
 set(APP_SOURCES main.cpp
         components/mainwindow.cpp
@@ -113,6 +151,11 @@ target_link_libraries(Hanvi PRIVATE CoreLogic Qt::Core Qt::Sql Qt::Gui Qt::Widge
 add_executable(HanviCLI main_cli.cpp)
 target_link_libraries(HanviCLI PRIVATE CoreLogic Qt::Core Qt::Sql Qt::Concurrent)
 
+if (TARGET Dictionaries)
+    add_dependencies(Hanvi Dictionaries)
+    add_dependencies(HanviCLI Dictionaries)
+endif ()
+
 add_custom_command(TARGET Hanvi POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/dict.db"
@@ -123,6 +166,43 @@ add_custom_command(TARGET Hanvi POST_BUILD
         "${CMAKE_CURRENT_SOURCE_DIR}/resources/NotoSansSC.ttf"
         "$<TARGET_FILE_DIR:Hanvi>/NotoSansSC.ttf"
 )
+add_custom_command(TARGET Hanvi POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:Hanvi>/opencc"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${opencc_SOURCE_DIR}/data/config/t2s.json"
+        "$<TARGET_FILE_DIR:Hanvi>/opencc/t2s.json"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${opencc_BINARY_DIR}/data/TSPhrases.ocd2"
+        "$<TARGET_FILE_DIR:Hanvi>/opencc/TSPhrases.ocd2"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${opencc_BINARY_DIR}/data/TSCharacters.ocd2"
+        "$<TARGET_FILE_DIR:Hanvi>/opencc/TSCharacters.ocd2"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${opencc_BINARY_DIR}/data/TSCharactersExt.ocd2"
+        "$<TARGET_FILE_DIR:Hanvi>/opencc/TSCharactersExt.ocd2"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${opencc_BINARY_DIR}/data/CJK_Compatibility_Ideographs.ocd2"
+        "$<TARGET_FILE_DIR:Hanvi>/opencc/CJK_Compatibility_Ideographs.ocd2"
+)
+
+add_custom_command(TARGET HanviCLI POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:HanviCLI>/opencc"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${opencc_SOURCE_DIR}/data/config/t2s.json"
+        "$<TARGET_FILE_DIR:HanviCLI>/opencc/t2s.json"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${opencc_BINARY_DIR}/data/TSPhrases.ocd2"
+        "$<TARGET_FILE_DIR:HanviCLI>/opencc/TSPhrases.ocd2"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${opencc_BINARY_DIR}/data/TSCharacters.ocd2"
+        "$<TARGET_FILE_DIR:HanviCLI>/opencc/TSCharacters.ocd2"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${opencc_BINARY_DIR}/data/TSCharactersExt.ocd2"
+        "$<TARGET_FILE_DIR:HanviCLI>/opencc/TSCharactersExt.ocd2"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${opencc_BINARY_DIR}/data/CJK_Compatibility_Ideographs.ocd2"
+        "$<TARGET_FILE_DIR:HanviCLI>/opencc/CJK_Compatibility_Ideographs.ocd2"
+)
 
 if (NOT WINDEPLOYQT_EXECUTABLE)
     find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${Qt6_DIR}/bin")
@@ -132,12 +212,25 @@ if (NOT WINDEPLOYQT_EXECUTABLE)
     message(FATAL_ERROR "Windeployqt not found.")
 endif ()
 
+
 add_custom_command(TARGET Hanvi POST_BUILD
         COMMAND "${WINDEPLOYQT_EXECUTABLE}" --dir "${CMAKE_BINARY_DIR}" --no-translations --no-compiler-runtime "$<TARGET_FILE_NAME:Hanvi>"
 )
 add_custom_command(TARGET HanviCLI POST_BUILD
         COMMAND "${WINDEPLOYQT_EXECUTABLE}" --dir "${CMAKE_BINARY_DIR}" --no-translations --no-compiler-runtime "$<TARGET_FILE_NAME:HanviCLI>"
 )
+
+if (COMPILER_RUNTIMES)
+    add_custom_command(TARGET Hanvi POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${COMPILER_RUNTIMES} "${CMAKE_BINARY_DIR}"
+    )
+    add_custom_command(TARGET HanviCLI POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${COMPILER_RUNTIMES} "${CMAKE_BINARY_DIR}"
+    )
+    set(WINDEPLOYQT_COMPILER_RUNTIME_FLAG "--no-compiler-runtime")
+else ()
+    set(WINDEPLOYQT_COMPILER_RUNTIME_FLAG "--compiler-runtime")
+endif ()
 
 set(DIST_DIR "${CMAKE_BINARY_DIR}/Hanvi")
 
@@ -153,15 +246,23 @@ add_custom_command(TARGET MakePortableZip POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:HanviCLI>" "${DIST_DIR}"
         COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/resources/NotoSansSC.ttf" "${DIST_DIR}"
         COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/dict.db" "${DIST_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "$<TARGET_FILE_DIR:Hanvi>/opencc" "${DIST_DIR}/opencc"
 )
 
 add_custom_command(TARGET MakePortableZip POST_BUILD
-        COMMAND "${WINDEPLOYQT_EXECUTABLE}" --dir "${DIST_DIR}" --no-translations --compiler-runtime "${DIST_DIR}/$<TARGET_FILE_NAME:Hanvi>"
-        COMMAND "${WINDEPLOYQT_EXECUTABLE}" --dir "${DIST_DIR}" --no-translations --compiler-runtime "${DIST_DIR}/$<TARGET_FILE_NAME:HanviCLI>"
+        COMMAND "${WINDEPLOYQT_EXECUTABLE}" --dir "${DIST_DIR}" --no-translations ${WINDEPLOYQT_COMPILER_RUNTIME_FLAG} "${DIST_DIR}/$<TARGET_FILE_NAME:Hanvi>"
+        COMMAND "${WINDEPLOYQT_EXECUTABLE}" --dir "${DIST_DIR}" --no-translations ${WINDEPLOYQT_COMPILER_RUNTIME_FLAG} "${DIST_DIR}/$<TARGET_FILE_NAME:HanviCLI>"
 )
+
+if (COMPILER_RUNTIMES)
+    add_custom_command(TARGET MakePortableZip POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${COMPILER_RUNTIMES} "${DIST_DIR}"
+    )
+endif ()
 
 add_custom_command(TARGET MakePortableZip POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E rm -f "${CMAKE_BINARY_DIR}/${ARCHIVE_NAME}"
         COMMAND 7z a -t7z -mx=9 "${CMAKE_BINARY_DIR}/${ARCHIVE_NAME}" "${DIST_DIR}"
         COMMAND ${CMAKE_COMMAND} -E rm -r "${DIST_DIR}"
 )
+

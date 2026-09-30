@@ -113,7 +113,7 @@ namespace
 
 void NovelTab::set_text(QString text)
 {
-    input_text = std::move(text);
+    input_text = normalize_text(text);
     repaginate();
 }
 
