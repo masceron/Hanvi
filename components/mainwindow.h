@@ -45,7 +45,7 @@ struct NovelTab
     SavedScroll saved_scroll;
     QString saved_token_cn;
 
-    void set_text(QString text);
+    void set_text(const QString &text);
     void repaginate();
 };
 

@@ -43,6 +43,11 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 else ()
     message(FATAL_ERROR "Compiler not supported.")
 endif ()
+
+if (MSVC)
+    target_compile_definitions(hanvi_flags INTERFACE NOMINMAX)
+endif ()
+
 target_compile_options(hanvi_flags INTERFACE ${_warn}
         "$<$<CONFIG:Release>:${_release}>"
         "$<$<BOOL:${HANVI_X86_64_V3}>:${_arch}>")
@@ -123,6 +128,11 @@ add_executable(Hanvi WIN32
         components/documents/token_canvas.cpp     components/documents/token_canvas.h
         components/loader.h components/chipdelegate.h components/chiplist.h)
 target_link_libraries(Hanvi PRIVATE CoreLogic Qt::Gui Qt::Widgets dwmapi hanvi_flags)
+if (MSVC)
+    target_sources(Hanvi PRIVATE resources/app.manifest)
+else ()
+    target_sources(Hanvi PRIVATE resources/manifest.rc)
+endif ()
 
 add_executable(HanviCLI main_cli.cpp)
 target_link_libraries(HanviCLI PRIVATE CoreLogic hanvi_flags)

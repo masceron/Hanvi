@@ -182,7 +182,7 @@ TrieNode* TrieNode::find_child(const QChar ch) const
     return nullptr;
 }
 
-void TrieNode::add_child(QChar ch, TrieNode* node)
+void TrieNode::add_child(const QChar ch, TrieNode* node)
 {
     if (child_count == 0)
     {

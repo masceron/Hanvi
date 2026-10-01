@@ -111,7 +111,7 @@ namespace
     };
 }
 
-void NovelTab::set_text(QString text)
+void NovelTab::set_text(const QString& text)
 {
     input_text = normalize_text(text);
     repaginate();
