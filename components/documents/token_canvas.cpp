@@ -161,9 +161,9 @@ void TokenCanvas::copy_all_to_clipboard() const
     }
 }
 
-void TokenCanvas::copy_selection_to_clipboard() const
+QString TokenCanvas::selected_text() const
 {
-    if (!has_selection()) return;
+    if (!has_selection()) return {};
     const auto [start, end] = normalized_selection();
     QString result;
 
@@ -182,10 +182,15 @@ void TokenCanvas::copy_selection_to_clipboard() const
             result += u'\n';
         }
     }
+    return result;
+}
 
-    if (!result.isEmpty())
+void TokenCanvas::copy_selection_to_clipboard() const
+{
+    const QString text = selected_text();
+    if (!text.isEmpty())
     {
-        QGuiApplication::clipboard()->setText(result);
+        QGuiApplication::clipboard()->setText(text);
     }
 }
 
@@ -193,6 +198,12 @@ void TokenCanvas::on_document_changed(const std::shared_ptr<const AlignedDocumen
 {
     clear_selection();
     rebuild_paragraph_data();
+    if (!search_query_.isEmpty())
+    {
+        const QString q = search_query_;
+        search_query_.clear();
+        search(q);
+    }
 }
 
 void TokenCanvas::on_active_token_changed(uint32_t /*token_id*/) const
@@ -485,7 +496,38 @@ void TokenCanvas::paintEvent(QPaintEvent* event)
 
         QList<QTextLayout::FormatRange> format_ranges;
 
-        // 1. Character selection range (blue highlight)
+        // 1. Search match highlights
+        if (!search_matches_.empty())
+        {
+            for (size_t m_idx = 0; m_idx < search_matches_.size(); ++m_idx)
+            {
+                const auto& m = search_matches_[m_idx];
+                if (m.paragraph == p)
+                {
+                    QTextLayout::FormatRange fr;
+                    fr.start = m.start_char;
+                    fr.length = m.length;
+                    if (static_cast<int>(m_idx) == current_search_idx_)
+                    {
+                        fr.format.setBackground(QColor(255, 150, 0));
+                        fr.format.setForeground(Qt::black);
+                        fr.format.setFontWeight(QFont::Bold);
+                    }
+                    else
+                    {
+                        fr.format.setBackground(QColor(160, 110, 20, 180));
+                        fr.format.setForeground(Qt::white);
+                    }
+                    format_ranges.append(fr);
+                }
+                else if (m.paragraph > p)
+                {
+                    break;
+                }
+            }
+        }
+
+        // 2. Character selection range (blue highlight)
         if (has_sel && p >= start.paragraph && p <= end.paragraph)
         {
             const int start_c = (p == start.paragraph) ? start.char_index : 0;
@@ -884,38 +926,143 @@ void TokenCanvas::focusOutEvent(QFocusEvent* event)
     update();
 }
 
+void TokenCanvas::scroll_to_char(const size_t p_idx, const int char_pos)
+{
+    if (p_idx >= layouts_.size()) return;
+    const auto& pl = layouts_[p_idx];
+    if (!pl.layout_valid || !pl.text_layout) return;
+
+    const qreal line_scale = line_height_percent_ / 100.0;
+    for (int l = 0; l < pl.text_layout->lineCount(); ++l)
+    {
+        QTextLine line = pl.text_layout->lineAt(l);
+        if (char_pos >= line.textStart() && char_pos < (line.textStart() + line.textLength()))
+        {
+            const qreal target_y = pl.y + line.y() * line_scale;
+            const int view_h = viewport()->height();
+            const int current_scroll = verticalScrollBar()->value();
+
+            if (target_y < current_scroll || target_y > (current_scroll + view_h - 40))
+            {
+                verticalScrollBar()->setValue(static_cast<int>(std::max(0.0, target_y - view_h / 3.0)));
+            }
+            viewport()->update();
+            return;
+        }
+    }
+
+    if (pl.text_layout->lineCount() > 0)
+    {
+        const QTextLine line = pl.text_layout->lineAt(pl.text_layout->lineCount() - 1);
+        const qreal target_y = pl.y + line.y() * line_scale;
+        const int view_h = viewport()->height();
+        const int current_scroll = verticalScrollBar()->value();
+
+        if (target_y < current_scroll || target_y > (current_scroll + view_h - 40))
+        {
+            verticalScrollBar()->setValue(static_cast<int>(std::max(0.0, target_y - view_h / 3.0)));
+        }
+        viewport()->update();
+    }
+}
+
 void TokenCanvas::scroll_to_token(const uint32_t token_id) const
 {
     if (!session_ || !session_->has_document()) return;
 
-    for (const auto & pl : layouts_)
+    for (size_t p = 0; p < layouts_.size(); ++p)
     {
-        for (const auto& span : pl.spans)
+        for (const auto& span : layouts_[p].spans)
         {
             if (span.token_id == token_id)
             {
-                if (!pl.layout_valid || !pl.text_layout) return;
-
-                const qreal line_scale = line_height_percent_ / 100.0;
-                for (int l = 0; l < pl.text_layout->lineCount(); ++l)
-                {
-                    QTextLine line = pl.text_layout->lineAt(l);
-                    if (span.start_char >= line.textStart() &&
-                        span.start_char < (line.textStart() + line.textLength()))
-                    {
-                        const qreal target_y = pl.y + line.y() * line_scale;
-                        const int view_h = viewport()->height();
-
-                        if (const int current_scroll = verticalScrollBar()->value(); target_y < current_scroll || target_y > (current_scroll + view_h - 40))
-                        {
-                            verticalScrollBar()->setValue(static_cast<int>(target_y - view_h / 3));
-                        }
-                        viewport()->update();
-                        return;
-                    }
-                }
+                const_cast<TokenCanvas*>(this)->scroll_to_char(p, span.start_char);
                 return;
             }
         }
     }
 }
+
+void TokenCanvas::scroll_to_match(const int idx)
+{
+    if (idx < 0 || idx >= static_cast<int>(search_matches_.size())) return;
+    const auto& m = search_matches_[idx];
+    scroll_to_char(m.paragraph, m.start_char);
+}
+
+int TokenCanvas::search(const QString& query)
+{
+    if (query.isEmpty())
+    {
+        clear_search();
+        return 0;
+    }
+
+    if (query == search_query_ && !search_matches_.empty())
+    {
+        find_next();
+        return static_cast<int>(search_matches_.size());
+    }
+
+    search_query_ = query;
+    search_matches_.clear();
+
+    for (size_t p = 0; p < layouts_.size(); ++p)
+    {
+        const auto& pl = layouts_[p];
+        int pos = 0;
+        while ((pos = pl.text.indexOf(query, pos, Qt::CaseInsensitive)) != -1)
+        {
+            search_matches_.push_back(SearchMatch{
+                .paragraph = p,
+                .start_char = pos,
+                .length = static_cast<int>(query.length())
+            });
+            pos += std::max(1, static_cast<int>(query.length()));
+        }
+    }
+
+    if (search_matches_.empty())
+    {
+        current_search_idx_ = -1;
+    }
+    else
+    {
+        current_search_idx_ = 0;
+        scroll_to_match(current_search_idx_);
+    }
+
+    emit search_results_changed(current_search_idx_, static_cast<int>(search_matches_.size()));
+    viewport()->update();
+    return static_cast<int>(search_matches_.size());
+}
+
+bool TokenCanvas::find_next()
+{
+    if (search_matches_.empty()) return false;
+    current_search_idx_ = (current_search_idx_ + 1) % static_cast<int>(search_matches_.size());
+    scroll_to_match(current_search_idx_);
+    emit search_results_changed(current_search_idx_, static_cast<int>(search_matches_.size()));
+    viewport()->update();
+    return true;
+}
+
+bool TokenCanvas::find_previous()
+{
+    if (search_matches_.empty()) return false;
+    current_search_idx_ = (current_search_idx_ - 1 + static_cast<int>(search_matches_.size())) % static_cast<int>(search_matches_.size());
+    scroll_to_match(current_search_idx_);
+    emit search_results_changed(current_search_idx_, static_cast<int>(search_matches_.size()));
+    viewport()->update();
+    return true;
+}
+
+void TokenCanvas::clear_search()
+{
+    search_query_.clear();
+    search_matches_.clear();
+    current_search_idx_ = -1;
+    emit search_results_changed(-1, 0);
+    viewport()->update();
+}
+

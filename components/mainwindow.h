@@ -13,6 +13,7 @@ class AlignedDocument;
 class DocumentSession;
 class QTabBar;
 class QPushButton;
+class findbar;
 struct Rule;
 
 QT_BEGIN_NAMESPACE
@@ -99,4 +100,8 @@ private:
 
     void triggerDpiRecovery();
     HPOWERNOTIFY m_powerNotify = nullptr;
+
+    findbar* find_bar = nullptr;
+    void show_findbar();
+    void reposition_findbar();
 };
