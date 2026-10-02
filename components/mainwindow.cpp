@@ -434,6 +434,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     const auto *previous_key = new QShortcut(QKeySequence(Qt::Key_Left), this);
     connect(previous_key, &QShortcut::activated, this, [this]() {
+        const QWidget *fw = QApplication::focusWidget();
+        if (fw && (qobject_cast<const QLineEdit*>(fw) || qobject_cast<const QSpinBox*>(fw))) return;
+
+        if (session && session->active_token_id() != 0) {
+            const uint32_t cur_id = session->active_token_id();
+            if (cur_id > 1) {
+                session->trigger_click(cur_id - 1);
+            }
+            return;
+        }
         if (auto *cur = current_tab(); cur && cur->current_page > 0) {
             cur->current_page--;
             cur->current_doc = nullptr;
@@ -443,11 +453,35 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     const auto *next_key = new QShortcut(QKeySequence(Qt::Key_Right), this);
     connect(next_key, &QShortcut::activated, this, [this]() {
+        const QWidget *fw = QApplication::focusWidget();
+        if (fw && (qobject_cast<const QLineEdit*>(fw) || qobject_cast<const QSpinBox*>(fw))) return;
+
+        if (session && session->active_token_id() != 0) {
+            const uint32_t cur_id = session->active_token_id();
+            if (session->has_document() && cur_id < session->document()->total_tokens()) {
+                session->trigger_click(cur_id + 1);
+            }
+            return;
+        }
         if (auto *cur = current_tab(); cur && cur->current_page < cur->pages.size() - 1) {
             cur->current_page++;
             cur->current_doc = nullptr;
             convert_and_display(false);
         }
+    });
+
+    const auto *esc_key = new QShortcut(QKeySequence(Qt::Key_Escape), this);
+    connect(esc_key, &QShortcut::activated, this, [this]() {
+        if (!QApplication::activeModalWidget() && session && session->active_token_id() != 0) {
+            session->clear_active_token();
+            session->clear_selection();
+        }
+    });
+
+    const auto *goto_page_key = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_G), this);
+    connect(goto_page_key, &QShortcut::activated, this, [this]() {
+        ui->current_page->setFocus();
+        ui->current_page->selectAll();
     });
 }
 
@@ -608,35 +642,54 @@ void MainWindow::changeEvent(QEvent *event) {
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
     if (event->type() == QEvent::KeyPress) {
-        if (const auto *ke = dynamic_cast<QKeyEvent *>(event); ke->modifiers().testFlag(Qt::ControlModifier) && !
-                                                               QApplication::activeModalWidget()) {
-            if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab) {
-                if (tabs.size() > 1) {
-                    if (ke->modifiers().testFlag(Qt::ShiftModifier) || ke->key() == Qt::Key_Backtab) {
-                        const int prev = (active_tab_index - 1 + static_cast<int>(tabs.size())) % static_cast<int>(tabs.
-                                             size());
-                        tab_bar->setCurrentIndex(prev);
-                    } else {
-                        const int next = (active_tab_index + 1) % static_cast<int>(tabs.size());
-                        tab_bar->setCurrentIndex(next);
+        const auto *ke = dynamic_cast<QKeyEvent *>(event);
+        if (!ke) return QMainWindow::eventFilter(obj, event);
+
+        if (!QApplication::activeModalWidget()) {
+            if (ke->modifiers().testFlag(Qt::ControlModifier)) {
+                if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab) {
+                    if (tabs.size() > 1) {
+                        if (ke->modifiers().testFlag(Qt::ShiftModifier) || ke->key() == Qt::Key_Backtab) {
+                            const int prev = (active_tab_index - 1 + static_cast<int>(tabs.size())) % static_cast<int>(tabs.
+                                                 size());
+                            tab_bar->setCurrentIndex(prev);
+                        } else {
+                            const int next = (active_tab_index + 1) % static_cast<int>(tabs.size());
+                            tab_bar->setCurrentIndex(next);
+                        }
+                    }
+                    return true;
+                }
+
+                if (ke->key() >= Qt::Key_1 && ke->key() <= Qt::Key_9) {
+                    const int target = ke->key() - Qt::Key_1;
+                    if (target < static_cast<int>(tabs.size())) {
+                        tab_bar->setCurrentIndex(target);
+                    }
+                    return true;
+                }
+
+                if (ke->key() == Qt::Key_0) {
+                    if (9 < static_cast<int>(tabs.size())) {
+                        tab_bar->setCurrentIndex(9);
+                    }
+                    return true;
+                }
+            } else if (session && session->active_token_id() != 0) {
+                const QWidget *fw = QApplication::focusWidget();
+                const bool is_input = fw && (qobject_cast<const QLineEdit*>(fw) || qobject_cast<const QSpinBox*>(fw));
+                if (!is_input && (ke->modifiers() == Qt::NoModifier || ke->modifiers() == Qt::KeypadModifier)) {
+                    if (ke->key() == Qt::Key_Escape) {
+                        session->clear_active_token();
+                        session->clear_selection();
+                        return true;
+                    }
+                    if (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter ||
+                        ke->key() == Qt::Key_Space || ke->key() == Qt::Key_E) {
+                        session->trigger_context_menu(session->active_token_id());
+                        return true;
                     }
                 }
-                return true;
-            }
-
-            if (ke->key() >= Qt::Key_1 && ke->key() <= Qt::Key_9) {
-                const int target = ke->key() - Qt::Key_1;
-                if (target < static_cast<int>(tabs.size())) {
-                    tab_bar->setCurrentIndex(target);
-                }
-                return true;
-            }
-
-            if (ke->key() == Qt::Key_0) {
-                if (9 < static_cast<int>(tabs.size())) {
-                    tab_bar->setCurrentIndex(9);
-                }
-                return true;
             }
         }
     } else if (event->type() == QEvent::ShortcutOverride) {

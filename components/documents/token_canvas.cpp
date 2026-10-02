@@ -1,6 +1,7 @@
 #include "token_canvas.h"
 #include <QPainter>
 #include <QMouseEvent>
+#include <QWheelEvent>
 #include <QScrollBar>
 #include <QGuiApplication>
 #include <QClipboard>
@@ -34,6 +35,12 @@ void TokenCanvas::set_session(DocumentSession* session)
         connect(session_, &DocumentSession::active_token_changed, this, &TokenCanvas::on_active_token_changed);
         connect(session_, &DocumentSession::hovered_token_changed, this, &TokenCanvas::on_hovered_token_changed);
         connect(session_, &DocumentSession::scroll_to_token_requested, this, &TokenCanvas::scroll_to_token);
+        connect(session_, &DocumentSession::selection_changed, this, [this](const DocumentSelection& sel) {
+            if (sel.is_empty() && has_selection())
+            {
+                clear_selection();
+            }
+        });
 
         if (session_->has_document())
         {
@@ -66,7 +73,59 @@ void TokenCanvas::set_line_height_percent(const int percent)
 void TokenCanvas::set_font(const QFont& font)
 {
     font_ = font;
+    if (default_pixel_size_ == 0)
+    {
+        default_pixel_size_ = font.pixelSize() > 0 ? font.pixelSize() : 16;
+    }
     layout_all();
+}
+
+void TokenCanvas::zoom(const int steps)
+{
+    int current_size = font_.pixelSize();
+    if (current_size <= 0)
+    {
+        current_size = font_.pointSize();
+    }
+    if (current_size <= 0)
+    {
+        current_size = 16;
+    }
+
+    const int new_size = std::clamp(current_size + steps, 10, 48);
+    if (new_size != current_size)
+    {
+        font_.setPixelSize(new_size);
+
+        const qreal old_total_h = total_height_;
+        const int old_scroll = verticalScrollBar()->value();
+
+        layout_all();
+
+        if (session_ && session_->active_token_id() != 0)
+        {
+            scroll_to_token(session_->active_token_id());
+        }
+        else if (old_total_h > 0.0 && total_height_ > 0.0)
+        {
+            const qreal ratio = static_cast<qreal>(old_scroll) / old_total_h;
+            verticalScrollBar()->setValue(static_cast<int>(std::round(ratio * total_height_)));
+        }
+    }
+}
+
+void TokenCanvas::reset_zoom()
+{
+    if (default_pixel_size_ > 0 && font_.pixelSize() != default_pixel_size_)
+    {
+        font_.setPixelSize(default_pixel_size_);
+        layout_all();
+    }
+}
+
+int TokenCanvas::font_pixel_size() const noexcept
+{
+    return font_.pixelSize();
 }
 
 int TokenCanvas::scroll_value() const
@@ -746,6 +805,22 @@ void TokenCanvas::contextMenuEvent(QContextMenuEvent* event)
     }
 }
 
+void TokenCanvas::wheelEvent(QWheelEvent* event)
+{
+    if (event->modifiers().testFlag(Qt::ControlModifier))
+    {
+        const int delta = event->angleDelta().y();
+        if (delta != 0)
+        {
+            const int steps = delta > 0 ? 1 : -1;
+            zoom(steps);
+            event->accept();
+            return;
+        }
+    }
+    QAbstractScrollArea::wheelEvent(event);
+}
+
 void TokenCanvas::keyPressEvent(QKeyEvent* event)
 {
     if (event->matches(QKeySequence::Copy))
@@ -753,6 +828,47 @@ void TokenCanvas::keyPressEvent(QKeyEvent* event)
         copy_selection_to_clipboard();
         return;
     }
+
+    if (event->modifiers().testFlag(Qt::ControlModifier))
+    {
+        if (event->key() == Qt::Key_Plus || event->key() == Qt::Key_Equal)
+        {
+            zoom(1);
+            event->accept();
+            return;
+        }
+        if (event->key() == Qt::Key_Minus)
+        {
+            zoom(-1);
+            event->accept();
+            return;
+        }
+        if (event->key() == Qt::Key_0)
+        {
+            reset_zoom();
+            event->accept();
+            return;
+        }
+    }
+
+    if (session_ && session_->active_token_id() != 0)
+    {
+        if (event->key() == Qt::Key_Escape)
+        {
+            session_->clear_active_token();
+            session_->clear_selection();
+            event->accept();
+            return;
+        }
+        if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter ||
+            event->key() == Qt::Key_Space || event->key() == Qt::Key_E)
+        {
+            session_->trigger_context_menu(session_->active_token_id());
+            event->accept();
+            return;
+        }
+    }
+
     QAbstractScrollArea::keyPressEvent(event);
 }
 
