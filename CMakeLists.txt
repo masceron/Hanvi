@@ -129,7 +129,11 @@ add_executable(Hanvi WIN32
         components/loader.h components/chipdelegate.h components/chiplist.h
         components/findbar.cpp
         components/findbar.h
-        components/findbar.ui)
+        components/findbar.ui
+        components/entrieseditor.cpp
+        components/entrieseditor.h
+        components/entrieseditor.ui
+)
 target_link_libraries(Hanvi PRIVATE CoreLogic Qt::Gui Qt::Widgets dwmapi hanvi_flags)
 if (MSVC)
     target_sources(Hanvi PRIVATE resources/app.manifest)

@@ -6,6 +6,7 @@
 
 #include "namesetsmanager.h"
 #include "ui_NamesetsManager.h"
+#include "entrieseditor.h"
 #include "core/dict.h"
 #include "core/structures.h"
 
@@ -20,10 +21,25 @@ NamesetsManager::NamesetsManager(QWidget* parent) :
     ui->name_sets_list->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Fixed);
     ui->name_sets_list->setColumnWidth(1, 80);
     ui->name_sets_list->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
-    ui->name_sets_list->setColumnWidth(2, 240);
+    ui->name_sets_list->setColumnWidth(2, 320);
 
     connect(ui->add_new, &QPushButton::clicked, this, &NamesetsManager::add_new_name_set);
     connect(ui->import_set, &QPushButton::clicked, this, &NamesetsManager::import_set);
+
+    connect(ui->name_sets_list, &QTableWidget::cellDoubleClicked, this, [this](int row, int column) {
+        if (column == 2) return;
+        if (row < 0 || row >= ui->name_sets_list->rowCount()) return;
+        auto* title_item = ui->name_sets_list->item(row, 0);
+        if (!title_item) return;
+        const int id = title_item->data(Qt::UserRole).toInt();
+        const QString title = title_item->text();
+
+        auto* editor = new entrieseditor(this);
+        editor->setAttribute(Qt::WA_DeleteOnClose);
+        editor->set_nameset(id, title);
+        connect(editor, &entrieseditor::entries_changed, this, &NamesetsManager::load_data);
+        editor->exec();
+    });
 
     load_data();
 }
@@ -49,6 +65,7 @@ void NamesetsManager::load_data()
         ui->name_sets_list->insertRow(row);
 
         auto* titleItem = new QTableWidgetItem(title);
+        titleItem->setData(Qt::UserRole, index);
         titleItem->setFlags(titleItem->flags() & ~Qt::ItemIsEditable);
         ui->name_sets_list->setItem(row, 0, titleItem);
 
@@ -70,7 +87,17 @@ QWidget* NamesetsManager::create_action_widget(int id, const QString& current_ti
     layout->setContentsMargins(2, 2, 2, 2);
     layout->setSpacing(5);
 
-    const auto edit = new QPushButton("Edit");
+    const auto entries_btn = new QPushButton("Entries");
+    entries_btn->setObjectName("entries_set");
+    connect(entries_btn, &QPushButton::clicked, this, [this, id, current_title] {
+        auto* editor = new entrieseditor(this);
+        editor->setAttribute(Qt::WA_DeleteOnClose);
+        editor->set_nameset(id, current_title);
+        connect(editor, &entrieseditor::entries_changed, this, &NamesetsManager::load_data);
+        editor->exec();
+    });
+
+    const auto edit = new QPushButton("Rename");
     edit->setObjectName("edit_set");
     connect(edit, &QPushButton::clicked, this, [this, id, current_title]()
     {
@@ -149,6 +176,7 @@ QWidget* NamesetsManager::create_action_widget(int id, const QString& current_ti
         QDesktopServices::openUrl(QUrl("file:///" + file_name.left(file_name.lastIndexOf('/'))));
     });
 
+    layout->addWidget(entries_btn);
     layout->addWidget(edit);
     layout->addWidget(delete_button);
     layout->addWidget(dump_button);
