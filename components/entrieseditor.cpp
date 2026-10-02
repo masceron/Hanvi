@@ -6,7 +6,6 @@
 #include "core/structures.h"
 
 #include <QSqlQuery>
-#include <QMessageBox>
 #include <QInputDialog>
 #include <QHeaderView>
 #include <QFont>
@@ -14,10 +13,6 @@
 #include <QKeyEvent>
 #include <QTimer>
 #include <QScrollBar>
-
-// -----------------------------------------------------------------------------
-// EntriesModel Implementation
-// -----------------------------------------------------------------------------
 
 EntriesModel::EntriesModel(QObject *parent) : QAbstractTableModel(parent) {}
 
@@ -135,10 +130,6 @@ const EntryItem* EntriesModel::item_at(const int row) const {
     return &items_[row];
 }
 
-// -----------------------------------------------------------------------------
-// entrieseditor Implementation
-// -----------------------------------------------------------------------------
-
 entrieseditor::entrieseditor(QWidget *parent) : QDialog(parent), ui(new Ui::entrieseditor) {
     ui->setupUi(this);
 
@@ -169,19 +160,19 @@ entrieseditor::entrieseditor(QWidget *parent) : QDialog(parent), ui(new Ui::entr
     search_timer_->setInterval(150);
     connect(search_timer_, &QTimer::timeout, this, &entrieseditor::reload_data);
 
-    connect(ui->search_box, &QLineEdit::textChanged, this, &entrieseditor::on_search_changed);
-    connect(ui->clear_search, &QPushButton::clicked, this, &entrieseditor::on_clear_search);
-    connect(ui->add_button, &QPushButton::clicked, this, &entrieseditor::on_add_entry);
-    connect(ui->add_translation, &QLineEdit::returnPressed, this, &entrieseditor::on_add_entry);
+    connect(ui->search_box, &QLineEdit::textChanged, this, &entrieseditor::search_text_changed);
+    connect(ui->clear_search, &QPushButton::clicked, this, &entrieseditor::clear_search);
+    connect(ui->add_button, &QPushButton::clicked, this, &entrieseditor::add_entry);
+    connect(ui->add_translation, &QLineEdit::returnPressed, this, &entrieseditor::add_entry);
     connect(ui->add_original, &QLineEdit::returnPressed, this, [this] {
         ui->add_translation->setFocus();
     });
 
-    connect(ui->edit_button, &QPushButton::clicked, this, &entrieseditor::on_edit_entry);
-    connect(ui->delete_button, &QPushButton::clicked, this, &entrieseditor::on_delete_entry);
+    connect(ui->edit_button, &QPushButton::clicked, this, &entrieseditor::edit_entry);
+    connect(ui->delete_button, &QPushButton::clicked, this, &entrieseditor::delete_entry);
     connect(ui->close_button, &QPushButton::clicked, this, &QDialog::accept);
 
-    connect(ui->entries_table, &QTableView::doubleClicked, this, &entrieseditor::on_table_double_clicked);
+    connect(ui->entries_table, &QTableView::doubleClicked, this, &entrieseditor::table_double_clicked);
     connect(ui->entries_table->selectionModel(), &QItemSelectionModel::selectionChanged, this, &entrieseditor::update_button_states);
 
     update_button_states();
@@ -225,14 +216,14 @@ void entrieseditor::reload_data() {
     execute_query(ui->search_box->text().trimmed());
 }
 
-void entrieseditor::update_button_states() {
+void entrieseditor::update_button_states() const {
     const bool has_sel = ui->entries_table->selectionModel() &&
                          !ui->entries_table->selectionModel()->selectedRows().isEmpty();
     ui->edit_button->setEnabled(has_sel);
     ui->delete_button->setEnabled(has_sel);
 }
 
-void entrieseditor::update_match_count_label() {
+void entrieseditor::update_match_count_label() const {
     const QString filter = ui->search_box->text().trimmed();
     const int shown_count = model_->rowCount();
 
@@ -346,7 +337,7 @@ void entrieseditor::execute_query(const QString& filter) {
     update_button_states();
 }
 
-void entrieseditor::fetch_next_batch() {
+void entrieseditor::fetch_next_batch() const {
     const QString filter = ui->search_box->text().trimmed();
     const int offset = model_->rowCount();
     constexpr int batch_size = 200;
@@ -427,29 +418,29 @@ void entrieseditor::fetch_next_batch() {
     update_match_count_label();
 }
 
-void entrieseditor::on_search_changed(const QString& /*text*/) {
+void entrieseditor::search_text_changed(const QString& /*text*/) const {
     search_timer_->start();
 }
 
-void entrieseditor::on_clear_search() {
+void entrieseditor::clear_search() {
     search_timer_->stop();
     ui->search_box->clear();
     reload_data();
     ui->search_box->setFocus();
 }
 
-void entrieseditor::on_add_entry() {
+void entrieseditor::add_entry() {
     const QString orig = ui->add_original->text().trimmed();
     const QString trans = ui->add_translation->text().trimmed();
 
     if (orig.isEmpty() || trans.isEmpty()) return;
 
     if (mode_ == EditorMode::Phrases) {
+        static const auto splitter = QRegularExpression(QStringLiteral("[/,]"));
         QStringList parts;
-        const auto tokens = trans.split(QRegularExpression(QStringLiteral("[/,]")), Qt::SkipEmptyParts);
-        for (const auto& token : tokens) {
-            const QString trimmed = token.trimmed();
-            if (!trimmed.isEmpty() && !parts.contains(trimmed)) {
+        for (const auto tokens = trans.split(splitter, Qt::SkipEmptyParts);
+            const auto& token : tokens) {
+            if (const QString trimmed = token.trimmed(); !trimmed.isEmpty() && !parts.contains(trimmed)) {
                 parts.append(trimmed);
             }
         }
@@ -485,19 +476,13 @@ void entrieseditor::on_add_entry() {
     ui->add_original->setFocus();
 }
 
-void entrieseditor::on_delete_entry() {
+void entrieseditor::delete_entry() {
     const auto selection = ui->entries_table->selectionModel()->selectedRows();
     if (selection.isEmpty()) return;
 
     const int row = selection.first().row();
     const auto* item = model_->item_at(row);
     if (!item) return;
-
-    const auto reply = QMessageBox::question(this, QStringLiteral("Confirm Deletion"),
-        QStringLiteral("Are you sure you want to delete '%1'?").arg(item->original),
-        QMessageBox::Yes | QMessageBox::No);
-
-    if (reply != QMessageBox::Yes) return;
 
     const QString original_key = item->original;
 
@@ -534,12 +519,12 @@ void entrieseditor::on_delete_entry() {
     }
 }
 
-void entrieseditor::on_table_double_clicked(const QModelIndex& index) {
+void entrieseditor::table_double_clicked(const QModelIndex& index) {
     if (!index.isValid()) return;
-    on_edit_entry();
+    edit_entry();
 }
 
-void entrieseditor::on_edit_entry() {
+void entrieseditor::edit_entry() {
     const auto selection = ui->entries_table->selectionModel()->selectedRows();
     if (selection.isEmpty()) return;
 
@@ -610,17 +595,17 @@ void entrieseditor::on_edit_entry() {
 void entrieseditor::keyPressEvent(QKeyEvent *event) {
     if (event->key() == Qt::Key_Delete) {
         if (ui->entries_table->hasFocus() || (!ui->search_box->hasFocus() && !ui->add_original->hasFocus() && !ui->add_translation->hasFocus())) {
-            on_delete_entry();
+            delete_entry();
             return;
         }
     } else if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
         if (ui->entries_table->hasFocus()) {
-            on_edit_entry();
+            edit_entry();
             return;
         }
     } else if (event->key() == Qt::Key_Escape) {
         if (ui->search_box->hasFocus() && !ui->search_box->text().isEmpty()) {
-            on_clear_search();
+            clear_search();
             return;
         }
     }
