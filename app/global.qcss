@@ -57,12 +57,12 @@ QPushButton:hover#delete_name {
     background-color: #D22B2B;
 }
 
-QPushButton#edit_set, QPushButton#dump_set, QPushButton#choose_set {
+QPushButton#entries_set, QPushButton#edit_set, QPushButton#dump_set, QPushButton#choose_set {
     background-color: #2b2b2b;
     border: 0.5px solid #6164f6;
     font-weight: bold;
 }
-QPushButton:hover#edit_set, QPushButton#dump_set, QPushButton:hover#choose_set {
+QPushButton:hover#entries_set, QPushButton:hover#edit_set, QPushButton#dump_set, QPushButton:hover#choose_set {
     background-color: #6164f6;
 }
 
@@ -454,5 +454,124 @@ findbar QPushButton#close:hover {
 findbar QPushButton#close:pressed {
     background-color: #c40e1d;
     color: #ffffff;
+}
+
+entrieseditor {
+    background-color: #1e1e24;
+}
+
+entrieseditor QTableView#entries_table {
+    background-color: #1e1e24;
+    alternate-background-color: #25252e;
+    selection-background-color: #214283;
+    selection-color: #ffffff;
+    border: 1px solid #3b3b4a;
+    gridline-color: transparent;
+    outline: none;
+}
+
+entrieseditor QTableView#entries_table::item {
+    padding: 3px 6px;
+    border: none;
+}
+
+entrieseditor QTableView#entries_table::item:selected {
+    background-color: #214283;
+    color: #ffffff;
+}
+
+entrieseditor QHeaderView::section {
+    background-color: #2b2b36;
+    color: #cfcfd8;
+    padding: 5px 8px;
+    border: 1px solid #3b3b4a;
+    font-weight: bold;
+}
+
+entrieseditor QLineEdit {
+    background-color: #2b2b36;
+    border: 1px solid #3b3b4a;
+    border-radius: 4px;
+    padding: 5px 8px;
+    color: #ffffff;
+    selection-background-color: #6164f6;
+}
+
+entrieseditor QLineEdit:focus {
+    border: 1px solid #6164f6;
+}
+
+entrieseditor QPushButton#add_button {
+    background-color: #2b2b36;
+    border: 1px solid #6164f6;
+    border-radius: 4px;
+    padding: 5px 14px;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+entrieseditor QPushButton#add_button:hover {
+    background-color: #6164f6;
+}
+
+entrieseditor QPushButton#add_button:pressed {
+    background-color: #4b4ec4;
+}
+
+entrieseditor QPushButton#edit_button {
+    background-color: #2b2b36;
+    border: 1px solid #6164f6;
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+entrieseditor QPushButton#edit_button:hover {
+    background-color: #6164f6;
+}
+
+entrieseditor QPushButton#edit_button:disabled {
+    background-color: #22222a;
+    border-color: #3b3b4a;
+    color: #666675;
+}
+
+entrieseditor QPushButton#delete_button {
+    background-color: #2b2b36;
+    border: 1px solid #D22B2B;
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+entrieseditor QPushButton#delete_button:hover {
+    background-color: #D22B2B;
+}
+
+entrieseditor QPushButton#delete_button:disabled {
+    background-color: #22222a;
+    border-color: #3b3b4a;
+    color: #666675;
+}
+
+entrieseditor QPushButton#clear_search,
+entrieseditor QPushButton#close_button {
+    background-color: #2b2b36;
+    border: 1px solid #555555;
+    border-radius: 4px;
+    padding: 5px 12px;
+    color: #ffffff;
+}
+
+entrieseditor QPushButton#clear_search:hover,
+entrieseditor QPushButton#close_button:hover {
+    background-color: #42414d;
+}
+
+entrieseditor QLabel#match_count {
+    color: #9a9aa6;
+    font-size: 9pt;
 }
 )"

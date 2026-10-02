@@ -30,6 +30,7 @@
 #include "core/dict.h"
 #include "documents/token_canvas.h"
 #include "findbar.h"
+#include "entrieseditor.h"
 
 namespace {
     class HanviTabBar : public QTabBar {
@@ -410,6 +411,54 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         }
     });
 
+    ui->current_name_set->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->current_name_set, &QPushButton::customContextMenuRequested, this, [this](const QPoint &pos) {
+        auto *menu = new QMenu(this);
+        menu->setObjectName("hamburger_menu");
+
+        auto *cur = current_tab();
+        const int set_id = cur ? cur->name_set_id : current_name_set_id;
+
+        auto *edit_action = menu->addAction("Edit Entries...");
+        edit_action->setEnabled(set_id != -1);
+        connect(edit_action, &QAction::triggered, this, [this, set_id, cur] {
+            if (set_id == -1) return;
+            QString title;
+            for (const auto &[index, t] : name_sets) {
+                if (index == set_id) {
+                    title = t;
+                    break;
+                }
+            }
+            auto *editor = new entrieseditor(this);
+            editor->setAttribute(Qt::WA_DeleteOnClose);
+            editor->set_nameset(set_id, title);
+            connect(editor, &entrieseditor::entries_changed, this, [this, cur] {
+                if (cur) cur->current_doc = nullptr;
+                convert_and_display(true);
+            });
+            editor->exec();
+        });
+
+        auto *choose_action = menu->addAction("Choose Nameset...");
+        connect(choose_action, &QAction::triggered, ui->current_name_set, &QPushButton::click);
+
+        auto *manage_action = menu->addAction("Namesets Manager...");
+        connect(manage_action, &QAction::triggered, this, [this] {
+            auto *manager = new NamesetsManager(this);
+            manager->setAttribute(Qt::WA_DeleteOnClose);
+            manager->exec();
+            load_data();
+            if (auto *cur = current_tab(); cur && cur->name_set_id != -1) {
+                load_name_set(cur->name_set_id);
+                cur->current_doc = nullptr;
+                convert_and_display(true);
+            }
+        });
+
+        menu->popup(ui->current_name_set->mapToGlobal(pos));
+    });
+
     ui->current_page->setValidator(new QIntValidator(1, 9999, this));
     connect(ui->current_page, &QLineEdit::editingFinished, this, [this] {
         if (auto *cur = current_tab(); cur && !cur->pages.isEmpty()) {
@@ -532,6 +581,30 @@ void MainWindow::setup_hamburger_menu(QPushButton *btn) {
 
     menu->addSeparator();
 
+    auto *edit_nameset_action = menu->addAction("Active Nameset Entries...");
+    connect(edit_nameset_action, &QAction::triggered, this, [this] {
+        auto *cur = current_tab();
+        const int set_id = cur ? cur->name_set_id : current_name_set_id;
+        if (set_id == -1) {
+            QMessageBox::information(this, "Active Nameset", "No nameset is currently active. Select a nameset first.");
+            return;
+        }
+        QString title;
+        for (const auto &[index, t] : name_sets) {
+            if (index == set_id) {
+                title = t;
+                break;
+            }
+        }
+        auto *editor = new entrieseditor(this);
+        editor->setAttribute(Qt::WA_DeleteOnClose);
+        editor->set_nameset(set_id, title);
+        connect(editor, &entrieseditor::entries_changed, this, [this, cur] {
+            if (cur) cur->current_doc = nullptr;
+            convert_and_display(true);
+        });
+        editor->exec();
+    });
 
     const auto *nameset_action = menu->addAction("Namesets Manager...");
     connect(nameset_action, &QAction::triggered, this, [this] {
@@ -539,6 +612,43 @@ void MainWindow::setup_hamburger_menu(QPushButton *btn) {
         manager->setAttribute(Qt::WA_DeleteOnClose);
         manager->exec();
         load_data();
+        if (auto *cur = current_tab(); cur && cur->name_set_id != -1) {
+            load_name_set(cur->name_set_id);
+            cur->current_doc = nullptr;
+            convert_and_display(true);
+        }
+    });
+
+    menu->addSeparator();
+
+    auto *dict_phrases_action = menu->addAction("Dictionary: Phrases...");
+    dict_phrases_action->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
+    dict_phrases_action->setShortcutContext(Qt::WindowShortcut);
+    this->addAction(dict_phrases_action);
+    connect(dict_phrases_action, &QAction::triggered, this, [this] {
+        auto *editor = new entrieseditor(this);
+        editor->setAttribute(Qt::WA_DeleteOnClose);
+        editor->set_phrases();
+        connect(editor, &entrieseditor::entries_changed, this, [this] {
+            if (auto *cur = current_tab()) cur->current_doc = nullptr;
+            convert_and_display(true);
+        });
+        editor->exec();
+    });
+
+    auto *dict_names_action = menu->addAction("Dictionary: Global Names...");
+    dict_names_action->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D));
+    dict_names_action->setShortcutContext(Qt::WindowShortcut);
+    this->addAction(dict_names_action);
+    connect(dict_names_action, &QAction::triggered, this, [this] {
+        auto *editor = new entrieseditor(this);
+        editor->setAttribute(Qt::WA_DeleteOnClose);
+        editor->set_global_names();
+        connect(editor, &entrieseditor::entries_changed, this, [this] {
+            if (auto *cur = current_tab()) cur->current_doc = nullptr;
+            convert_and_display(true);
+        });
+        editor->exec();
     });
 
     auto *reconvert_action = menu->addAction("Re-convert");
