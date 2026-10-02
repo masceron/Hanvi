@@ -25,6 +25,8 @@ struct CharSelection {
     }
 };
 
+class QWheelEvent;
+
 class TokenCanvas : public QAbstractScrollArea {
     Q_OBJECT
 
@@ -40,6 +42,9 @@ public:
 
     void set_line_height_percent(int percent);
     void set_font(const QFont& font);
+    void zoom(int steps);
+    void reset_zoom();
+    [[nodiscard]] int font_pixel_size() const noexcept;
 
     [[nodiscard]] int scroll_value() const;
     void set_scroll_value(int val) const;
@@ -52,7 +57,7 @@ public:
 
     [[nodiscard]] bool has_selection() const noexcept { return !normalized_selection().is_empty(); }
     [[nodiscard]] CharSelection normalized_selection() const noexcept { return CharSelection{.start = sel_start_, .end = sel_end_}.normalized(); }
-    void clear_selection() { sel_start_ = {}; sel_end_ = {}; }
+    void clear_selection() { sel_start_ = {}; sel_end_ = {}; if (viewport()) viewport()->update(); }
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -64,6 +69,7 @@ protected:
     void leaveEvent(QEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
     void focusInEvent(QFocusEvent* event) override;
     void focusOutEvent(QFocusEvent* event) override;
 
@@ -88,6 +94,7 @@ private:
     LanguageRole role_ = LanguageRole::Chinese;
     int line_height_percent_ = 100;
     QFont font_;
+    int default_pixel_size_ = 0;
     qreal margin_ = 8.0;
     int last_layout_width_ = 0;
 
