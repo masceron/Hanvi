@@ -25,6 +25,14 @@ struct CharSelection {
     }
 };
 
+struct SearchMatch {
+    size_t paragraph = 0;
+    int start_char = 0;
+    int length = 0;
+
+    auto operator<=>(const SearchMatch&) const = default;
+};
+
 class QWheelEvent;
 
 class TokenCanvas : public QAbstractScrollArea {
@@ -49,15 +57,29 @@ public:
     [[nodiscard]] int scroll_value() const;
     void set_scroll_value(int val) const;
     void scroll_to_token(uint32_t token_id) const;
+    void scroll_to_char(size_t p_idx, int char_pos);
 
     [[nodiscard]] QString full_text() const;
     void copy_all_to_clipboard() const;
 
+    [[nodiscard]] QString selected_text() const;
     void copy_selection_to_clipboard() const;
 
     [[nodiscard]] bool has_selection() const noexcept { return !normalized_selection().is_empty(); }
     [[nodiscard]] CharSelection normalized_selection() const noexcept { return CharSelection{.start = sel_start_, .end = sel_end_}.normalized(); }
     void clear_selection() { sel_start_ = {}; sel_end_ = {}; if (viewport()) viewport()->update(); }
+
+    int search(const QString& query);
+    bool find_next();
+    bool find_previous();
+    void clear_search();
+
+    [[nodiscard]] int current_search_match_index() const noexcept { return current_search_idx_; }
+    [[nodiscard]] int search_match_count() const noexcept { return static_cast<int>(search_matches_.size()); }
+    [[nodiscard]] const QString& current_search_query() const noexcept { return search_query_; }
+
+signals:
+    void search_results_changed(int current_match, int total_matches);
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -113,6 +135,12 @@ private:
     [[nodiscard]] size_t find_paragraph_at_y(qreal doc_y) const;
     [[nodiscard]] std::optional<std::pair<size_t, int>> char_at_pos(const QPoint& viewport_pos, bool clamp) const;
     [[nodiscard]] const TokenSpan* token_at_char(size_t p_idx, int char_pos) const;
+
+    QString search_query_;
+    std::vector<SearchMatch> search_matches_;
+    int current_search_idx_ = -1;
+
+    void scroll_to_match(int idx);
 
 private slots:
     void on_document_changed(const std::shared_ptr<const AlignedDocument>& doc);

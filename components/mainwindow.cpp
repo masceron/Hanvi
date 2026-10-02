@@ -29,6 +29,7 @@
 #include "../core/converter.h"
 #include "core/dict.h"
 #include "documents/token_canvas.h"
+#include "findbar.h"
 
 namespace {
     class HanviTabBar : public QTabBar {
@@ -282,6 +283,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     vn_font.setPixelSize(16);
     ui->vn_output->set_font(vn_font);
     ui->vn_output->set_line_height_percent(125);
+
+    find_bar = new findbar(ui->vn_output->viewport());
+    find_bar->hide();
+    ui->vn_output->viewport()->installEventFilter(this);
+
+    connect(find_bar, &findbar::search_requested, ui->vn_output, &TokenCanvas::search);
+    connect(find_bar, &findbar::next_requested, ui->vn_output, &TokenCanvas::find_next);
+    connect(find_bar, &findbar::previous_requested, ui->vn_output, &TokenCanvas::find_previous);
+    connect(find_bar, &findbar::closed, this, [this] {
+        ui->vn_output->clear_search();
+        ui->vn_output->setFocus();
+    });
+    connect(ui->vn_output, &TokenCanvas::search_results_changed, find_bar, &findbar::set_matches_count);
 
     connect(session, &DocumentSession::request_dict_popup, this, &MainWindow::on_request_dict_popup);
     connect(session, &DocumentSession::request_rule_popup, this, &MainWindow::on_request_rule_popup);
@@ -641,12 +655,21 @@ void MainWindow::changeEvent(QEvent *event) {
 }
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
+    if (ui && ui->vn_output && obj == ui->vn_output->viewport() && event->type() == QEvent::Resize) {
+        reposition_findbar();
+    }
+
     if (event->type() == QEvent::KeyPress) {
         const auto *ke = dynamic_cast<QKeyEvent *>(event);
         if (!ke) return QMainWindow::eventFilter(obj, event);
 
         if (!QApplication::activeModalWidget()) {
             if (ke->modifiers().testFlag(Qt::ControlModifier)) {
+                if (ke->key() == Qt::Key_F) {
+                    show_findbar();
+                    return true;
+                }
+
                 if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab) {
                     if (tabs.size() > 1) {
                         if (ke->modifiers().testFlag(Qt::ShiftModifier) || ke->key() == Qt::Key_Backtab) {
@@ -675,6 +698,20 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
                     }
                     return true;
                 }
+            } else if (ke->key() == Qt::Key_F3) {
+                if (find_bar && !find_bar->search_text().isEmpty()) {
+                    if (ke->modifiers().testFlag(Qt::ShiftModifier)) {
+                        ui->vn_output->find_previous();
+                    } else {
+                        ui->vn_output->find_next();
+                    }
+                    return true;
+                }
+            } else if (ke->key() == Qt::Key_Escape && find_bar && find_bar->isVisible()) {
+                find_bar->hide();
+                ui->vn_output->clear_search();
+                ui->vn_output->setFocus();
+                return true;
             } else if (session && session->active_token_id() != 0) {
                 const QWidget *fw = QApplication::focusWidget();
                 const bool is_input = fw && (qobject_cast<const QLineEdit*>(fw) || qobject_cast<const QSpinBox*>(fw));
@@ -696,7 +733,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
         if (const auto *ke = dynamic_cast<QKeyEvent *>(event); ke->modifiers().testFlag(Qt::ControlModifier) && !
                                                                QApplication::activeModalWidget()) {
             if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab ||
-                (ke->key() >= Qt::Key_0 && ke->key() <= Qt::Key_9)) {
+                (ke->key() >= Qt::Key_0 && ke->key() <= Qt::Key_9) || ke->key() == Qt::Key_F) {
                 event->accept();
                 return true;
             }
@@ -1160,3 +1197,29 @@ void MainWindow::on_request_rule_popup(const Rule *rule) {
     popup->setAttribute(Qt::WA_DeleteOnClose);
     popup->exec();
 }
+
+void MainWindow::reposition_findbar() {
+    if (!find_bar || !ui || !ui->vn_output || !ui->vn_output->viewport()) return;
+    constexpr int margin_right = 16;
+    constexpr int margin_top = 10;
+    const int x = ui->vn_output->viewport()->width() - find_bar->width() - margin_right;
+    const int y = margin_top;
+    find_bar->move(std::max(10, x), y);
+    find_bar->raise();
+}
+
+void MainWindow::show_findbar() {
+    if (!find_bar || !ui || !ui->vn_output) return;
+    const QString sel = ui->vn_output->selected_text().trimmed();
+    if (!sel.isEmpty() && !sel.contains(u'\n')) {
+        find_bar->set_search_text(sel);
+    }
+    reposition_findbar();
+    find_bar->show();
+    find_bar->raise();
+    find_bar->focus_input();
+    if (!find_bar->search_text().isEmpty()) {
+        ui->vn_output->search(find_bar->search_text());
+    }
+}
+

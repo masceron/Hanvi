@@ -126,7 +126,10 @@ add_executable(Hanvi WIN32
         components/namesetchooser.cpp    components/namesetchooser.h    components/namesetchooser.ui
         components/documents/document_session.cpp components/documents/document_session.h
         components/documents/token_canvas.cpp     components/documents/token_canvas.h
-        components/loader.h components/chipdelegate.h components/chiplist.h)
+        components/loader.h components/chipdelegate.h components/chiplist.h
+        components/findbar.cpp
+        components/findbar.h
+        components/findbar.ui)
 target_link_libraries(Hanvi PRIVATE CoreLogic Qt::Gui Qt::Widgets dwmapi hanvi_flags)
 if (MSVC)
     target_sources(Hanvi PRIVATE resources/app.manifest)
