@@ -102,6 +102,6 @@ private:
     HPOWERNOTIFY m_powerNotify = nullptr;
 
     findbar* find_bar = nullptr;
-    void show_findbar();
-    void reposition_findbar();
+    void show_findbar() const;
+    void reposition_findbar() const;
 };

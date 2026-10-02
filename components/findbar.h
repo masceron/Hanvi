@@ -15,9 +15,9 @@ public:
     explicit findbar(QWidget *parent = nullptr);
     ~findbar() override;
 
-    void set_matches_count(int current, int total);
-    void focus_input();
-    void set_search_text(const QString& text);
+    void set_matches_count(int current, int total) const;
+    void focus_input() const;
+    void set_search_text(const QString& text) const;
     [[nodiscard]] QString search_text() const;
 
 signals:

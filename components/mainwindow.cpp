@@ -1308,20 +1308,19 @@ void MainWindow::on_request_rule_popup(const Rule *rule) {
     popup->exec();
 }
 
-void MainWindow::reposition_findbar() {
+void MainWindow::reposition_findbar() const {
     if (!find_bar || !ui || !ui->vn_output || !ui->vn_output->viewport()) return;
     constexpr int margin_right = 16;
     constexpr int margin_top = 10;
     const int x = ui->vn_output->viewport()->width() - find_bar->width() - margin_right;
-    const int y = margin_top;
+    constexpr int y = margin_top;
     find_bar->move(std::max(10, x), y);
     find_bar->raise();
 }
 
-void MainWindow::show_findbar() {
+void MainWindow::show_findbar() const {
     if (!find_bar || !ui || !ui->vn_output) return;
-    const QString sel = ui->vn_output->selected_text().trimmed();
-    if (!sel.isEmpty() && !sel.contains(u'\n')) {
+    if (const QString sel = ui->vn_output->selected_text().trimmed(); !sel.isEmpty() && !sel.contains(u'\n')) {
         find_bar->set_search_text(sel);
     }
     reposition_findbar();

@@ -926,8 +926,7 @@ void TokenCanvas::focusOutEvent(QFocusEvent* event)
     update();
 }
 
-void TokenCanvas::scroll_to_char(const size_t p_idx, const int char_pos)
-{
+void TokenCanvas::scroll_to_char(const size_t p_idx, const int char_pos) const {
     if (p_idx >= layouts_.size()) return;
     const auto& pl = layouts_[p_idx];
     if (!pl.layout_valid || !pl.text_layout) return;
@@ -983,8 +982,7 @@ void TokenCanvas::scroll_to_token(const uint32_t token_id) const
     }
 }
 
-void TokenCanvas::scroll_to_match(const int idx)
-{
+void TokenCanvas::scroll_to_match(const int idx) const {
     if (idx < 0 || idx >= static_cast<int>(search_matches_.size())) return;
     const auto& m = search_matches_[idx];
     scroll_to_char(m.paragraph, m.start_char);

@@ -31,7 +31,7 @@ findbar::~findbar() {
     delete ui;
 }
 
-void findbar::set_matches_count(const int current, const int total) {
+void findbar::set_matches_count(const int current, const int total) const {
     if (total <= 0) {
         ui->matches->setText(QStringLiteral("0/0"));
         ui->next_match->setEnabled(false);
@@ -43,12 +43,12 @@ void findbar::set_matches_count(const int current, const int total) {
     }
 }
 
-void findbar::focus_input() {
+void findbar::focus_input() const {
     ui->search_box->setFocus();
     ui->search_box->selectAll();
 }
 
-void findbar::set_search_text(const QString& text) {
+void findbar::set_search_text(const QString& text) const {
     ui->search_box->setText(text);
     ui->search_box->selectAll();
 }
@@ -59,7 +59,7 @@ QString findbar::search_text() const {
 
 bool findbar::eventFilter(QObject *watched, QEvent *event) {
     if (watched == ui->search_box && event->type() == QEvent::KeyPress) {
-        const auto *ke = static_cast<QKeyEvent*>(event);
+        const auto *ke = dynamic_cast<QKeyEvent*>(event);
         if (ke->key() == Qt::Key_Escape) {
             hide();
             emit closed();

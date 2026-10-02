@@ -57,7 +57,7 @@ public:
     [[nodiscard]] int scroll_value() const;
     void set_scroll_value(int val) const;
     void scroll_to_token(uint32_t token_id) const;
-    void scroll_to_char(size_t p_idx, int char_pos);
+    void scroll_to_char(size_t p_idx, int char_pos) const;
 
     [[nodiscard]] QString full_text() const;
     void copy_all_to_clipboard() const;
@@ -140,7 +140,7 @@ private:
     std::vector<SearchMatch> search_matches_;
     int current_search_idx_ = -1;
 
-    void scroll_to_match(int idx);
+    void scroll_to_match(int idx) const;
 
 private slots:
     void on_document_changed(const std::shared_ptr<const AlignedDocument>& doc);

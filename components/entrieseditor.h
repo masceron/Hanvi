@@ -28,13 +28,17 @@ class EntriesModel : public QAbstractTableModel {
 public:
     explicit EntriesModel(QObject *parent = nullptr);
 
-    [[nodiscard]] int rowCount(const QModelIndex &parent = QModelIndex()) const override;
-    [[nodiscard]] int columnCount(const QModelIndex &parent = QModelIndex()) const override;
-    [[nodiscard]] QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
-    [[nodiscard]] QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
+    [[nodiscard]] int rowCount(const QModelIndex &parent) const override;
+    [[nodiscard]] int rowCount() const noexcept { return static_cast<int>(items_.size()); }
+    [[nodiscard]] int columnCount(const QModelIndex &parent) const override;
+    static int columnCount() noexcept { return 2; }
+    [[nodiscard]] QVariant data(const QModelIndex &index, int role) const override;
+    [[nodiscard]] QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
 
-    [[nodiscard]] bool canFetchMore(const QModelIndex &parent = QModelIndex()) const override;
-    void fetchMore(const QModelIndex &parent = QModelIndex()) override;
+    [[nodiscard]] bool canFetchMore(const QModelIndex &parent) const override;
+    [[nodiscard]] bool canFetchMore() const { return canFetchMore(QModelIndex()); }
+    void fetchMore(const QModelIndex &parent) override;
+    void fetchMore() { fetchMore(QModelIndex()); }
 
     void set_items(std::vector<EntryItem> items, bool is_phrases_mode, bool has_more);
     void append_items(std::vector<EntryItem> items, bool has_more);
@@ -73,14 +77,14 @@ signals:
 protected:
     void keyPressEvent(QKeyEvent *event) override;
 
-private slots:
-    void on_search_changed(const QString& text);
-    void on_clear_search();
-    void on_add_entry();
-    void on_edit_entry();
-    void on_delete_entry();
-    void on_table_double_clicked(const QModelIndex& index);
-    void fetch_next_batch();
+private:
+    void search_text_changed(const QString& text) const;
+    void clear_search();
+    void add_entry();
+    void edit_entry();
+    void delete_entry();
+    void table_double_clicked(const QModelIndex& index);
+    void fetch_next_batch() const;
 
 private:
     Ui::entrieseditor *ui;
@@ -95,6 +99,6 @@ private:
 
     void reload_data();
     void execute_query(const QString& filter);
-    void update_button_states();
-    void update_match_count_label();
+    void update_button_states() const;
+    void update_match_count_label() const;
 };
