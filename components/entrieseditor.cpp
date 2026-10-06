@@ -14,7 +14,8 @@
 #include <QTimer>
 #include <QScrollBar>
 
-EntriesModel::EntriesModel(QObject *parent) : QAbstractTableModel(parent) {}
+EntriesModel::EntriesModel(QObject *parent) : QAbstractTableModel(parent) {
+}
 
 int EntriesModel::rowCount(const QModelIndex &parent) const {
     if (parent.isValid()) return 0;
@@ -31,7 +32,7 @@ QVariant EntriesModel::data(const QModelIndex &index, int role) const {
         return {};
     }
 
-    const auto& item = items_[index.row()];
+    const auto &item = items_[index.row()];
 
     if (role == Qt::DisplayRole) {
         if (index.column() == 0) {
@@ -82,8 +83,7 @@ bool EntriesModel::canFetchMore(const QModelIndex &parent) const {
 }
 
 void EntriesModel::fetchMore(const QModelIndex &parent) {
-    if (parent.isValid() || !has_more_ || is_fetching_) return;
-    is_fetching_ = true;
+    if (parent.isValid() || !has_more_) return;
     emit fetch_more_requested();
 }
 
@@ -92,26 +92,44 @@ void EntriesModel::set_items(std::vector<EntryItem> items, const bool is_phrases
     items_ = std::move(items);
     is_phrases_mode_ = is_phrases_mode;
     has_more_ = has_more;
-    is_fetching_ = false;
     endResetModel();
 }
 
-void EntriesModel::append_items(std::vector<EntryItem> items, const bool has_more) {
-    if (items.empty()) {
-        has_more_ = false;
-        is_fetching_ = false;
-        return;
-    }
+void EntriesModel::append_items(std::vector<EntryItem> items) {
+    if (items.empty()) return;
     const int start_row = static_cast<int>(items_.size());
     const int count = static_cast<int>(items.size());
     beginInsertRows(QModelIndex(), start_row, start_row + count - 1);
     items_.insert(items_.end(), std::make_move_iterator(items.begin()), std::make_move_iterator(items.end()));
-    has_more_ = has_more;
-    is_fetching_ = false;
     endInsertRows();
 }
 
-void EntriesModel::update_translation(const int row, const QString& new_trans) {
+void EntriesModel::prepend_items(std::vector<EntryItem> items) {
+    if (items.empty()) return;
+    const int count = static_cast<int>(items.size());
+    beginInsertRows(QModelIndex(), 0, count - 1);
+    items_.insert(items_.begin(), std::make_move_iterator(items.begin()), std::make_move_iterator(items.end()));
+    endInsertRows();
+}
+
+void EntriesModel::trim_top(const int count) {
+    if (count <= 0 || items_.empty()) return;
+    const int actual_count = std::min(count, static_cast<int>(items_.size()));
+    beginRemoveRows(QModelIndex(), 0, actual_count - 1);
+    items_.erase(items_.begin(), items_.begin() + actual_count);
+    endRemoveRows();
+}
+
+void EntriesModel::trim_bottom(const int count) {
+    if (count <= 0 || items_.empty()) return;
+    const int actual_count = std::min(count, static_cast<int>(items_.size()));
+    const int start = static_cast<int>(items_.size()) - actual_count;
+    beginRemoveRows(QModelIndex(), start, static_cast<int>(items_.size()) - 1);
+    items_.erase(items_.begin() + start, items_.end());
+    endRemoveRows();
+}
+
+void EntriesModel::update_translation(const int row, const QString &new_trans) {
     if (row < 0 || row >= static_cast<int>(items_.size())) return;
     items_[row].translated = new_trans;
     const auto idx = index(row, 1);
@@ -125,7 +143,7 @@ void EntriesModel::remove_row(const int row) {
     endRemoveRows();
 }
 
-const EntryItem* EntriesModel::item_at(const int row) const {
+const EntryItem *EntriesModel::item_at(const int row) const {
     if (row < 0 || row >= static_cast<int>(items_.size())) return nullptr;
     return &items_[row];
 }
@@ -137,21 +155,13 @@ entrieseditor::entrieseditor(QWidget *parent) : QDialog(parent), ui(new Ui::entr
     ui->entries_table->setModel(model_);
     ui->entries_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     ui->entries_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    ui->entries_table->setVerticalScrollMode(QAbstractItemView::ScrollPerItem);
 
-    connect(model_, &EntriesModel::fetch_more_requested, this, &entrieseditor::fetch_next_batch);
-
-    connect(ui->entries_table->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int value) {
-        auto *sb = ui->entries_table->verticalScrollBar();
-        if (sb && sb->maximum() > 0 && value >= sb->maximum() - 15) {
-            if (model_->canFetchMore()) {
-                model_->fetchMore();
-            }
-        }
-    });
-
+    connect(model_, &EntriesModel::fetch_more_requested, this, &entrieseditor::fetch_down);
+    connect(ui->entries_table->verticalScrollBar(), &QScrollBar::valueChanged, this, &entrieseditor::handle_scroll);
     connect(ui->entries_table->verticalScrollBar(), &QScrollBar::rangeChanged, this, [this](int /*min*/, int max) {
-        if (max == 0 && model_->canFetchMore()) {
-            model_->fetchMore();
+        if (!is_updating_window_ && max == 0 && has_more_below_) {
+            fetch_down();
         }
     });
 
@@ -173,7 +183,8 @@ entrieseditor::entrieseditor(QWidget *parent) : QDialog(parent), ui(new Ui::entr
     connect(ui->close_button, &QPushButton::clicked, this, &QDialog::accept);
 
     connect(ui->entries_table, &QTableView::doubleClicked, this, &entrieseditor::table_double_clicked);
-    connect(ui->entries_table->selectionModel(), &QItemSelectionModel::selectionChanged, this, &entrieseditor::update_button_states);
+    connect(ui->entries_table->selectionModel(), &QItemSelectionModel::selectionChanged, this,
+            &entrieseditor::update_button_states);
 
     update_button_states();
 }
@@ -182,7 +193,7 @@ entrieseditor::~entrieseditor() {
     delete ui;
 }
 
-void entrieseditor::set_nameset(const int set_id, const QString& title) {
+void entrieseditor::set_nameset(const int set_id, const QString &title) {
     mode_ = EditorMode::Nameset;
     set_id_ = set_id;
     set_title_ = title;
@@ -225,27 +236,120 @@ void entrieseditor::update_button_states() const {
 
 void entrieseditor::update_match_count_label() const {
     const QString filter = ui->search_box->text().trimmed();
-    const int shown_count = model_->rowCount();
+    const int count = model_->rowCount();
+
+    if (count == 0) {
+        ui->match_count->setText(QStringLiteral("0 entries"));
+        return;
+    }
+
+    const int start_idx = window_offset_ + 1;
+    const int end_idx = window_offset_ + count;
 
     if (filter.isEmpty()) {
-        const int total = (cached_total_count_ >= 0) ? cached_total_count_ : shown_count;
-        if (total > shown_count) {
-            ui->match_count->setText(QStringLiteral("Showing %1 of %2 entries").arg(shown_count).arg(total));
+        const int total = (cached_total_count_ >= 0) ? cached_total_count_ : end_idx;
+        if (total > count) {
+            ui->match_count->setText(QStringLiteral("Entries %1 – %2 of %3")
+                .arg(start_idx).arg(end_idx).arg(total));
         } else {
             ui->match_count->setText(QStringLiteral("%1 entries").arg(total));
         }
     } else {
-        if (model_->has_more()) {
-            ui->match_count->setText(QStringLiteral("Showing %1 matches (scroll for more)").arg(shown_count));
+        if (has_more_below_) {
+            ui->match_count->setText(QStringLiteral("Matches %1 – %2 (scroll for more)")
+                .arg(start_idx).arg(end_idx));
+        } else if (window_offset_ > 0) {
+            ui->match_count->setText(QStringLiteral("Matches %1 – %2")
+                .arg(start_idx).arg(end_idx));
         } else {
-            ui->match_count->setText(QStringLiteral("%1 matches").arg(shown_count));
+            ui->match_count->setText(QStringLiteral("%1 matches").arg(count));
         }
     }
 }
 
-void entrieseditor::execute_query(const QString& filter) {
+std::vector<EntryItem> entrieseditor::query_items(const QString &filter, const int offset, const int limit) const {
     std::vector<EntryItem> items;
-    constexpr int batch_size = 200;
+
+    if (mode_ == EditorMode::Nameset) {
+        QSqlQuery q;
+        if (filter.isEmpty()) {
+            q.prepare(QStringLiteral(
+                "SELECT original, translated FROM name_set_entries WHERE set_id = :id ORDER BY original LIMIT :limit OFFSET :offset"));
+            q.bindValue(QStringLiteral(":id"), set_id_);
+            q.bindValue(QStringLiteral(":limit"), limit);
+            q.bindValue(QStringLiteral(":offset"), offset);
+        } else {
+            q.prepare(QStringLiteral("SELECT original, translated FROM name_set_entries WHERE set_id = :id AND "
+                "(original LIKE :filter OR translated LIKE :filter) ORDER BY original LIMIT :limit OFFSET :offset"));
+            q.bindValue(QStringLiteral(":id"), set_id_);
+            q.bindValue(QStringLiteral(":filter"), QStringLiteral("%%1%").arg(filter));
+            q.bindValue(QStringLiteral(":limit"), limit);
+            q.bindValue(QStringLiteral(":offset"), offset);
+        }
+
+        if (q.exec()) {
+            while (q.next()) {
+                items.push_back(EntryItem{
+                    .original = q.value(0).toString(),
+                    .translated = q.value(1).toString()
+                });
+            }
+        }
+    } else if (mode_ == EditorMode::Phrases) {
+        QSqlQuery q;
+        if (filter.isEmpty()) {
+            q.prepare(QStringLiteral(
+                "SELECT original, translated FROM phrases ORDER BY original LIMIT :limit OFFSET :offset"));
+            q.bindValue(QStringLiteral(":limit"), limit);
+            q.bindValue(QStringLiteral(":offset"), offset);
+        } else {
+            q.prepare(QStringLiteral(
+                "SELECT original, translated FROM phrases WHERE original LIKE :filter OR translated LIKE :filter ORDER BY original LIMIT :limit OFFSET :offset"));
+            q.bindValue(QStringLiteral(":filter"), QStringLiteral("%%1%").arg(filter));
+            q.bindValue(QStringLiteral(":limit"), limit);
+            q.bindValue(QStringLiteral(":offset"), offset);
+        }
+
+        if (q.exec()) {
+            while (q.next()) {
+                items.push_back(EntryItem{
+                    .original = q.value(0).toString(),
+                    .translated = q.value(1).toString()
+                });
+            }
+        }
+    } else if (mode_ == EditorMode::GlobalNames) {
+        QSqlQuery q;
+        if (filter.isEmpty()) {
+            q.prepare(QStringLiteral(
+                "SELECT original, translated FROM names ORDER BY original LIMIT :limit OFFSET :offset"));
+            q.bindValue(QStringLiteral(":limit"), limit);
+            q.bindValue(QStringLiteral(":offset"), offset);
+        } else {
+            q.prepare(QStringLiteral(
+                "SELECT original, translated FROM names WHERE original LIKE :filter OR translated LIKE :filter ORDER BY original LIMIT :limit OFFSET :offset"));
+            q.bindValue(QStringLiteral(":filter"), QStringLiteral("%%1%").arg(filter));
+            q.bindValue(QStringLiteral(":limit"), limit);
+            q.bindValue(QStringLiteral(":offset"), offset);
+        }
+
+        if (q.exec()) {
+            while (q.next()) {
+                items.push_back(EntryItem{
+                    .original = q.value(0).toString(),
+                    .translated = q.value(1).toString()
+                });
+            }
+        }
+    }
+
+    return items;
+}
+
+void entrieseditor::execute_query(const QString &filter) {
+    is_updating_window_ = true;
+    window_offset_ = 0;
+    constexpr int initial_count = 200;
 
     if (filter.isEmpty() && cached_total_count_ < 0) {
         if (mode_ == EditorMode::Nameset) {
@@ -268,162 +372,143 @@ void entrieseditor::execute_query(const QString& filter) {
         }
     }
 
-    if (mode_ == EditorMode::Nameset) {
-        QSqlQuery q;
-        if (filter.isEmpty()) {
-            q.prepare(QStringLiteral("SELECT original, translated FROM name_set_entries WHERE set_id = :id ORDER BY original LIMIT :limit"));
-            q.bindValue(QStringLiteral(":id"), set_id_);
-            q.bindValue(QStringLiteral(":limit"), batch_size);
-        } else {
-            q.prepare(QStringLiteral("SELECT original, translated FROM name_set_entries WHERE set_id = :id AND "
-                                    "(original LIKE :filter OR translated LIKE :filter) ORDER BY original LIMIT :limit"));
-            q.bindValue(QStringLiteral(":id"), set_id_);
-            q.bindValue(QStringLiteral(":filter"), QStringLiteral("%%1%").arg(filter));
-            q.bindValue(QStringLiteral(":limit"), batch_size);
-        }
+    std::vector<EntryItem> items = query_items(filter, 0, initial_count);
+    has_more_below_ = static_cast<int>(items.size()) == initial_count;
 
-        if (q.exec()) {
-            while (q.next()) {
-                items.push_back(EntryItem{
-                    .original = q.value(0).toString(),
-                    .translated = q.value(1).toString()
-                });
-            }
-        }
-    } else if (mode_ == EditorMode::Phrases) {
-        QSqlQuery q;
-        if (filter.isEmpty()) {
-            q.prepare(QStringLiteral("SELECT original, translated FROM phrases ORDER BY original LIMIT :limit"));
-            q.bindValue(QStringLiteral(":limit"), batch_size);
-        } else {
-            q.prepare(QStringLiteral("SELECT original, translated FROM phrases WHERE original LIKE :filter OR translated LIKE :filter ORDER BY original LIMIT :limit"));
-            q.bindValue(QStringLiteral(":filter"), QStringLiteral("%%1%").arg(filter));
-            q.bindValue(QStringLiteral(":limit"), batch_size);
-        }
+    model_->set_items(std::move(items), mode_ == EditorMode::Phrases, has_more_below_);
 
-        if (q.exec()) {
-            while (q.next()) {
-                items.push_back(EntryItem{
-                    .original = q.value(0).toString(),
-                    .translated = q.value(1).toString()
-                });
-            }
-        }
-    } else if (mode_ == EditorMode::GlobalNames) {
-        QSqlQuery q;
-        if (filter.isEmpty()) {
-            q.prepare(QStringLiteral("SELECT original, translated FROM names ORDER BY original LIMIT :limit"));
-            q.bindValue(QStringLiteral(":limit"), batch_size);
-        } else {
-            q.prepare(QStringLiteral("SELECT original, translated FROM names WHERE original LIKE :filter OR translated LIKE :filter ORDER BY original LIMIT :limit"));
-            q.bindValue(QStringLiteral(":filter"), QStringLiteral("%%1%").arg(filter));
-            q.bindValue(QStringLiteral(":limit"), batch_size);
-        }
-
-        if (q.exec()) {
-            while (q.next()) {
-                items.push_back(EntryItem{
-                    .original = q.value(0).toString(),
-                    .translated = q.value(1).toString()
-                });
-            }
-        }
+    if (auto *sb = ui->entries_table->verticalScrollBar()) {
+        sb->setValue(0);
     }
 
-    const bool has_more = static_cast<int>(items.size()) == batch_size;
-    model_->set_items(std::move(items), mode_ == EditorMode::Phrases, has_more);
+    is_updating_window_ = false;
 
     update_match_count_label();
     update_button_states();
 }
 
-void entrieseditor::fetch_next_batch() const {
+void entrieseditor::handle_scroll(const int value) {
+    if (is_updating_window_) return;
+
+    auto *sb = ui->entries_table->verticalScrollBar();
+    if (!sb) return;
+
+    if (has_more_below_ && sb->maximum() > 0 && value >= sb->maximum() - 20) {
+        fetch_down();
+        return;
+    }
+
+    if (window_offset_ > 0 && value <= 20) {
+        fetch_up();
+    }
+}
+
+void entrieseditor::fetch_down() {
+    if (is_updating_window_ || !has_more_below_) return;
+    is_updating_window_ = true;
+
     const QString filter = ui->search_box->text().trimmed();
-    const int offset = model_->rowCount();
-    constexpr int batch_size = 200;
+    const int fetch_offset = window_offset_ + model_->rowCount();
+    constexpr int chunk_size = 100;
+    constexpr int max_window = 400;
 
-    std::vector<EntryItem> new_items;
+    std::vector<EntryItem> new_items = query_items(filter, fetch_offset, chunk_size);
 
-    if (mode_ == EditorMode::Nameset) {
-        QSqlQuery q;
-        if (filter.isEmpty()) {
-            q.prepare(QStringLiteral("SELECT original, translated FROM name_set_entries WHERE set_id = :id ORDER BY original LIMIT :limit OFFSET :offset"));
-            q.bindValue(QStringLiteral(":id"), set_id_);
-            q.bindValue(QStringLiteral(":limit"), batch_size);
-            q.bindValue(QStringLiteral(":offset"), offset);
+    if (new_items.empty()) {
+        has_more_below_ = false;
+        model_->set_has_more(false);
+        is_updating_window_ = false;
+        update_match_count_label();
+        return;
+    }
+
+    if (static_cast<int>(new_items.size()) < chunk_size) {
+        has_more_below_ = false;
+        model_->set_has_more(false);
+    }
+
+    model_->append_items(std::move(new_items));
+
+    if (model_->rowCount() > max_window) {
+        const int trim_count = model_->rowCount() - max_window;
+        auto *sb = ui->entries_table->verticalScrollBar();
+        const int cur_scroll = sb ? sb->value() : 0;
+
+        const auto sel = ui->entries_table->selectionModel()->selectedRows();
+        const int sel_row = sel.isEmpty() ? -1 : sel.first().row();
+
+        model_->trim_top(trim_count);
+        window_offset_ += trim_count;
+
+        if (sb) {
+            sb->setValue(std::max(0, cur_scroll - trim_count));
+        }
+        if (sel_row >= trim_count) {
+            ui->entries_table->selectRow(sel_row - trim_count);
         } else {
-            q.prepare(QStringLiteral("SELECT original, translated FROM name_set_entries WHERE set_id = :id AND "
-                                    "(original LIKE :filter OR translated LIKE :filter) ORDER BY original LIMIT :limit OFFSET :offset"));
-            q.bindValue(QStringLiteral(":id"), set_id_);
-            q.bindValue(QStringLiteral(":filter"), QStringLiteral("%%1%").arg(filter));
-            q.bindValue(QStringLiteral(":limit"), batch_size);
-            q.bindValue(QStringLiteral(":offset"), offset);
-        }
-
-        if (q.exec()) {
-            while (q.next()) {
-                new_items.push_back(EntryItem{
-                    .original = q.value(0).toString(),
-                    .translated = q.value(1).toString()
-                });
-            }
-        }
-    } else if (mode_ == EditorMode::Phrases) {
-        QSqlQuery q;
-        if (filter.isEmpty()) {
-            q.prepare(QStringLiteral("SELECT original, translated FROM phrases ORDER BY original LIMIT :limit OFFSET :offset"));
-            q.bindValue(QStringLiteral(":limit"), batch_size);
-            q.bindValue(QStringLiteral(":offset"), offset);
-        } else {
-            q.prepare(QStringLiteral("SELECT original, translated FROM phrases WHERE original LIKE :filter OR translated LIKE :filter ORDER BY original LIMIT :limit OFFSET :offset"));
-            q.bindValue(QStringLiteral(":filter"), QStringLiteral("%%1%").arg(filter));
-            q.bindValue(QStringLiteral(":limit"), batch_size);
-            q.bindValue(QStringLiteral(":offset"), offset);
-        }
-
-        if (q.exec()) {
-            while (q.next()) {
-                new_items.push_back(EntryItem{
-                    .original = q.value(0).toString(),
-                    .translated = q.value(1).toString()
-                });
-            }
-        }
-    } else if (mode_ == EditorMode::GlobalNames) {
-        QSqlQuery q;
-        if (filter.isEmpty()) {
-            q.prepare(QStringLiteral("SELECT original, translated FROM names ORDER BY original LIMIT :limit OFFSET :offset"));
-            q.bindValue(QStringLiteral(":limit"), batch_size);
-            q.bindValue(QStringLiteral(":offset"), offset);
-        } else {
-            q.prepare(QStringLiteral("SELECT original, translated FROM names WHERE original LIKE :filter OR translated LIKE :filter ORDER BY original LIMIT :limit OFFSET :offset"));
-            q.bindValue(QStringLiteral(":filter"), QStringLiteral("%%1%").arg(filter));
-            q.bindValue(QStringLiteral(":limit"), batch_size);
-            q.bindValue(QStringLiteral(":offset"), offset);
-        }
-
-        if (q.exec()) {
-            while (q.next()) {
-                new_items.push_back(EntryItem{
-                    .original = q.value(0).toString(),
-                    .translated = q.value(1).toString()
-                });
-            }
+            ui->entries_table->clearSelection();
         }
     }
 
-    const bool has_more = static_cast<int>(new_items.size()) == batch_size;
-    model_->append_items(std::move(new_items), has_more);
-
+    is_updating_window_ = false;
     update_match_count_label();
 }
 
-void entrieseditor::search_text_changed(const QString& /*text*/) const {
+void entrieseditor::fetch_up() {
+    if (is_updating_window_ || window_offset_ <= 0) return;
+    is_updating_window_ = true;
+
+    const QString filter = ui->search_box->text().trimmed();
+    constexpr int chunk_size = 100;
+    constexpr int max_window = 400;
+
+    const int fetch_count = std::min(chunk_size, window_offset_);
+    const int fetch_offset = window_offset_ - fetch_count;
+
+    std::vector<EntryItem> new_items = query_items(filter, fetch_offset, fetch_count);
+
+    if (new_items.empty()) {
+        window_offset_ = 0;
+        is_updating_window_ = false;
+        update_match_count_label();
+        return;
+    }
+
+    const int prepended_count = static_cast<int>(new_items.size());
+    auto *sb = ui->entries_table->verticalScrollBar();
+    const int cur_scroll = sb ? sb->value() : 0;
+
+    const auto sel = ui->entries_table->selectionModel()->selectedRows();
+    const int sel_row = sel.isEmpty() ? -1 : sel.first().row();
+
+    model_->prepend_items(std::move(new_items));
+    window_offset_ -= prepended_count;
+    has_more_below_ = true;
+    model_->set_has_more(true);
+
+    if (sb) {
+        sb->setValue(cur_scroll + prepended_count);
+    }
+    if (sel_row >= 0) {
+        ui->entries_table->selectRow(sel_row + prepended_count);
+    }
+
+    if (model_->rowCount() > max_window) {
+        const int trim_count = model_->rowCount() - max_window;
+        model_->trim_bottom(trim_count);
+    }
+
+    is_updating_window_ = false;
+    update_match_count_label();
+}
+
+void entrieseditor::search_text_changed(const QString & /*text*/) const {
     search_timer_->start();
 }
 
 void entrieseditor::clear_search() {
     search_timer_->stop();
+    const QSignalBlocker blocker(ui->search_box);
     ui->search_box->clear();
     reload_data();
     ui->search_box->setFocus();
@@ -439,7 +524,7 @@ void entrieseditor::add_entry() {
         static const auto splitter = QRegularExpression(QStringLiteral("[/,]"));
         QStringList parts;
         for (const auto tokens = trans.split(splitter, Qt::SkipEmptyParts);
-            const auto& token : tokens) {
+             const auto &token: tokens) {
             if (const QString trimmed = token.trimmed(); !trimmed.isEmpty() && !parts.contains(trimmed)) {
                 parts.append(trimmed);
             }
@@ -454,8 +539,9 @@ void entrieseditor::add_entry() {
         dictionary.insert(orig, trans, NAME);
     } else if (mode_ == EditorMode::Nameset) {
         QSqlQuery q;
-        q.prepare(QStringLiteral("INSERT INTO name_set_entries (set_id, original, translated) VALUES (:set_id, :original, :translated) "
-                                 "ON CONFLICT(set_id, original) DO UPDATE SET translated = excluded.translated"));
+        q.prepare(QStringLiteral(
+            "INSERT INTO name_set_entries (set_id, original, translated) VALUES (:set_id, :original, :translated) "
+            "ON CONFLICT(set_id, original) DO UPDATE SET translated = excluded.translated"));
         q.bindValue(QStringLiteral(":set_id"), set_id_);
         q.bindValue(QStringLiteral(":original"), orig);
         q.bindValue(QStringLiteral(":translated"), trans);
@@ -481,7 +567,7 @@ void entrieseditor::delete_entry() {
     if (selection.isEmpty()) return;
 
     const int row = selection.first().row();
-    const auto* item = model_->item_at(row);
+    const auto *item = model_->item_at(row);
     if (!item) return;
 
     const QString original_key = item->original;
@@ -516,10 +602,12 @@ void entrieseditor::delete_entry() {
     if (new_count > 0) {
         const int target_row = std::min(row, new_count - 1);
         ui->entries_table->selectRow(target_row);
+    } else if (cached_total_count_ > 0 || window_offset_ > 0) {
+        reload_data();
     }
 }
 
-void entrieseditor::table_double_clicked(const QModelIndex& index) {
+void entrieseditor::table_double_clicked(const QModelIndex &index) {
     if (!index.isValid()) return;
     edit_entry();
 }
@@ -529,14 +617,14 @@ void entrieseditor::edit_entry() {
     if (selection.isEmpty()) return;
 
     const int row = selection.first().row();
-    const auto* item = model_->item_at(row);
+    const auto *item = model_->item_at(row);
     if (!item) return;
 
     const QString original_key = item->original;
     const QString old_trans = item->translated;
 
     if (mode_ == EditorMode::Phrases) {
-        auto* popup = new DictPopup(this);
+        auto *popup = new DictPopup(this);
         popup->load_data(original_key);
         popup->setAttribute(Qt::WA_DeleteOnClose);
         if (popup->exec()) {
@@ -561,13 +649,14 @@ void entrieseditor::edit_entry() {
     } else {
         bool ok = false;
         const QString new_trans = QInputDialog::getText(this, QStringLiteral("Edit Translation"),
-            QStringLiteral("Translation for '%1':").arg(original_key),
-            QLineEdit::Normal, old_trans, &ok);
+                                                        QStringLiteral("Translation for '%1':").arg(original_key),
+                                                        QLineEdit::Normal, old_trans, &ok);
 
         if (ok && !new_trans.isEmpty() && new_trans != old_trans) {
             if (mode_ == EditorMode::Nameset) {
                 QSqlQuery q;
-                q.prepare(QStringLiteral("UPDATE name_set_entries SET translated = :trans WHERE set_id = :id AND original = :orig"));
+                q.prepare(QStringLiteral(
+                    "UPDATE name_set_entries SET translated = :trans WHERE set_id = :id AND original = :orig"));
                 q.bindValue(QStringLiteral(":trans"), new_trans);
                 q.bindValue(QStringLiteral(":id"), set_id_);
                 q.bindValue(QStringLiteral(":orig"), original_key);
@@ -594,7 +683,8 @@ void entrieseditor::edit_entry() {
 
 void entrieseditor::keyPressEvent(QKeyEvent *event) {
     if (event->key() == Qt::Key_Delete) {
-        if (ui->entries_table->hasFocus() || (!ui->search_box->hasFocus() && !ui->add_original->hasFocus() && !ui->add_translation->hasFocus())) {
+        if (ui->entries_table->hasFocus() || (!ui->search_box->hasFocus() && !ui->add_original->hasFocus() && !ui->
+                                              add_translation->hasFocus())) {
             delete_entry();
             return;
         }
