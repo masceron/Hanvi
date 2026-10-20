@@ -1064,34 +1064,56 @@ static std::string get_opencc_config_path()
     return {};
 }
 
+static std::mutex g_opencc_mutex;
+static std::string g_opencc_custom_config_path;
+static std::unique_ptr<opencc::SimpleConverter> g_opencc_converter;
+
+void init_opencc(const std::string& config_path)
+{
+    std::lock_guard<std::mutex> lock(g_opencc_mutex);
+    g_opencc_custom_config_path = config_path;
+    try
+    {
+        g_opencc_converter = std::make_unique<opencc::SimpleConverter>(config_path);
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Failed to initialize OpenCC with path " << config_path << ": " << e.what() << std::endl;
+        g_opencc_converter.reset();
+    }
+}
+
 std::u16string to_simplified_chinese(std::u16string_view input)
 {
     if (input.empty()) return {};
 
-    static std::once_flag init_flag;
-    static std::unique_ptr<opencc::SimpleConverter> converter;
-
-    std::call_once(init_flag, [] {
-        const std::string config_path = get_opencc_config_path();
+    std::lock_guard<std::mutex> lock(g_opencc_mutex);
+    if (!g_opencc_converter)
+    {
+        std::string config_path = g_opencc_custom_config_path;
+        if (config_path.empty())
+        {
+            config_path = get_opencc_config_path();
+        }
         if (!config_path.empty())
         {
             try
             {
-                converter = std::make_unique<opencc::SimpleConverter>(config_path);
+                g_opencc_converter = std::make_unique<opencc::SimpleConverter>(config_path);
             }
             catch (const std::exception& e)
             {
                 std::cerr << "Failed to initialize OpenCC: " << e.what() << std::endl;
-                converter.reset();
+                g_opencc_converter.reset();
             }
         }
         else
         {
             std::cerr << "OpenCC t2s.json not found in application directory or search paths." << std::endl;
         }
-    });
+    }
 
-    if (!converter)
+    if (!g_opencc_converter)
     {
         return std::u16string(input);
     }
@@ -1099,7 +1121,7 @@ std::u16string to_simplified_chinese(std::u16string_view input)
     try
     {
         std::string utf8_in = to_utf8(input);
-        std::string utf8_out = converter->Convert(utf8_in);
+        std::string utf8_out = g_opencc_converter->Convert(utf8_in);
         return to_utf16(utf8_out);
     }
     catch (const std::exception& e)
