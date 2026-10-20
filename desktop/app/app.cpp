@@ -30,6 +30,10 @@ void init_style(QApplication& app)
     {
         QFontDatabase::addApplicationFont(font_path);
     }
+    else if (QFile::exists("desktop/resources/NotoSansSC.ttf"))
+    {
+        QFontDatabase::addApplicationFont("desktop/resources/NotoSansSC.ttf");
+    }
     else if (QFile::exists("resources/NotoSansSC.ttf"))
     {
         QFontDatabase::addApplicationFont("resources/NotoSansSC.ttf");
