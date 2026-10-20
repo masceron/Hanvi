@@ -13,6 +13,8 @@
 
 namespace hanvi {
 
+void init_opencc(const std::string& config_path);
+
 std::shared_ptr<AlignedDocument> convert(std::u16string_view input,
                                          const std::function<void(int)>& progress_callback = nullptr);
 std::u16string convert_plain(std::u16string_view input,

@@ -84,6 +84,10 @@ All dictionary queries access in-memory data structures loaded from `dict.db`.
 // 1. Initialize and load dictionaries (blocking / synchronous)
 hanvi::load_dict("path/to/dict.db");
 
+// (Optional) Explicitly configure OpenCC t2s.json path (e.g. for Android internal storage)
+// If not called, automatically searches standard relative and executable paths.
+hanvi::init_opencc("path/to/opencc/t2s.json");
+
 // Or asynchronous with a callback:
 hanvi::load_dict("path/to/dict.db", []() {
     // Called when background worker threads finish loading Trie & maps
