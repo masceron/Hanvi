@@ -96,7 +96,7 @@ set(OPENCC_DATA "${opencc_SOURCE_DIR}/data/config/t2s.json")
 foreach (_dict TSPhrases TSCharacters TSCharactersExt CJK_Compatibility_Ideographs)
     list(APPEND OPENCC_DATA "${opencc_BINARY_DIR}/data/${_dict}.ocd2")
 endforeach ()
-set(APP_DATA "${CMAKE_CURRENT_SOURCE_DIR}/dict.db" "${CMAKE_CURRENT_SOURCE_DIR}/resources/NotoSansSC.ttf")
+set(APP_DATA "${CMAKE_CURRENT_SOURCE_DIR}/dict.db" "${CMAKE_CURRENT_SOURCE_DIR}/desktop/resources/NotoSansSC.ttf")
 
 # ---- SQLite ------------------------------------------------------------------
 add_library(sqlite3 STATIC 3rdparty/sqlite3/sqlite3.c)
@@ -128,31 +128,7 @@ target_link_libraries(CoreLogic
         PUBLIC  sqlite3
         PRIVATE libopencc hanvi_flags)
 
-add_executable(Hanvi WIN32
-        main.cpp resources.qrc resources/icon.rc
-        app/app.cpp app/app.h app/desktop_io.cpp app/desktop_io.h
-        components/mainwindow.cpp        components/mainwindow.h        components/mainwindow.ui
-        components/dictpopup.cpp         components/dictpopup.h         components/dictpopup.ui
-        components/namesetsmanager.cpp   components/namesetsmanager.h   components/namesetsmanager.ui
-        components/rulepopup.cpp         components/rulepopup.h         components/rulepopup.ui
-        components/namesetchooser.cpp    components/namesetchooser.h    components/namesetchooser.ui
-        components/documents/document_session.cpp components/documents/document_session.h
-        components/documents/token_canvas.cpp     components/documents/token_canvas.h
-        components/loader.h components/chipdelegate.h components/chiplist.h
-        components/findbar.cpp
-        components/findbar.h
-        components/findbar.ui
-        components/entrieseditor.cpp
-        components/entrieseditor.h
-        components/entrieseditor.ui
-)
-target_include_directories(Hanvi PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/components")
-target_link_libraries(Hanvi PRIVATE CoreLogic Qt::Core Qt::Gui Qt::Widgets Qt::Sql Qt::Concurrent dwmapi hanvi_flags)
-if (MSVC)
-    target_sources(Hanvi PRIVATE resources/app.manifest)
-else ()
-    target_sources(Hanvi PRIVATE resources/manifest.rc)
-endif ()
+add_subdirectory(desktop)
 
 add_executable(HanviCLI main_cli.cpp)
 target_link_libraries(HanviCLI PRIVATE CoreLogic Qt::Core Qt::Concurrent hanvi_flags)

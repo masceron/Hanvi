@@ -20,13 +20,14 @@
 #endif
 
 #include "ui_mainwindow.h"
-#include "../core/io.h"
+#include "app/desktop_io.h"
+#include "core/io.h"
 #include "mainwindow.h"
 #include "rulepopup.h"
 #include "dictpopup.h"
 #include "namesetsmanager.h"
 #include "namesetchooser.h"
-#include "../core/converter.h"
+#include "core/converter.h"
 #include "core/dict.h"
 #include "documents/token_canvas.h"
 #include "findbar.h"
