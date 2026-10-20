@@ -1,129 +1,180 @@
-#include "../core/db.h"
-
-#include <QSqlQuery>
-
+#include "db.h"
 #include "dict.h"
-#include "structures.h"
+#include "sqlite_helper.h"
+#include <vector>
+#include <string>
 
-static QString get_table_name(const Priority priority)
+namespace hanvi {
+
+static std::vector<std::u16string_view> split_u16(std::u16string_view str, char16_t sep)
+{
+    std::vector<std::u16string_view> result;
+    size_t start = 0;
+    while (start < str.size())
+    {
+        size_t pos = str.find(sep, start);
+        if (pos == std::u16string_view::npos)
+        {
+            result.push_back(str.substr(start));
+            break;
+        }
+        result.push_back(str.substr(start, pos - start));
+        start = pos + 1;
+    }
+    return result;
+}
+
+static std::u16string join_u16(const std::vector<std::u16string>& parts, char16_t sep)
+{
+    if (parts.empty()) return {};
+    std::u16string res = parts[0];
+    for (size_t i = 1; i < parts.size(); ++i)
+    {
+        res.push_back(sep);
+        res += parts[i];
+    }
+    return res;
+}
+
+static const char* get_table_name(const Priority priority)
 {
     return priority == NAME ? "names" : "phrases";
 }
 
-void db_insert(const QString& key, const QString& value, const Priority priority)
+void db_insert(std::u16string_view key, std::u16string_view value, const Priority priority)
 {
     if (priority == NONE) return;
-    const QString table = get_table_name(priority);
-    const QString separator = "\x1F";
+    sqlite3* db = get_db_handle();
+    if (!db) return;
 
-    QSqlQuery q;
-    q.prepare("SELECT translated FROM " + table + " WHERE original = :key");
-    q.bindValue(":key", key);
+    const char* table = get_table_name(priority);
+    std::string select_sql = std::string("SELECT translated FROM ") + table + " WHERE original = ?";
+    SqliteStmt q(db, select_sql.c_str());
+    q.bind_text16(1, key);
 
-    if (q.exec() && q.next())
+    if (q.step())
     {
-        const QString raw = q.value(0).toString();
-        QStringList list = raw.split(separator, Qt::SkipEmptyParts);
+        auto raw = q.column_text16(0);
+        auto list = split_u16(raw, u'\x1F');
 
-        list.removeAll(value);
-        list.prepend(value);
+        std::vector<std::u16string> items;
+        items.emplace_back(value);
+        for (const auto& item : list)
+        {
+            if (item != value && !item.empty())
+            {
+                items.emplace_back(item);
+            }
+        }
 
-        QSqlQuery update;
-        update.prepare("UPDATE " + table + " SET translated = :val WHERE original = :key");
-        update.bindValue(":val", list.join(separator));
-        update.bindValue(":key", key);
-        update.exec();
+        std::u16string joined = join_u16(items, u'\x1F');
+        std::string update_sql = std::string("UPDATE ") + table + " SET translated = ? WHERE original = ?";
+        SqliteStmt update_stmt(db, update_sql.c_str());
+        update_stmt.bind_text16(1, joined);
+        update_stmt.bind_text16(2, key);
+        update_stmt.exec();
     }
     else
     {
-        QSqlQuery insert;
-        insert.prepare("INSERT INTO " + table + " (original, translated) VALUES (:key, :val)");
-        insert.bindValue(":key", key);
-        insert.bindValue(":val", value);
-        insert.exec();
+        std::string insert_sql = std::string("INSERT INTO ") + table + " (original, translated) VALUES (?, ?)";
+        SqliteStmt insert_stmt(db, insert_sql.c_str());
+        insert_stmt.bind_text16(1, key);
+        insert_stmt.bind_text16(2, value);
+        insert_stmt.exec();
     }
 }
 
-void db_reorder(const QString& key, const QStringList& new_order)
+void db_reorder(std::u16string_view key, const std::vector<std::u16string>& new_order)
 {
-    const QString separator = "\x1F";
+    sqlite3* db = get_db_handle();
+    if (!db) return;
 
-    QSqlQuery q;
-    q.prepare("INSERT OR REPLACE INTO phrases (original, translated) VALUES (:key, :val)");
-    q.bindValue(":key", key);
-    q.bindValue(":val", new_order.join(separator));
-
+    std::u16string joined = join_u16(new_order, u'\x1F');
+    SqliteStmt q(db, "INSERT OR REPLACE INTO phrases (original, translated) VALUES (?, ?)");
+    q.bind_text16(1, key);
+    q.bind_text16(2, joined);
     q.exec();
 }
 
-void db_remove(const QString& key, const Priority priority)
+void db_remove(std::u16string_view key, const Priority priority)
 {
     if (priority == NONE) return;
-    const QString table = get_table_name(priority);
+    sqlite3* db = get_db_handle();
+    if (!db) return;
 
-    QSqlQuery q;
-    q.prepare("DELETE FROM " + table + " WHERE original = :key");
-    q.bindValue(":key", key);
-
+    const char* table = get_table_name(priority);
+    std::string sql = std::string("DELETE FROM ") + table + " WHERE original = ?";
+    SqliteStmt q(db, sql.c_str());
+    q.bind_text16(1, key);
     q.exec();
 }
 
-void db_remove_meaning(const QString& key, const QString& value)
+void db_remove_meaning(std::u16string_view key, std::u16string_view value)
 {
-    const QString separator = "\x1F";
+    sqlite3* db = get_db_handle();
+    if (!db) return;
 
-    QSqlQuery q;
-    q.prepare("SELECT translated FROM phrases WHERE original = :key");
-    q.bindValue(":key", key);
+    SqliteStmt q(db, "SELECT translated FROM phrases WHERE original = ?");
+    q.bind_text16(1, key);
 
-    if (q.exec() && q.next())
+    if (q.step())
     {
-        const QString raw = q.value(0).toString();
+        auto raw = q.column_text16(0);
+        auto list = split_u16(raw, u'\x1F');
 
-        if (QStringList list = raw.split(separator, Qt::SkipEmptyParts); list.removeAll(value) > 0)
+        std::vector<std::u16string> remaining;
+        for (const auto& item : list)
         {
-            if (list.isEmpty())
+            if (item != value && !item.empty())
             {
-                QSqlQuery del;
-                del.prepare("DELETE FROM phrases WHERE original = :key");
-                del.bindValue(":key", key);
-                del.exec();
+                remaining.emplace_back(item);
             }
-            else
-            {
-                QSqlQuery update;
-                update.prepare("UPDATE phrases SET translated = :val WHERE original = :key");
-                update.bindValue(":val", list.join(separator));
-                update.bindValue(":key", key);
-                update.exec();
-            }
+        }
+
+        if (remaining.empty())
+        {
+            SqliteStmt del(db, "DELETE FROM phrases WHERE original = ?");
+            del.bind_text16(1, key);
+            del.exec();
+        }
+        else
+        {
+            std::u16string joined = join_u16(remaining, u'\x1F');
+            SqliteStmt update(db, "UPDATE phrases SET translated = ? WHERE original = ?");
+            update.bind_text16(1, joined);
+            update.bind_text16(2, key);
+            update.exec();
         }
     }
 }
 
-void nameset_db_insert(const QString& key, const QString& value)
+void nameset_db_insert(std::u16string_view key, std::u16string_view value)
 {
-    QSqlQuery q;
-    q.prepare(
-        R"(INSERT INTO name_set_entries (original, set_id, translated)
-                    VALUES (:original, :set_id, :translated)
-                    ON CONFLICT (set_id, original)
-                    DO UPDATE SET translated = excluded.translated)"
-    );
+    sqlite3* db = get_db_handle();
+    if (!db) return;
 
-    q.bindValue(":original", key);
-    q.bindValue(":set_id", current_name_set_id);
-    q.bindValue(":translated", value);
+    const char* sql =
+        "INSERT INTO name_set_entries (original, set_id, translated) "
+        "VALUES (?, ?, ?) "
+        "ON CONFLICT (set_id, original) "
+        "DO UPDATE SET translated = excluded.translated";
 
+    SqliteStmt q(db, sql);
+    q.bind_text16(1, key);
+    q.bind_int(2, current_name_set_id);
+    q.bind_text16(3, value);
     q.exec();
 }
 
-void nameset_db_remove(const QString& key)
+void nameset_db_remove(std::u16string_view key)
 {
-    QSqlQuery q;
-    q.prepare("DELETE FROM name_set_entries WHERE set_id = :set_id AND original = :original");
-    q.bindValue(":set_id", current_name_set_id);
-    q.bindValue(":original", key);
+    sqlite3* db = get_db_handle();
+    if (!db) return;
 
+    SqliteStmt q(db, "DELETE FROM name_set_entries WHERE set_id = ? AND original = ?");
+    q.bind_int(1, current_name_set_id);
+    q.bind_text16(2, key);
     q.exec();
 }
+
+} // namespace hanvi

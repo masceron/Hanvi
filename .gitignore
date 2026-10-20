@@ -1,2 +1,5 @@
 .idea/
 *.bak
+*.db-shm
+*.db-wal
+cmake-build-*/

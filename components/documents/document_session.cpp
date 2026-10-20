@@ -105,13 +105,15 @@ void DocumentSession::clear_selection()
 QString DocumentSession::selected_text(const LanguageRole role) const
 {
     if (!doc_ || selection_.is_empty()) return {};
-    return doc_->get_text_range(selection_, role);
+    auto res = doc_->get_text_range(selection_, role);
+    return QString::fromUtf16(res.data(), static_cast<qsizetype>(res.size()));
 }
 
 QString DocumentSession::selected_chinese_text() const
 {
     if (!doc_ || selection_.is_empty()) return {};
-    return doc_->get_chinese_for_range(selection_);
+    auto res = doc_->get_chinese_for_range(selection_);
+    return QString::fromUtf16(res.data(), static_cast<qsizetype>(res.size()));
 }
 
 void DocumentSession::trigger_click(const uint32_t token_id)
@@ -171,9 +173,12 @@ void DocumentSession::trigger_context_menu(const uint32_t clicked_token_id)
         {
             emit request_rule_popup(tok->rule);
         }
-        else if (!tok->cn.isEmpty())
+        else if (!tok->cn.empty())
         {
-            emit request_dict_popup(tok->cn);
+            emit request_dict_popup(QString::fromUtf16(tok->cn.data(), static_cast<qsizetype>(tok->cn.size())));
         }
+
+
+
     }
 }

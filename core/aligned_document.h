@@ -2,8 +2,18 @@
 
 #include <vector>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <cstdint>
-#include "core/structures.h"
+#include "structures.h"
+#include "unicode_utils.h"
+
+#ifdef QT_CORE_LIB
+#include <QString>
+#include <QStringView>
+#endif
+
+namespace hanvi {
 
 enum class LanguageRole : uint8_t
 {
@@ -15,13 +25,13 @@ enum class LanguageRole : uint8_t
 struct Token
 {
     uint32_t id = 0;
-    QString cn;
-    QString sv;
-    QString vn;
+    std::u16string cn;
+    std::u16string sv;
+    std::u16string vn;
     const Rule* rule = nullptr;
     bool has_trailing_space = false;
 
-    [[nodiscard]] const QString& text(const LanguageRole role) const noexcept
+    [[nodiscard]] const std::u16string& text(const LanguageRole role) const noexcept
     {
         switch (role)
         {
@@ -38,67 +48,25 @@ struct Token
 
 namespace Typography
 {
-    inline bool is_closer_char(const QChar c) noexcept
-    {
-        return c == u'.' || c == u',' || c == u'!' || c == u'?' ||
-            c == u':' || c == u';' || c == u'…' ||
-            c == u')' || c == u']' || c == u'}' || c == u'>' ||
-            c == u'”' || c == u'’';
-    }
+    using hanvi::is_closer_char;
+    using hanvi::is_opener_char;
+    using hanvi::is_digit;
+    using hanvi::is_latin;
+    using hanvi::is_latin_or_digit;
 
-    inline bool is_opener_char(const QChar c) noexcept
-    {
-        return c == u'(' || c == u'[' || c == u'{' || c == u'<' ||
-            c == u'“' || c == u'‘';
-    }
-
-    inline bool is_digit(const QChar c) noexcept
-    {
-        const ushort code = c.unicode();
-        return (code >= '0' && code <= '9') ||
-            (code >= 0xFF10 && code <= 0xFF19) ||
-            c.isDigit();
-    }
-
-    inline bool is_latin_or_digit(const QChar c) noexcept
-    {
-        const ushort code = c.unicode();
-        if ((code >= '0' && code <= '9') ||
-            (code >= 'A' && code <= 'Z') ||
-            (code >= 'a' && code <= 'z'))
-        {
-            return true;
-        }
-        if ((code >= 0xFF10 && code <= 0xFF19) ||
-            (code >= 0xFF21 && code <= 0xFF3A) ||
-            (code >= 0xFF41 && code <= 0xFF5A))
-        {
-            return true;
-        }
-        if (c.isDigit())
-        {
-            return true;
-        }
-        if (QChar::script(c.unicode()) == QChar::Script_Latin)
-        {
-            return true;
-        }
-        return false;
-    }
-
-    inline bool should_insert_space_before(const QString& text, const QString& tok_str, bool& in_quote,
+    inline bool should_insert_space_before(std::u16string_view text, std::u16string_view tok_str, bool& in_quote,
                                            bool& in_single_quote,
                                            const Token* prev_tok = nullptr, const Token* cur_tok = nullptr,
                                            const Token* prev_prev_tok = nullptr) noexcept
     {
-        if (text.isEmpty()) return false;
-        if (text.endsWith(u' ')) return false;
+        if (text.empty()) return false;
+        if (text.back() == u' ') return false;
 
-        const QChar prev_char = text.back();
-        const QChar first_char = tok_str[0];
+        const char16_t prev_char = text.back();
+        const char16_t first_char = tok_str[0];
 
         // Do not insert space between consecutive surrogate pairs (e.g. emojis)
-        if (prev_char.isLowSurrogate() && first_char.isHighSurrogate())
+        if (is_low_surrogate(prev_char) && is_high_surrogate(first_char))
         {
             return false;
         }
@@ -145,7 +113,7 @@ namespace Typography
 
         // If both adjacent tokens in source text are Latin scripts or digits, no space between them
         if (prev_tok != nullptr && cur_tok != nullptr &&
-            !prev_tok->cn.isEmpty() && !cur_tok->cn.isEmpty())
+            !prev_tok->cn.empty() && !cur_tok->cn.empty())
         {
             if (is_latin_or_digit(prev_tok->cn.back()) && is_latin_or_digit(cur_tok->cn.front()))
             {
@@ -153,7 +121,7 @@ namespace Typography
             }
             // Handle decimal point or comma between digits (e.g. 3.14 or 15,000)
             if ((prev_tok->cn == u"." || prev_tok->cn == u",") &&
-                prev_prev_tok != nullptr && !prev_prev_tok->cn.isEmpty() &&
+                prev_prev_tok != nullptr && !prev_prev_tok->cn.empty() &&
                 is_digit(prev_prev_tok->cn.back()) && is_digit(cur_tok->cn.front()))
             {
                 return false;
@@ -163,6 +131,25 @@ namespace Typography
         return true;
     }
 
+    inline bool should_insert_space_before(std::u16string_view text, std::u16string_view tok_str, bool& in_quote,
+                                           const Token* prev_tok = nullptr, const Token* cur_tok = nullptr,
+                                           const Token* prev_prev_tok = nullptr) noexcept
+    {
+        bool dummy_single_quote = false;
+        return should_insert_space_before(text, tok_str, in_quote, dummy_single_quote, prev_tok, cur_tok, prev_prev_tok);
+    }
+
+#ifdef QT_CORE_LIB
+    inline bool should_insert_space_before(const QString& text, const QString& tok_str, bool& in_quote,
+                                           bool& in_single_quote,
+                                           const Token* prev_tok = nullptr, const Token* cur_tok = nullptr,
+                                           const Token* prev_prev_tok = nullptr) noexcept
+    {
+        return should_insert_space_before(q_to_u16(text),
+                                          q_to_u16(tok_str),
+                                          in_quote, in_single_quote, prev_tok, cur_tok, prev_prev_tok);
+    }
+
     inline bool should_insert_space_before(const QString& text, const QString& tok_str, bool& in_quote,
                                            const Token* prev_tok = nullptr, const Token* cur_tok = nullptr,
                                            const Token* prev_prev_tok = nullptr) noexcept
@@ -170,6 +157,7 @@ namespace Typography
         bool dummy_single_quote = false;
         return should_insert_space_before(text, tok_str, in_quote, dummy_single_quote, prev_tok, cur_tok, prev_prev_tok);
     }
+#endif
 } // namespace Typography
 
 struct DocumentPosition
@@ -208,8 +196,19 @@ public:
 
     [[nodiscard]] const Token* find_token(uint32_t id) const noexcept;
     [[nodiscard]] std::optional<DocumentPosition> find_token_position(uint32_t id) const noexcept;
-    [[nodiscard]] QString get_text_range(const DocumentSelection& selection, LanguageRole role) const;
-    [[nodiscard]] QString get_chinese_for_range(const DocumentSelection& selection) const;
+    [[nodiscard]] std::u16string get_text_range(const DocumentSelection& selection, LanguageRole role) const;
+    [[nodiscard]] std::u16string get_chinese_for_range(const DocumentSelection& selection) const;
+
+#ifdef QT_CORE_LIB
+    [[nodiscard]] QString get_qtext_range(const DocumentSelection& selection, LanguageRole role) const {
+        auto res = get_text_range(selection, role);
+        return QString::fromUtf16(res.data(), static_cast<qsizetype>(res.size()));
+    }
+    [[nodiscard]] QString get_qchinese_for_range(const DocumentSelection& selection) const {
+        auto res = get_chinese_for_range(selection);
+        return QString::fromUtf16(res.data(), static_cast<qsizetype>(res.size()));
+    }
+#endif
 
     [[nodiscard]] size_t total_tokens() const noexcept { return total_tokens_; }
     void clear() noexcept;
@@ -218,3 +217,13 @@ private:
     std::vector<DocumentPosition> token_lut_;
     size_t total_tokens_ = 0;
 };
+
+} // namespace hanvi
+
+using hanvi::LanguageRole;
+using hanvi::Token;
+namespace Typography = hanvi::Typography;
+using hanvi::DocumentPosition;
+using hanvi::DocumentSelection;
+using hanvi::Paragraph;
+using hanvi::AlignedDocument;

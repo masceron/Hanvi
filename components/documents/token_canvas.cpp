@@ -240,7 +240,7 @@ void TokenCanvas::rebuild_paragraph_data()
             for (size_t t = 0; t < tokens.size(); ++t)
             {
                 const auto& tok = tokens[t];
-                const QString tok_str = tok.cn;
+                const QString tok_str = QString::fromUtf16(tok.cn.data(), static_cast<qsizetype>(tok.cn.size()));
 
                 TokenSpan span;
                 span.token_id = tok.id;
@@ -264,7 +264,7 @@ void TokenCanvas::rebuild_paragraph_data()
             for (size_t t = 0; t < tokens.size(); ++t)
             {
                 const auto& tok = tokens[t];
-                const QString tok_str = tok.text(role_);
+                const QString tok_str = QString::fromUtf16(tok.text(role_).data(), static_cast<qsizetype>(tok.text(role_).size()));
 
                 if (tok_str.isEmpty())
                 {
@@ -770,7 +770,7 @@ void TokenCanvas::contextMenuEvent(QContextMenuEvent* event)
                         const QString span_text = pl.text.mid(span.start_char, span.length);
                         const QStringList words = span_text.split(u' ', Qt::SkipEmptyParts);
 
-                        if (words.size() == tok->cn.length())
+                        if (words.size() == static_cast<int>(tok->cn.length()))
                         {
                             int cur = 0;
                             for (int w = 0; w < words.size(); ++w)
@@ -780,14 +780,14 @@ void TokenCanvas::contextMenuEvent(QContextMenuEvent* event)
                                 const int w_end = cur + w_len;
                                 if (w_end > inter_start && w_start < inter_end)
                                 {
-                                    chinese_text += tok->cn[w];
+                                    chinese_text += QChar(tok->cn[w]);
                                 }
                                 cur = w_end + 1;
                             }
                         }
                         else
                         {
-                            chinese_text += tok->cn;
+                            chinese_text += QString::fromUtf16(tok->cn.data(), static_cast<qsizetype>(tok->cn.size()));
                         }
                     }
                 }
@@ -814,7 +814,7 @@ void TokenCanvas::contextMenuEvent(QContextMenuEvent* event)
                 {
                     if (const auto* tok = doc->find_token(span.token_id))
                     {
-                        chinese_text += tok->cn;
+                        chinese_text += QString::fromUtf16(tok->cn.data(), static_cast<qsizetype>(tok->cn.size()));
                     }
                 }
             }
@@ -840,7 +840,7 @@ void TokenCanvas::contextMenuEvent(QContextMenuEvent* event)
                     session_->request_rule_popup(tok->rule);
                     return;
                 }
-                session_->request_dict_popup(tok->cn);
+                session_->request_dict_popup(QString::fromUtf16(tok->cn.data(), static_cast<qsizetype>(tok->cn.size())));
                 return;
             }
         }

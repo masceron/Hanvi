@@ -4,7 +4,8 @@
 #include <QDialog>
 
 
-struct Rule;
+namespace hanvi { struct Rule; }
+using hanvi::Rule;
 QT_BEGIN_NAMESPACE
 
 namespace Ui
