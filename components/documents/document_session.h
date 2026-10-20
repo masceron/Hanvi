@@ -2,7 +2,7 @@
 
 #include <QObject>
 #include <memory>
-#include "aligned_document.h"
+#include "core/aligned_document.h"
 
 class DocumentSession : public QObject
 {

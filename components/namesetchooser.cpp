@@ -55,7 +55,8 @@ void namesetchooser::load_data(const QString& filter)
 
     for (const auto& [index, title] : name_sets)
     {
-        if (!filter.isEmpty() && !title.contains(filter, Qt::CaseInsensitive))
+        QString qtitle = QString::fromUtf16(title.data(), static_cast<qsizetype>(title.size()));
+        if (!filter.isEmpty() && !qtitle.contains(filter, Qt::CaseInsensitive))
         {
             continue;
         }
@@ -63,7 +64,7 @@ void namesetchooser::load_data(const QString& filter)
         const int row = ui->name_set_list->rowCount();
         ui->name_set_list->insertRow(row);
 
-        auto* titleItem = new QTableWidgetItem(title);
+        auto* titleItem = new QTableWidgetItem(qtitle);
         titleItem->setFlags(titleItem->flags() & ~Qt::ItemIsEditable);
         ui->name_set_list->setItem(row, 0, titleItem);
 

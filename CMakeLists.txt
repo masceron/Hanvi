@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(Hanvi LANGUAGES CXX)
+project(Hanvi LANGUAGES C CXX)
 
 if (NOT WIN32)
     message(FATAL_ERROR "Hanvi only supports Windows.")
@@ -25,7 +25,7 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ${HANVI_IPO})
 # ---- Project-only flags -------------------------------
 add_library(hanvi_flags INTERFACE)
 if (MSVC)
-    set(_warn         /W3 /WX /permissive-)
+    set(_warn         /W3 /WX /permissive- /utf-8)
     set(_release      /Ob3 /Oi /Ot /GF /GA /Gy /Gw /Qpar)
     set(_release_link /OPT:REF /OPT:ICF)
     set(_arch         /arch:AVX2)
@@ -98,27 +98,39 @@ foreach (_dict TSPhrases TSCharacters TSCharactersExt CJK_Compatibility_Ideograp
 endforeach ()
 set(APP_DATA "${CMAKE_CURRENT_SOURCE_DIR}/dict.db" "${CMAKE_CURRENT_SOURCE_DIR}/resources/NotoSansSC.ttf")
 
+# ---- SQLite ------------------------------------------------------------------
+add_library(sqlite3 STATIC 3rdparty/sqlite3/sqlite3.c)
+set_target_properties(sqlite3 PROPERTIES AUTOMOC OFF AUTORCC OFF AUTOUIC OFF)
+target_include_directories(sqlite3 PUBLIC 3rdparty/sqlite3)
+if (MSVC)
+    target_compile_options(sqlite3 PRIVATE /W0)
+else ()
+    target_compile_options(sqlite3 PRIVATE -w)
+endif ()
+
 # ---- Targets -----------------------------------------------------------------
 add_library(CoreLogic STATIC
-        core/converter.h   core/converter.cpp
-        core/db.h          core/db.cpp
-        core/dict.h        core/dict.cpp
-        core/io.h          core/io.cpp
-        core/structures.h  core/structures.cpp
-        components/documents/aligned_document.h
-        components/documents/aligned_document.cpp)
+        core/converter.h          core/converter.cpp
+        core/db.h                 core/db.cpp
+        core/dict.h               core/dict.cpp
+        core/io.h                 core/io.cpp
+        core/structures.h         core/structures.cpp
+        core/aligned_document.h   core/aligned_document.cpp
+        core/unicode_utils.h      core/sqlite_helper.h)
+set_target_properties(CoreLogic PROPERTIES AUTOMOC OFF AUTORCC OFF AUTOUIC OFF)
 target_include_directories(CoreLogic PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/components")
+        "${CMAKE_CURRENT_SOURCE_DIR}")
 target_include_directories(CoreLogic SYSTEM PUBLIC
-        "${opencc_SOURCE_DIR}/src" "${opencc_BINARY_DIR}/src")
+        "${opencc_SOURCE_DIR}/src" "${opencc_BINARY_DIR}/src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/sqlite3")
 target_compile_definitions(CoreLogic PUBLIC Opencc_BUILT_AS_STATIC)
 target_link_libraries(CoreLogic
-        PUBLIC  Qt::Core Qt::Sql Qt::Concurrent
-        PRIVATE Qt::Widgets libopencc hanvi_flags)
+        PUBLIC  sqlite3
+        PRIVATE libopencc hanvi_flags)
 
 add_executable(Hanvi WIN32
         main.cpp resources.qrc resources/icon.rc
-        app/app.cpp app/app.h
+        app/app.cpp app/app.h app/desktop_io.cpp app/desktop_io.h
         components/mainwindow.cpp        components/mainwindow.h        components/mainwindow.ui
         components/dictpopup.cpp         components/dictpopup.h         components/dictpopup.ui
         components/namesetsmanager.cpp   components/namesetsmanager.h   components/namesetsmanager.ui
@@ -134,7 +146,8 @@ add_executable(Hanvi WIN32
         components/entrieseditor.h
         components/entrieseditor.ui
 )
-target_link_libraries(Hanvi PRIVATE CoreLogic Qt::Gui Qt::Widgets dwmapi hanvi_flags)
+target_include_directories(Hanvi PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/components")
+target_link_libraries(Hanvi PRIVATE CoreLogic Qt::Core Qt::Gui Qt::Widgets Qt::Sql Qt::Concurrent dwmapi hanvi_flags)
 if (MSVC)
     target_sources(Hanvi PRIVATE resources/app.manifest)
 else ()
@@ -142,7 +155,7 @@ else ()
 endif ()
 
 add_executable(HanviCLI main_cli.cpp)
-target_link_libraries(HanviCLI PRIVATE CoreLogic hanvi_flags)
+target_link_libraries(HanviCLI PRIVATE CoreLogic Qt::Core Qt::Concurrent hanvi_flags)
 
 set(_out "$<TARGET_FILE_DIR:Hanvi>")
 set(_deploy_stamp "${CMAKE_CURRENT_BINARY_DIR}/HanviRuntime-$<CONFIG>.stamp")

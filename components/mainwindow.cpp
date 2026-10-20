@@ -426,7 +426,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
             QString title;
             for (const auto &[index, t] : name_sets) {
                 if (index == set_id) {
-                    title = t;
+                    title = QString::fromUtf16(t.data(), static_cast<qsizetype>(t.size()));
                     break;
                 }
             }
@@ -592,7 +592,7 @@ void MainWindow::setup_hamburger_menu(QPushButton *btn) {
         QString title;
         for (const auto &[index, t] : name_sets) {
             if (index == set_id) {
-                title = t;
+                title = QString::fromUtf16(t.data(), static_cast<qsizetype>(t.size()));
                 break;
             }
         }
@@ -1145,7 +1145,7 @@ void MainWindow::load_data() {
     bool found = false;
     for (const auto &[index, title]: name_sets) {
         if (index == active_set_id) {
-            ui->current_name_set->setText(title);
+            ui->current_name_set->setText(QString::fromUtf16(title.data(), static_cast<qsizetype>(title.size())));
             found = true;
             break;
         }
@@ -1222,7 +1222,9 @@ void MainWindow::convert_and_display(const bool scroll_back) {
         };
 
         const QFuture<std::shared_ptr<AlignedDocument> > future = QtConcurrent::run(
-            convert, cur->pages[cur->current_page], reporter);
+            [page = cur->pages[cur->current_page].toString(), reporter]() {
+                return convert(page, reporter);
+            });
         watcher.setFuture(future);
     }
 }
@@ -1243,7 +1245,9 @@ void MainWindow::convert_to_file() {
     };
 
     const QFuture<QString> future = QtConcurrent::run(
-        convert_plain, cur->input_text, reporter);
+        [text = cur->input_text, reporter]() {
+            return convert_plain(text, reporter);
+        });
     plain_watcher.setFuture(future);
 }
 
@@ -1269,7 +1273,8 @@ void MainWindow::update_display() {
             if (!cur->saved_token_cn.isEmpty()) {
                 for (const auto &para: doc->paragraphs) {
                     for (const auto &tok: para.tokens) {
-                        if (tok.cn == cur->saved_token_cn || tok.cn.contains(cur->saved_token_cn)) {
+                        QString tok_cn = QString::fromUtf16(tok.cn.data(), static_cast<qsizetype>(tok.cn.size()));
+                        if (tok_cn == cur->saved_token_cn || tok_cn.contains(cur->saved_token_cn)) {
                             session->set_active_token(tok.id);
                             goto token_found;
                         }

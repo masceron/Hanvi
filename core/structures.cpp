@@ -1,6 +1,9 @@
 #include "structures.h"
 #include <algorithm>
+#include <cstring>
 #include <ranges>
+
+namespace hanvi {
 
 static constexpr uintptr_t TAG_MASK = 0x3;
 static constexpr uintptr_t TAG_NULL = 0x0;
@@ -15,46 +18,73 @@ namespace {
         const char16_t* phrase = nullptr;
         std::vector<Rule> rules;
     };
-}
 
-namespace
-{
     struct ChildHeader
     {
         uint16_t capacity;
         uint16_t count;
 
-        [[nodiscard]] QChar* chars()
+        [[nodiscard]] char16_t* chars()
         {
-            return reinterpret_cast<QChar*>(this + 1);
+            return reinterpret_cast<char16_t*>(this + 1);
         }
 
-        [[nodiscard]] const QChar* chars() const
+        [[nodiscard]] const char16_t* chars() const
         {
-            return reinterpret_cast<const QChar*>(this + 1);
+            return reinterpret_cast<const char16_t*>(this + 1);
         }
 
         [[nodiscard]] TrieNode** nodes()
         {
-            const size_t char_bytes = capacity * sizeof(QChar);
+            const size_t char_bytes = capacity * sizeof(char16_t);
             const size_t aligned_offset = (sizeof(ChildHeader) + char_bytes + 7) & ~static_cast<size_t>(7);
             return reinterpret_cast<TrieNode**>(reinterpret_cast<char*>(this) + aligned_offset);
         }
 
         [[nodiscard]] TrieNode* const* nodes() const
         {
-            const size_t char_bytes = capacity * sizeof(QChar);
+            const size_t char_bytes = capacity * sizeof(char16_t);
             const size_t aligned_offset = (sizeof(ChildHeader) + char_bytes + 7) & ~static_cast<size_t>(7);
             return reinterpret_cast<TrieNode* const*>(reinterpret_cast<const char*>(this) + aligned_offset);
         }
 
         static size_t allocation_size(const size_t cap)
         {
-            const size_t char_bytes = cap * sizeof(QChar);
+            const size_t char_bytes = cap * sizeof(char16_t);
             const size_t aligned_offset = (sizeof(ChildHeader) + char_bytes + 7) & ~static_cast<size_t>(7);
             return aligned_offset + cap * sizeof(TrieNode*);
         }
     };
+
+    std::vector<std::u16string_view> split_u16(std::u16string_view str, char16_t sep)
+    {
+        std::vector<std::u16string_view> result;
+        size_t start = 0;
+        while (start < str.size())
+        {
+            size_t pos = str.find(sep, start);
+            if (pos == std::u16string_view::npos)
+            {
+                result.push_back(str.substr(start));
+                break;
+            }
+            result.push_back(str.substr(start, pos - start));
+            start = pos + 1;
+        }
+        return result;
+    }
+
+    std::u16string join_u16(const std::vector<std::u16string>& parts, char16_t sep)
+    {
+        if (parts.empty()) return {};
+        std::u16string res = parts[0];
+        for (size_t i = 1; i < parts.size(); ++i)
+        {
+            res.push_back(sep);
+            res += parts[i];
+        }
+        return res;
+    }
 }
 
 TrieNode* NodePool::allocate()
@@ -84,7 +114,7 @@ NodePool::~NodePool()
     clear();
 }
 
-const char16_t* TextArena::allocate(const QStringView& str)
+const char16_t* TextArena::allocate(std::u16string_view str)
 {
     const size_t len = str.length();
     int sep = -1;
@@ -114,7 +144,7 @@ const char16_t* TextArena::allocate(const QStringView& str)
     current_block_ptr[offset - 1] = static_cast<char16_t>(first_len);
     if (total_len > 0)
     {
-        std::memcpy(current_block_ptr + offset, str.utf16(), total_len * sizeof(char16_t));
+        std::memcpy(current_block_ptr + offset, str.data(), total_len * sizeof(char16_t));
     }
     current_block_ptr[offset + total_len] = u'\0';
 
@@ -149,7 +179,7 @@ void TrieNode::free_data()
     data = TAG_NULL;
 }
 
-TrieNode* TrieNode::find_child(const QChar ch) const
+TrieNode* TrieNode::find_child(const char16_t ch) const
 {
     if (child_count == 1)
     {
@@ -182,7 +212,7 @@ TrieNode* TrieNode::find_child(const QChar ch) const
     return nullptr;
 }
 
-void TrieNode::add_child(const QChar ch, TrieNode* node)
+void TrieNode::add_child(const char16_t ch, TrieNode* node)
 {
     if (child_count == 0)
     {
@@ -200,11 +230,9 @@ void TrieNode::add_child(const QChar ch, TrieNode* node)
             return;
         }
 
-        constexpr size_t initial_cap = 2;
-        const size_t size_bytes = ChildHeader::allocation_size(initial_cap);
-        void* mem = operator new(size_bytes);
-        auto* header = new(mem) ChildHeader;
-        header->capacity = static_cast<uint16_t>(initial_cap);
+        constexpr uint16_t initial_cap = 4;
+        auto* header = static_cast<ChildHeader*>(operator new(ChildHeader::allocation_size(initial_cap)));
+        header->capacity = initial_cap;
         header->count = 2;
 
         auto* ch_ptr = header->chars();
@@ -231,112 +259,111 @@ void TrieNode::add_child(const QChar ch, TrieNode* node)
     }
 
     auto* header = reinterpret_cast<ChildHeader*>(first_child);
-
-    if (header->count == header->capacity)
-    {
-        const size_t new_cap = header->capacity * 2;
-        const size_t size_bytes = ChildHeader::allocation_size(new_cap);
-
-        void* mem = operator new(size_bytes);
-        auto* new_header = new(mem) ChildHeader;
-        new_header->capacity = static_cast<uint16_t>(new_cap);
-        new_header->count = header->count;
-
-        std::memcpy(new_header->chars(), header->chars(), header->count * sizeof(QChar));
-        std::memcpy(new_header->nodes(), header->nodes(), header->count * sizeof(TrieNode*));
-
-        operator delete(header);
-        first_child = reinterpret_cast<TrieNode*>(new_header);
-        header = new_header;
-    }
-
     auto* ch_ptr = header->chars();
     auto* nd_ptr = header->nodes();
     const uint16_t n = header->count;
 
     const auto it = std::lower_bound(ch_ptr, ch_ptr + n, ch);
-    const size_t idx = it - ch_ptr;
+    const int idx = static_cast<int>(it - ch_ptr);
 
-    if (idx < n && ch_ptr[idx] == ch)
+    if (it != ch_ptr + n && *it == ch)
     {
         nd_ptr[idx] = node;
         return;
     }
 
-    if (idx < n)
+    if (n == header->capacity)
     {
-        std::memmove(ch_ptr + idx + 1, ch_ptr + idx, (n - idx) * sizeof(QChar));
-        std::memmove(nd_ptr + idx + 1, nd_ptr + idx, (n - idx) * sizeof(TrieNode*));
+        const uint16_t new_cap = header->capacity < 8 ? header->capacity * 2 : header->capacity + 8;
+        auto* new_header = static_cast<ChildHeader*>(operator new(ChildHeader::allocation_size(new_cap)));
+        new_header->capacity = new_cap;
+        new_header->count = n + 1;
+
+        auto* new_ch_ptr = new_header->chars();
+        auto* new_nd_ptr = new_header->nodes();
+
+        std::memcpy(new_ch_ptr, ch_ptr, idx * sizeof(char16_t));
+        std::memcpy(new_nd_ptr, nd_ptr, idx * sizeof(TrieNode*));
+
+        new_ch_ptr[idx] = ch;
+        new_nd_ptr[idx] = node;
+
+        std::memcpy(new_ch_ptr + idx + 1, ch_ptr + idx, (n - idx) * sizeof(char16_t));
+        std::memcpy(new_nd_ptr + idx + 1, nd_ptr + idx, (n - idx) * sizeof(TrieNode*));
+
+        operator delete(header);
+        first_child = reinterpret_cast<TrieNode*>(new_header);
+        child_count = n + 1;
+        return;
     }
+
+    std::memmove(ch_ptr + idx + 1, ch_ptr + idx, (n - idx) * sizeof(char16_t));
+    std::memmove(nd_ptr + idx + 1, nd_ptr + idx, (n - idx) * sizeof(TrieNode*));
 
     ch_ptr[idx] = ch;
     nd_ptr[idx] = node;
-    header->count++;
-    child_count = header->count;
+    header->count = n + 1;
+    child_count = n + 1;
 }
 
-QStringView TrieNode::get_name() const
+StringView TrieNode::get_name() const
 {
     const uintptr_t tag = data & TAG_MASK;
-    const uintptr_t ptr_val = data & ~TAG_MASK;
-
     if (tag == TAG_NAME)
     {
-        const auto* raw = reinterpret_cast<const char16_t*>(ptr_val);
-        const uint16_t total_len = raw[-2];
-        return {raw, total_len};
+        const auto* ptr = reinterpret_cast<const char16_t*>(data & ~TAG_MASK);
+        const uint16_t len = ptr[-2];
+        return StringView(ptr, len);
     }
     if (tag == TAG_COMPLEX)
     {
-        const auto* c = reinterpret_cast<const ComplexNodeData*>(ptr_val);
-        if (c->name)
+        const auto* comp = reinterpret_cast<const ComplexNodeData*>(data & ~TAG_MASK);
+        if (comp->name)
         {
-            const uint16_t total_len = c->name[-2];
-            return {c->name, total_len};
+            const uint16_t len = comp->name[-2];
+            return StringView(comp->name, len);
         }
     }
     return {};
 }
 
-QStringView TrieNode::get_first_phrase() const
+StringView TrieNode::get_first_phrase() const
 {
     const uintptr_t tag = data & TAG_MASK;
-    const uintptr_t ptr_val = data & ~TAG_MASK;
-
     if (tag == TAG_PHRASE)
     {
-        const auto* raw = reinterpret_cast<const char16_t*>(ptr_val);
-        const uint16_t first_len = raw[-1];
-        return {raw, first_len};
+        const auto* ptr = reinterpret_cast<const char16_t*>(data & ~TAG_MASK);
+        const uint16_t first_len = ptr[-1];
+        return StringView(ptr, first_len);
     }
     if (tag == TAG_COMPLEX)
     {
-        if (const auto* c = reinterpret_cast<const ComplexNodeData*>(ptr_val); c->phrase)
+        const auto* comp = reinterpret_cast<const ComplexNodeData*>(data & ~TAG_MASK);
+        if (comp->phrase)
         {
-            const uint16_t first_len = c->phrase[-1];
-            return {c->phrase, first_len};
+            const uint16_t first_len = comp->phrase[-1];
+            return StringView(comp->phrase, first_len);
         }
     }
     return {};
 }
 
-QStringView TrieNode::get_full_phrase() const
+StringView TrieNode::get_full_phrase() const
 {
     const uintptr_t tag = data & TAG_MASK;
-    const uintptr_t ptr_val = data & ~TAG_MASK;
-
     if (tag == TAG_PHRASE)
     {
-        const auto* raw = reinterpret_cast<const char16_t*>(ptr_val);
-        const uint16_t total_len = raw[-2];
-        return {raw, total_len};
+        const auto* ptr = reinterpret_cast<const char16_t*>(data & ~TAG_MASK);
+        const uint16_t total_len = ptr[-2];
+        return StringView(ptr, total_len);
     }
     if (tag == TAG_COMPLEX)
     {
-        if (const auto* c = reinterpret_cast<const ComplexNodeData*>(ptr_val); c->phrase)
+        const auto* comp = reinterpret_cast<const ComplexNodeData*>(data & ~TAG_MASK);
+        if (comp->phrase)
         {
-            const uint16_t total_len = c->phrase[-2];
-            return {c->phrase, total_len};
+            const uint16_t total_len = comp->phrase[-2];
+            return StringView(comp->phrase, total_len);
         }
     }
     return {};
@@ -344,10 +371,11 @@ QStringView TrieNode::get_full_phrase() const
 
 std::vector<Rule>* TrieNode::get_rules() const
 {
-    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_COMPLEX)
+    const uintptr_t tag = data & TAG_MASK;
+    if (tag == TAG_COMPLEX)
     {
-        auto* c = reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK);
-        return &c->rules;
+        auto* comp = reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK);
+        if (!comp->rules.empty()) return &comp->rules;
     }
     return nullptr;
 }
@@ -357,59 +385,58 @@ void TrieNode::ensure_complex()
     const uintptr_t tag = data & TAG_MASK;
     if (tag == TAG_COMPLEX) return;
 
-    auto* complex = new ComplexNodeData();
-    const uintptr_t ptr_val = data & ~TAG_MASK;
-
+    auto* comp = new ComplexNodeData();
     if (tag == TAG_NAME)
     {
-        complex->name = reinterpret_cast<const char16_t*>(ptr_val);
+        comp->name = reinterpret_cast<const char16_t*>(data & ~TAG_MASK);
     }
     else if (tag == TAG_PHRASE)
     {
-        complex->phrase = reinterpret_cast<const char16_t*>(ptr_val);
+        comp->phrase = reinterpret_cast<const char16_t*>(data & ~TAG_MASK);
     }
-
-    data = reinterpret_cast<uintptr_t>(complex) | TAG_COMPLEX;
+    data = reinterpret_cast<uintptr_t>(comp) | TAG_COMPLEX;
 }
 
 void TrieNode::set_name_ptr(const char16_t* ptr)
 {
     const uintptr_t tag = data & TAG_MASK;
-    if (tag == TAG_NULL || tag == TAG_NAME)
+    if (tag == TAG_NULL)
     {
         data = reinterpret_cast<uintptr_t>(ptr) | TAG_NAME;
-        return;
     }
-
-    ensure_complex();
-    auto* c = reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK);
-    c->name = ptr;
+    else if (tag == TAG_NAME)
+    {
+        data = reinterpret_cast<uintptr_t>(ptr) | TAG_NAME;
+    }
+    else
+    {
+        ensure_complex();
+        reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK)->name = ptr;
+    }
 }
 
 void TrieNode::set_phrase_ptr(const char16_t* ptr)
 {
     const uintptr_t tag = data & TAG_MASK;
-    if (tag == TAG_NULL || tag == TAG_PHRASE)
+    if (tag == TAG_NULL)
     {
         data = reinterpret_cast<uintptr_t>(ptr) | TAG_PHRASE;
-        return;
     }
-
-    ensure_complex();
-    auto* c = reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK);
-    c->phrase = ptr;
+    else if (tag == TAG_PHRASE)
+    {
+        data = reinterpret_cast<uintptr_t>(ptr) | TAG_PHRASE;
+    }
+    else
+    {
+        ensure_complex();
+        reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK)->phrase = ptr;
+    }
 }
 
 void TrieNode::add_rule(const Rule& rule)
 {
     ensure_complex();
-    auto* c = reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK);
-    c->rules.push_back(rule);
-
-    std::ranges::sort(c->rules, [](const Rule& a, const Rule& b)
-    {
-        return a.original_end.length() > b.original_end.length();
-    });
+    reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK)->rules.push_back(rule);
 }
 
 void TrieNode::remove_name()
@@ -421,8 +448,7 @@ void TrieNode::remove_name()
     }
     else if (tag == TAG_COMPLEX)
     {
-        auto* c = reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK);
-        c->name = nullptr;
+        reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK)->name = nullptr;
     }
 }
 
@@ -435,8 +461,7 @@ void TrieNode::remove_phrases()
     }
     else if (tag == TAG_COMPLEX)
     {
-        auto* c = reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK);
-        c->phrase = nullptr;
+        reinterpret_cast<ComplexNodeData*>(data & ~TAG_MASK)->phrase = nullptr;
     }
 }
 
@@ -513,10 +538,10 @@ Dictionary& Dictionary::operator=(Dictionary&& other) noexcept
     return *this;
 }
 
-void Dictionary::insert(const QString& key, const QString& value, const Priority priority)
+void Dictionary::insert(std::u16string_view key, std::u16string_view value, const Priority priority)
 {
     TrieNode* node = root;
-    for (const QChar ch : key)
+    for (const char16_t ch : key)
     {
         TrieNode* next = node->find_child(ch);
         if (!next)
@@ -534,33 +559,33 @@ void Dictionary::insert(const QString& key, const QString& value, const Priority
     else
     {
         const auto existing_full = node->get_full_phrase();
-        if (existing_full.isNull() || existing_full.isEmpty())
+        if (existing_full.empty())
         {
             node->set_phrase_ptr(text_arena.allocate(value));
         }
         else
         {
-            const auto list = existing_full.split(u'\x1F');
-            QStringList str_list;
+            const auto list = split_u16(existing_full, u'\x1F');
+            std::vector<std::u16string> str_list;
             str_list.reserve(list.size() + 1);
-            str_list.append(value);
+            str_list.emplace_back(value);
             for (const auto& item : list)
             {
                 if (item != value)
                 {
-                    str_list.append(item.toString());
+                    str_list.emplace_back(item);
                 }
             }
-            const QString combined = str_list.join(u'\x1F');
+            const std::u16string combined = join_u16(str_list, u'\x1F');
             node->set_phrase_ptr(text_arena.allocate(combined));
         }
     }
 }
 
-void Dictionary::insert_bulk(const QString& key, const Priority priority, const QString& value)
+void Dictionary::insert_bulk(std::u16string_view key, const Priority priority, std::u16string_view value)
 {
     TrieNode* node = root;
-    for (const QChar ch : key)
+    for (const char16_t ch : key)
     {
         TrieNode* next = node->find_child(ch);
         if (!next)
@@ -582,7 +607,7 @@ void Dictionary::insert_bulk(const QString& key, const Priority priority, const 
     }
 }
 
-ExactResult Dictionary::find_exact(const QStringView& key) const
+ExactResult Dictionary::find_exact(std::u16string_view key) const
 {
     const TrieNode* node = walk_node(key);
     if (!node) return {};
@@ -593,62 +618,62 @@ ExactResult Dictionary::find_exact(const QStringView& key) const
     return result;
 }
 
-void Dictionary::reorder(const QString& key, const QStringList& new_order) const
+void Dictionary::reorder(std::u16string_view key, const std::vector<std::u16string>& new_order) const
 {
     TrieNode* node = walk_node(key);
     if (!node) return;
 
-    if (new_order.isEmpty())
+    if (new_order.empty())
     {
         node->remove_phrases();
         return;
     }
 
-    const QString combined = new_order.join(u'\x1F');
+    const std::u16string combined = join_u16(new_order, u'\x1F');
     node->set_phrase_ptr(text_arena.allocate(combined));
 }
 
-void Dictionary::remove_meaning(const QString& key, const QString& value) const
+void Dictionary::remove_meaning(std::u16string_view key, std::u16string_view value) const
 {
     TrieNode* node = walk_node(key);
     if (!node) return;
 
     const auto existing_full = node->get_full_phrase();
-    if (existing_full.isNull() || existing_full.isEmpty()) return;
+    if (existing_full.empty()) return;
 
-    const auto list = existing_full.split(u'\x1F');
-    QStringList remaining;
+    const auto list = split_u16(existing_full, u'\x1F');
+    std::vector<std::u16string> remaining;
     for (const auto& item : list)
     {
         if (item != value)
         {
-            remaining.append(item.toString());
+            remaining.emplace_back(item);
         }
     }
 
-    if (remaining.isEmpty())
+    if (remaining.empty())
     {
         node->remove_phrases();
     }
     else
     {
-        const QString combined = remaining.join(u'\x1F');
+        const std::u16string combined = join_u16(remaining, u'\x1F');
         node->set_phrase_ptr(text_arena.allocate(combined));
     }
 }
 
-Match Dictionary::find(const QStringView& text, const int startPos) const
+Match Dictionary::find(std::u16string_view text, const int startPos) const
 {
     const TrieNode* node = root;
     int best_len_found = 0;
-    QStringView translated;
+    StringView translated;
     Priority priority = NONE;
 
     std::vector<Rule>* rules = nullptr;
 
-    for (int i = startPos; i < text.length(); ++i)
+    for (size_t i = startPos; i < text.length(); ++i)
     {
-        const QChar ch = text[i];
+        const char16_t ch = text[i];
 
         node = node->find_child(ch);
         if (!node) break;
@@ -660,15 +685,15 @@ Match Dictionary::find(const QStringView& text, const int startPos) const
 
         if (const auto name = node->get_name(); !name.isNull())
         {
-            best_len_found = i - startPos + 1;
+            best_len_found = static_cast<int>(i - startPos + 1);
             translated = name;
             priority = NAME;
         }
         else if (const auto phrase = node->get_first_phrase(); !phrase.isNull())
         {
-            if (i - startPos + 1 > best_len_found)
+            if (static_cast<int>(i - startPos + 1) > best_len_found)
             {
-                best_len_found = i - startPos + 1;
+                best_len_found = static_cast<int>(i - startPos + 1);
                 translated = phrase;
                 priority = PHRASE;
             }
@@ -678,10 +703,10 @@ Match Dictionary::find(const QStringView& text, const int startPos) const
     return {.length = best_len_found, .priority = priority, .rules = rules, .translation = translated};
 }
 
-void Dictionary::insert_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end)
+void Dictionary::insert_rule(std::u16string_view start, std::u16string_view end, std::u16string_view t_start, std::u16string_view t_end)
 {
     TrieNode* node = root;
-    for (const QChar ch : start)
+    for (const char16_t ch : start)
     {
         TrieNode* next = node->find_child(ch);
         if (!next)
@@ -693,11 +718,14 @@ void Dictionary::insert_rule(const QString& start, const QString& end, const QSt
     }
 
     node->add_rule({
-        .original_start = start, .original_end = end, .translation_start = t_start, .translation_end = t_end
+        .original_start = std::u16string(start),
+        .original_end = std::u16string(end),
+        .translation_start = std::u16string(t_start),
+        .translation_end = std::u16string(t_end)
     });
 }
 
-const Rule* Dictionary::find_exact_rule(const QString& start, const QString& end) const
+const Rule* Dictionary::find_exact_rule(std::u16string_view start, std::u16string_view end) const
 {
     const TrieNode* node = walk_node(start);
     if (!node) return nullptr;
@@ -717,7 +745,7 @@ const Rule* Dictionary::find_exact_rule(const QString& start, const QString& end
     return nullptr;
 }
 
-void Dictionary::remove_rule(const QString& start, const QString& end) const
+void Dictionary::remove_rule(std::u16string_view start, std::u16string_view end)
 {
     const TrieNode* node = walk_node(start);
     if (!node) return;
@@ -736,7 +764,7 @@ void Dictionary::remove_rule(const QString& start, const QString& end) const
     }
 }
 
-void Dictionary::edit_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end) const
+void Dictionary::edit_rule(std::u16string_view start, std::u16string_view end, std::u16string_view t_start, std::u16string_view t_end) const
 {
     const TrieNode* node = walk_node(start);
     if (!node) return;
@@ -756,10 +784,10 @@ void Dictionary::edit_rule(const QString& start, const QString& end, const QStri
     }
 }
 
-TrieNode* Dictionary::walk_node(const QStringView& key) const
+TrieNode* Dictionary::walk_node(std::u16string_view key) const
 {
     TrieNode* node = root;
-    for (const QChar ch : key)
+    for (const char16_t ch : key)
     {
         node = node->find_child(ch);
         if (!node) return nullptr;
@@ -767,7 +795,7 @@ TrieNode* Dictionary::walk_node(const QStringView& key) const
     return node;
 }
 
-void Dictionary::remove(const QString& key, const Priority priority) const
+void Dictionary::remove(std::u16string_view key, const Priority priority) const
 {
     TrieNode* node = walk_node(key);
     if (!node) return;
@@ -781,3 +809,5 @@ void Dictionary::remove(const QString& key, const Priority priority) const
         node->remove_phrases();
     }
 }
+
+} // namespace hanvi

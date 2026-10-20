@@ -277,9 +277,9 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
             continue;
         }
 
-        if (sv_readings.contains(ch))
+        if (auto it = sv_readings.find(static_cast<char16_t>(ch.unicode())); it != sv_readings.end())
         {
-            sv_reading.append(sv_readings[ch]);
+            sv_reading.append(QString::fromUtf16(it->second.data(), static_cast<qsizetype>(it->second.size())));
         }
         else
         {

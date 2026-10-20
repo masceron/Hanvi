@@ -1,37 +1,34 @@
-#include <QApplication>
-#include <QClipboard>
-#include <QFile>
-
 #include "io.h"
 #include "db.h"
 #include "dict.h"
 
-QList<QStringView> paginate(const QString& input_text, const int min_length)
-{
-    QList<QStringView> pages;
-    const QStringView full_view(input_text);
+namespace hanvi {
 
-    int cursor = 0;
-    const int length = static_cast<int>(full_view.length());
+std::vector<std::u16string_view> paginate(const std::u16string_view input_text, const int min_length)
+{
+    std::vector<std::u16string_view> pages;
+    size_t cursor = 0;
+    const size_t length = input_text.length();
 
     while (cursor < length)
     {
-        const int target_end = cursor + min_length;
+        const size_t target_end = cursor + min_length;
 
         if (target_end >= length)
         {
-            pages.append(full_view.sliced(cursor));
+            pages.push_back(input_text.substr(cursor));
             break;
         }
-        if (const int cutoff = static_cast<int>(full_view.indexOf('\n', target_end)); cutoff == -1)
+        size_t cutoff = input_text.find(u'\n', target_end);
+        if (cutoff == std::u16string_view::npos)
         {
-            pages.append(full_view.sliced(cursor));
+            pages.push_back(input_text.substr(cursor));
             break;
         }
         else
         {
-            const int chunk_len = cutoff + 1 - cursor;
-            pages.append(full_view.sliced(cursor, chunk_len));
+            const size_t chunk_len = cutoff + 1 - cursor;
+            pages.push_back(input_text.substr(cursor, chunk_len));
 
             cursor = cutoff + 1;
         }
@@ -40,55 +37,7 @@ QList<QStringView> paginate(const QString& input_text, const int min_length)
     return pages;
 }
 
-std::expected<QString, io_error> load_from_clipboard()
-{
-    if (auto clipboard_text = QApplication::clipboard()->text(); !clipboard_text.isEmpty())
-    {
-        return clipboard_text;
-    }
-    return std::unexpected(io_error::not_text);
-}
-
-std::expected<QString, io_error> load_from_file(const QString& name)
-{
-    if (!name.isEmpty())
-    {
-        if (QFile file(name); file.open(QIODevice::ReadOnly | QFile::Text))
-        {
-            QTextStream ins(&file);
-            auto input = file.readAll();
-            file.close();
-
-            if (input.isEmpty()) return std::unexpected(io_error::file_not_readable);
-
-            return input;
-        }
-        return std::unexpected(io_error::not_text);
-    }
-
-    return std::unexpected(io_error::file_not_readable);
-}
-
-int save_to_file(const QString& name, const QString& text)
-{
-    if (!name.isEmpty())
-    {
-        if (QFile file(name); file.open(QIODevice::WriteOnly | QFile::Text))
-        {
-            QTextStream out(&file);
-            out << text;
-            out.flush();
-
-            file.close();
-
-            return 0;
-        }
-    }
-
-    return 1;
-}
-
-void io_insert(const int id, const QString& key, const QString& value, const Priority priority)
+void io_insert(const int id, std::u16string_view key, std::u16string_view value, const Priority priority)
 {
     if (id == -1)
     {
@@ -102,13 +51,13 @@ void io_insert(const int id, const QString& key, const QString& value, const Pri
     }
 }
 
-void io_reorder(const QString& key, const QStringList& new_order)
+void io_reorder(std::u16string_view key, const std::vector<std::u16string>& new_order)
 {
     dictionary.reorder(key, new_order);
     db_reorder(key, new_order);
 }
 
-void io_remove(const int id, const QString& key, const Priority priority)
+void io_remove(const int id, std::u16string_view key, const Priority priority)
 {
     if (id == -1)
     {
@@ -122,8 +71,10 @@ void io_remove(const int id, const QString& key, const Priority priority)
     }
 }
 
-void io_remove_meaning(const QString& key, const QString& value)
+void io_remove_meaning(std::u16string_view key, std::u16string_view value)
 {
     dictionary.remove_meaning(key, value);
     db_remove_meaning(key, value);
 }
+
+} // namespace hanvi

@@ -96,7 +96,7 @@ int main(int argc, char* argv[])
         {
             const auto set_chosen = std::ranges::find_if(name_sets, [&](const NameSet& name_set)
             {
-                return name_set.title.compare(set_specified, Qt::CaseInsensitive) == 0;
+                return QString::fromUtf16(name_set.title.data(), static_cast<qsizetype>(name_set.title.size())).compare(set_specified, Qt::CaseInsensitive) == 0;
             });
             if (set_chosen == name_sets.end())
             {

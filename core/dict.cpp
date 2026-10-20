@@ -1,139 +1,165 @@
-#include <QSqlQuery>
-#include <QFutureWatcher>
-#include <QtConcurrentRun>
-
 #include "dict.h"
-#include "structures.h"
+#include "sqlite_helper.h"
+#include <future>
+#include <thread>
+#include <mutex>
+#include <iostream>
 
-static void init_db()
+namespace hanvi {
+
+static sqlite3* g_db = nullptr;
+static std::string g_db_path = "dict.db";
+static std::mutex g_db_mutex;
+
+void init_db(const std::string& db_path)
 {
-    auto db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName("dict.db");
+    std::lock_guard<std::mutex> lock(g_db_mutex);
+    if (g_db) return;
 
-    if (!db.open())
+    g_db_path = db_path;
+    if (sqlite3_open_v2(g_db_path.c_str(), &g_db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr) != SQLITE_OK)
     {
-        exit(1);
+        std::cerr << "Failed to open database: " << g_db_path << std::endl;
+        return;
     }
 
-    QSqlQuery query(db);
-    query.exec("PRAGMA foreign_keys = ON;");
+    char* errmsg = nullptr;
+    sqlite3_exec(g_db, "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;", nullptr, nullptr, &errmsg);
+    if (errmsg) sqlite3_free(errmsg);
 }
 
-static void load_global_data(const std::function<void()>& on_finished)
+void close_db()
 {
-    QFuture<void> future_sv = QtConcurrent::run([]
+    std::lock_guard<std::mutex> lock(g_db_mutex);
+    if (g_db)
     {
-        {
-            QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "SV_thread");
-            db.setDatabaseName("dict.db");
-            if (db.open())
-            {
-                QSqlQuery query(db);
-                query.setForwardOnly(true);
-                query.exec("SELECT original, translated FROM sv_readings");
-                while (query.next())
-                {
-                    QChar key = query.value(0).toString().at(0);
-                    QString val = query.value(1).toString();
-                    sv_readings.insert(key, val);
-                }
-                db.close();
-            }
-        }
-        QSqlDatabase::removeDatabase("SV_thread");
-    });
+        sqlite3_close(g_db);
+        g_db = nullptr;
+    }
+}
 
-    QFuture<void> future_punc = QtConcurrent::run([]
-    {
-        {
-            QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "P_thread");
-            db.setDatabaseName("dict.db");
-            if (db.open())
-            {
-                QSqlQuery query(db);
-                query.setForwardOnly(true);
-                query.exec("SELECT original, normalized FROM punctuations");
-                while (query.next())
-                {
-                    const QChar key = query.value(0).toString().at(0);
-                    const QChar val = query.value(1).toString().at(0);
-                    punctuations.insert(key, val);
-                }
-                db.close();
-            }
-        }
-        QSqlDatabase::removeDatabase("P_thread");
-    });
-
-    QFuture<void> future_trie = QtConcurrent::run([]
-    {
-        {
-            QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", "NP_thread");
-            db.setDatabaseName("dict.db");
-            if (db.open())
-            {
-                QSqlQuery query(db);
-                query.setForwardOnly(true);
-
-                query.exec("SELECT original, translated FROM names");
-                while (query.next())
-                {
-                    dictionary.insert_bulk(query.value(0).toString(), NAME, query.value(1).toString());
-                }
-
-                query.exec("SELECT original, translated FROM phrases");
-                while (query.next())
-                {
-                    dictionary.insert_bulk(query.value(0).toString(), PHRASE, query.value(1).toString());
-                }
-
-                query.exec("SELECT original_start, original_end, translated_start, translated_end FROM grammar_rules");
-                while (query.next())
-                {
-                    dictionary.insert_rule(query.value(0).toString(), query.value(1).toString(),
-                                           query.value(2).toString(), query.value(3).toString());
-                }
-                db.close();
-            }
-        }
-        QSqlDatabase::removeDatabase("NP_thread");
-    });
-
-    const QFuture<void> master_future = QtConcurrent::run([future_sv, future_punc, future_trie]() mutable
-    {
-        future_sv.waitForFinished();
-        future_punc.waitForFinished();
-        future_trie.waitForFinished();
-    });
-
-    auto* watcher = new QFutureWatcher<void>();
-
-    QObject::connect(watcher, &QFutureWatcher<void>::finished, [watcher, on_finished]()
-    {
-        if (on_finished) on_finished();
-
-        watcher->deleteLater();
-    });
-
-    watcher->setFuture(master_future);
+sqlite3* get_db_handle()
+{
+    if (!g_db) init_db();
+    return g_db;
 }
 
 static void load_name_sets_data()
 {
-    QSqlQuery query;
-    query.prepare("SELECT id, title FROM name_sets");
-    query.exec();
-    while (query.next())
+    name_sets.clear();
+    sqlite3* db = get_db_handle();
+    if (!db) return;
+
+    SqliteStmt stmt(db, "SELECT id, title FROM name_sets");
+    while (stmt.step())
     {
-        int id = query.value(0).toInt();
-        QString title = query.value(1).toString();
-        name_sets.emplace_back(id, title);
+        int id = stmt.column_int(0);
+        auto title = stmt.column_text16(1);
+        name_sets.emplace_back(id, std::u16string(title));
+    }
+}
+
+static void load_global_data(const std::function<void()>& on_finished)
+{
+    const std::string path = g_db_path;
+
+    auto do_load = [path, on_finished]() {
+        auto fut_sv = std::async(std::launch::async, [path] {
+            sqlite3* db_sv = nullptr;
+            if (sqlite3_open_v2(path.c_str(), &db_sv, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, nullptr) == SQLITE_OK)
+            {
+                SqliteStmt stmt(db_sv, "SELECT original, translated FROM sv_readings");
+                while (stmt.step())
+                {
+                    auto orig = stmt.column_text16(0);
+                    auto trans = stmt.column_text16(1);
+                    if (!orig.empty())
+                    {
+                        sv_readings.insert_or_assign(orig[0], std::u16string(trans));
+                    }
+                }
+                sqlite3_close(db_sv);
+            }
+        });
+
+        auto fut_punc = std::async(std::launch::async, [path] {
+            sqlite3* db_punc = nullptr;
+            if (sqlite3_open_v2(path.c_str(), &db_punc, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, nullptr) == SQLITE_OK)
+            {
+                SqliteStmt stmt(db_punc, "SELECT original, normalized FROM punctuations");
+                while (stmt.step())
+                {
+                    auto orig = stmt.column_text16(0);
+                    auto norm = stmt.column_text16(1);
+                    if (!orig.empty() && !norm.empty())
+                    {
+                        punctuations.insert_or_assign(orig[0], norm[0]);
+                    }
+                }
+                sqlite3_close(db_punc);
+            }
+        });
+
+        auto fut_trie = std::async(std::launch::async, [path] {
+            sqlite3* db_trie = nullptr;
+            if (sqlite3_open_v2(path.c_str(), &db_trie, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, nullptr) == SQLITE_OK)
+            {
+                {
+                    SqliteStmt stmt(db_trie, "SELECT original, translated FROM names");
+                    while (stmt.step())
+                    {
+                        dictionary.insert_bulk(stmt.column_text16(0), Priority::NAME, stmt.column_text16(1));
+                    }
+                }
+                {
+                    SqliteStmt stmt(db_trie, "SELECT original, translated FROM phrases");
+                    while (stmt.step())
+                    {
+                        dictionary.insert_bulk(stmt.column_text16(0), Priority::PHRASE, stmt.column_text16(1));
+                    }
+                }
+                {
+                    SqliteStmt stmt(db_trie, "SELECT original_start, original_end, translated_start, translated_end FROM grammar_rules");
+                    while (stmt.step())
+                    {
+                        dictionary.insert_rule(stmt.column_text16(0), stmt.column_text16(1),
+                                               stmt.column_text16(2), stmt.column_text16(3));
+                    }
+                }
+                sqlite3_close(db_trie);
+            }
+        });
+
+        fut_sv.get();
+        fut_punc.get();
+        fut_trie.get();
+
+        if (on_finished)
+        {
+            on_finished();
+        }
+    };
+
+    if (on_finished)
+    {
+        std::thread(do_load).detach();
+    }
+    else
+    {
+        do_load();
     }
 }
 
 void load_dict(const std::function<void()>& on_finished)
 {
     init_db();
+    load_name_sets_data();
+    load_global_data(on_finished);
+}
+
+void load_dict(const std::string& db_path, const std::function<void()>& on_finished)
+{
+    init_db(db_path);
     load_name_sets_data();
     load_global_data(on_finished);
 }
@@ -145,18 +171,15 @@ void load_name_set(const int id)
 
     if (id == -1) return;
 
-    QSqlQuery query;
-    query.prepare("SELECT original, translated FROM name_set_entries WHERE set_id = :id");
-    query.bindValue(":id", id);
+    sqlite3* db = get_db_handle();
+    if (!db) return;
 
-    if (query.exec())
+    SqliteStmt stmt(db, "SELECT original, translated FROM name_set_entries WHERE set_id = ?");
+    stmt.bind_int(1, id);
+
+    while (stmt.step())
     {
-        while (query.next())
-        {
-            QString key = query.value(0).toString();
-            QString val = query.value(1).toString();
-            name_set_dictionary.insert_bulk(key, NAME, val);
-        }
+        name_set_dictionary.insert_bulk(stmt.column_text16(0), Priority::NAME, stmt.column_text16(1));
     }
 }
 
@@ -171,3 +194,5 @@ void reload_dict(const std::function<void()>& on_finished)
     load_name_set(current_name_set_id);
     load_global_data(on_finished);
 }
+
+} // namespace hanvi

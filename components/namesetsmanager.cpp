@@ -64,7 +64,8 @@ void NamesetsManager::load_data()
         const int row = ui->name_sets_list->rowCount();
         ui->name_sets_list->insertRow(row);
 
-        auto* titleItem = new QTableWidgetItem(title);
+        QString qtitle = QString::fromUtf16(title.data(), static_cast<qsizetype>(title.size()));
+        auto* titleItem = new QTableWidgetItem(qtitle);
         titleItem->setData(Qt::UserRole, index);
         titleItem->setFlags(titleItem->flags() & ~Qt::ItemIsEditable);
         ui->name_sets_list->setItem(row, 0, titleItem);
@@ -76,7 +77,7 @@ void NamesetsManager::load_data()
         count_item->setFlags(count_item->flags() & ~Qt::ItemIsEditable);
 
         ui->name_sets_list->setItem(row, 1, count_item);
-        ui->name_sets_list->setCellWidget(row, 2, create_action_widget(index, title));
+        ui->name_sets_list->setCellWidget(row, 2, create_action_widget(index, qtitle));
     }
 }
 

@@ -9,12 +9,14 @@
 #include <windows.h>
 #endif
 
-class AlignedDocument;
+namespace hanvi { class AlignedDocument; struct Rule; }
+using hanvi::AlignedDocument;
+using hanvi::Rule;
 class DocumentSession;
 class QTabBar;
 class QPushButton;
 class findbar;
-struct Rule;
+
 
 QT_BEGIN_NAMESPACE
 

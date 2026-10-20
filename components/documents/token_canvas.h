@@ -5,7 +5,7 @@
 #include <vector>
 #include <memory>
 #include <optional>
-#include "aligned_document.h"
+#include "core/aligned_document.h"
 #include "document_session.h"
 
 struct CharPosition {

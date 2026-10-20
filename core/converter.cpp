@@ -1,14 +1,19 @@
 #include "converter.h"
 #include "structures.h"
 #include "dict.h"
+#include "unicode_utils.h"
 #include <optional>
-#include <QCoreApplication>
-#include <QDir>
-#include <QDebug>
 #include <mutex>
+#include <algorithm>
+#include <iostream>
+#include <filesystem>
 #include <SimpleConverter.hpp>
 
-#include "documents/aligned_document.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+namespace hanvi {
 
 namespace
 {
@@ -30,74 +35,78 @@ namespace
     };
 }
 
-static QString get_sv(const QStringView& cn)
+static std::u16string get_sv(const std::u16string_view& cn)
 {
-    QString sv_reading;
-    int idx = 0;
+    std::u16string sv_reading;
+    size_t idx = 0;
     while (idx < cn.length())
     {
-        const QChar ch = cn[idx];
-        if (ch.isHighSurrogate() && idx + 1 < cn.length() && cn[idx + 1].isLowSurrogate())
+        const char16_t ch = cn[idx];
+        if (is_high_surrogate(ch) && idx + 1 < cn.length() && is_low_surrogate(cn[idx + 1]))
         {
-            sv_reading.append(cn.sliced(idx, 2));
+            sv_reading += cn.substr(idx, 2);
             idx += 2;
-            if (idx < cn.length() && !(cn[idx].isHighSurrogate() && idx + 1 < cn.length() && cn[idx + 1].isLowSurrogate()))
+            if (idx < cn.length() && !(is_high_surrogate(cn[idx]) && idx + 1 < cn.length() && is_low_surrogate(cn[idx + 1])))
             {
-                sv_reading.append(" ");
+                sv_reading.push_back(u' ');
             }
             continue;
         }
 
-        if (sv_readings.contains(ch))
+        if (auto it = sv_readings.find(ch); it != sv_readings.end())
         {
-            sv_reading.append(sv_readings[ch]);
+            sv_reading += it->second;
         }
         else
         {
-            if (punctuations.contains(ch))
+            if (auto pit = punctuations.find(ch); pit != punctuations.end())
             {
-                sv_reading.append(punctuations[ch]);
+                sv_reading.push_back(pit->second);
             }
-            else sv_reading.append(ch);
+            else sv_reading.push_back(ch);
         }
-        sv_reading.append(" ");
+        sv_reading.push_back(u' ');
         idx++;
     }
-    if (!sv_reading.isEmpty() && sv_reading.endsWith(' '))
+    if (!sv_reading.empty() && sv_reading.back() == u' ')
     {
-        sv_reading.resize(sv_reading.size() - 1);
+        sv_reading.pop_back();
     }
 
     return sv_reading;
 }
 
-static QChar normalize_char(const QChar c) noexcept
+static char16_t normalize_char(const char16_t c) noexcept
 {
-    if (const QChar mapped = punctuations.value(c); !mapped.isNull())
+    if (auto it = punctuations.find(c); it != punctuations.end())
     {
-        return mapped;
+        return it->second;
     }
-    const ushort code = c.unicode();
-    if (code >= 0xFF21 && code <= 0xFF3A)
+    const uint16_t code = c;
+    if (code >= 0xFF21 && code <= 0xFF3A) // Ａ-Ｚ
     {
-        return QChar(code - 0xFEE0);
+        return static_cast<char16_t>(code - 0xFEE0);
     }
-    if (code >= 0xFF41 && code <= 0xFF5A)
+    if (code >= 0xFF41 && code <= 0xFF5A) // ａ-ｚ
     {
-        return QChar(code - 0xFEE0);
+        return static_cast<char16_t>(code - 0xFEE0);
+    }
+    if (code >= 0xFF10 && code <= 0xFF19) // ０-９
+    {
+        return static_cast<char16_t>(code - 0xFEE0);
     }
     return c;
 }
 
-static bool should_append_space(const QStringView& input, const int current_end_idx,
-                                const QChar current_char_source = QChar(),
+static bool should_append_space(const std::u16string_view& input, const size_t current_end_idx,
+                                const char16_t current_char_source = 0,
                                 const bool in_quote = false,
                                 const bool in_single_quote = false)
 {
-    static constexpr QStringView openers(u"“‘([<{");
-    if (!current_char_source.isNull())
+    static constexpr std::u16string_view openers(u"“‘([<{");
+    if (current_char_source != 0)
     {
-        if (openers.contains(current_char_source))
+        if (openers.find(current_char_source) != std::u16string_view::npos)
         {
             return false;
         }
@@ -111,11 +120,11 @@ static bool should_append_space(const QStringView& input, const int current_end_
         }
     }
 
-    static constexpr QStringView closers(u".,;:!?)]}>”’…");
+    static constexpr std::u16string_view closers(u".,;:!?)]}>”’…");
 
     if (current_end_idx < input.length())
     {
-        const QChar next_char = input[current_end_idx];
+        const char16_t next_char = input[current_end_idx];
 
         if (next_char == u'"')
         {
@@ -131,33 +140,33 @@ static bool should_append_space(const QStringView& input, const int current_end_
                 return false;
             }
         }
-        else if (closers.contains(next_char))
+        else if (closers.find(next_char) != std::u16string_view::npos)
         {
             return false;
         }
 
-        QChar prev_char = current_char_source;
+        char16_t prev_char = current_char_source;
 
-        if (prev_char.isNull() && current_end_idx > 0)
+        if (prev_char == 0 && current_end_idx > 0)
         {
             prev_char = input[current_end_idx - 1];
         }
 
-        if (!prev_char.isNull())
+        if (prev_char != 0)
         {
-            if (prev_char.isLowSurrogate() && next_char.isHighSurrogate())
+            if (is_low_surrogate(prev_char) && is_high_surrogate(next_char))
             {
                 return false;
             }
 
-            if (Typography::is_latin_or_digit(prev_char) && Typography::is_latin_or_digit(next_char))
+            if (is_latin_or_digit(prev_char) && is_latin_or_digit(next_char))
             {
                 return false;
             }
 
-            if ((prev_char == u'.' || prev_char == u',') && Typography::is_digit(next_char))
+            if ((prev_char == u'.' || prev_char == u',') && is_digit(next_char))
             {
-                if (current_end_idx >= 2 && Typography::is_digit(input[current_end_idx - 2]))
+                if (current_end_idx >= 2 && is_digit(input[current_end_idx - 2]))
                 {
                     return false;
                 }
@@ -168,10 +177,9 @@ static bool should_append_space(const QStringView& input, const int current_end_
     return true;
 }
 
-static int is_optimal_phrase(const QStringView& text, const int current_pos, const int current_len)
+static int is_optimal_phrase(const std::u16string_view& text, const int current_pos, const int current_len)
 {
     const int threshold = std::max(current_len, 3);
-
     const int limit = current_pos + current_len;
 
     for (int next_start = current_pos + 1; next_start < limit; ++next_start)
@@ -202,42 +210,41 @@ namespace
     };
 }
 
-static std::optional<RuleMatch> find_matching_rule(const QStringView& text, const int current_pos,
+static std::optional<RuleMatch> find_matching_rule(const std::u16string_view& text, const int current_pos,
                                                    const std::vector<Rule>& rules)
 {
-    static constexpr QStringView stoppers(u"，。：；！？“”’.,，;:!?)]}>\"'");
+    static constexpr std::u16string_view stoppers(u"，。：；！？“”’.,，;:!?)]}>\"'");
     int limit = std::min(static_cast<int>(text.length()), current_pos + 25);
 
     for (int i = current_pos; i < limit; ++i)
     {
-        if (const QChar ch = text[i]; stoppers.contains(ch))
+        if (const char16_t ch = text[i]; stoppers.find(ch) != std::u16string_view::npos)
         {
             limit = i;
             break;
         }
     }
 
-    const QStringView search_area = text.sliced(current_pos, limit - current_pos);
+    const std::u16string_view search_area = text.substr(current_pos, limit - current_pos);
     std::optional<RuleMatch> best_match = std::nullopt;
 
     for (const auto& rule : rules)
     {
         const int start_len = static_cast<int>(rule.original_start.length());
-        if (search_area.length() <= start_len) continue;
+        if (static_cast<int>(search_area.length()) <= start_len) continue;
 
         int search_offset = start_len;
 
         while (true)
         {
-            const int relative_end_idx = static_cast<int>(search_area.indexOf(rule.original_end, search_offset));
+            const size_t found = search_area.find(rule.original_end, search_offset);
+            if (found == std::u16string_view::npos) break;
 
-            if (relative_end_idx == -1) break;
-
+            const int relative_end_idx = static_cast<int>(found);
             const int abs_start_of_end = current_pos + relative_end_idx;
             const int rule_end_len = static_cast<int>(rule.original_end.length());
 
             bool is_safe = true;
-
             const int lookback_limit = std::max(current_pos + start_len, abs_start_of_end - 6);
 
             for (int k = abs_start_of_end; k >= lookback_limit; --k)
@@ -309,17 +316,17 @@ static std::optional<RuleMatch> find_matching_rule(const QStringView& text, cons
     return best_match;
 }
 
-static void convert_recursive_aligned(const QStringView& input, int start_offset, uint32_t& token_counter,
+static void convert_recursive_aligned(const std::u16string_view& input, int start_offset, uint32_t& token_counter,
                                       bool& cap_next,
                                       Progress& progress, AlignedDocument& doc)
 {
-    int i = 0;
+    size_t i = 0;
 
     while (i < input.length())
     {
-        QChar ch = input[i];
+        char16_t ch = input[i];
 
-        if (ch == '\n')
+        if (ch == u'\n')
         {
             doc.paragraphs.emplace_back();
             cap_next = true;
@@ -327,7 +334,7 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
             progress.update(1);
             continue;
         }
-        if (ch.isSpace())
+        if (ch == u' ' || ch == u'\t' || ch == u'\r' || ch == u'\v' || ch == u'\f' || ch == 0x3000)
         {
             if (!doc.paragraphs.empty() && !doc.paragraphs.back().tokens.empty())
             {
@@ -340,20 +347,20 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
 
         if (current_name_set_id != -1)
         {
-            if (Match match = name_set_dictionary.find(input, i); match.length > 0 && match.priority == NAME)
+            if (Match match = name_set_dictionary.find(input, static_cast<int>(i)); match.length > 0 && match.priority == NAME)
             {
-                QString sv = get_sv(input.sliced(i, match.length));
-                if (cap_next)
+                std::u16string sv = get_sv(input.substr(i, match.length));
+                if (cap_next && !sv.empty())
                 {
-                    sv[0] = sv[0].toUpper();
+                    sv[0] = to_upper_char16(sv[0]);
                     cap_next = false;
                 }
 
                 Token tok;
                 tok.id = ++token_counter;
-                tok.cn = input.sliced(i, match.length).toString();
+                tok.cn = std::u16string(input.substr(i, match.length));
                 tok.sv = std::move(sv);
-                tok.vn = match.translation.toString();
+                tok.vn = std::u16string(match.translation);
 
                 i += match.length;
                 progress.update(match.length);
@@ -363,22 +370,22 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
             }
         }
 
-        auto [length, priority, rules, translation] = dictionary.find(input, i);
+        auto [length, priority, rules, translation] = dictionary.find(input, static_cast<int>(i));
 
         if (length > 0 && priority == NAME)
         {
-            QString sv = get_sv(input.sliced(i, length));
-            if (cap_next)
+            std::u16string sv = get_sv(input.substr(i, length));
+            if (cap_next && !sv.empty())
             {
-                sv[0] = sv[0].toUpper();
+                sv[0] = to_upper_char16(sv[0]);
                 cap_next = false;
             }
 
             Token tok;
             tok.id = ++token_counter;
-            tok.cn = input.sliced(i, length).toString();
+            tok.cn = std::u16string(input.substr(i, length));
             tok.sv = std::move(sv);
-            tok.vn = translation.toString();
+            tok.vn = std::u16string(translation);
 
             i += length;
             progress.update(length);
@@ -389,7 +396,7 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
 
         if (rules != nullptr)
         {
-            if (auto rule_match = find_matching_rule(input, i, *rules))
+            if (auto rule_match = find_matching_rule(input, static_cast<int>(i), *rules))
             {
                 const Rule* rule = rule_match->rule;
                 int rule_start_len = static_cast<int>(rule->original_start.length());
@@ -399,7 +406,7 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
 
                 if (!phrase_overrides_rule)
                 {
-                    int inner_start_idx = i + rule_start_len;
+                    int inner_start_idx = static_cast<int>(i) + rule_start_len;
                     int inner_len = rule_match->abs_start_of_end_token - inner_start_idx;
                     int rule_end_len = static_cast<int>(rule->original_end.length());
 
@@ -407,10 +414,10 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
 
                     uint32_t rule_uid = ++token_counter;
 
-                    QString t_start = rule->translation_start;
-                    if (cap_next && !t_start.isEmpty())
+                    std::u16string t_start = rule->translation_start;
+                    if (cap_next && !t_start.empty())
                     {
-                        if (t_start[0].isLower()) t_start[0] = t_start[0].toUpper();
+                        if (is_lower_char16(t_start[0])) t_start[0] = to_upper_char16(t_start[0]);
                         cap_next = false;
                     }
 
@@ -422,7 +429,7 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
                     start_tok.rule = rule;
                     doc.paragraphs.back().tokens.push_back(std::move(start_tok));
 
-                    convert_recursive_aligned(input.sliced(inner_start_idx, inner_len),
+                    convert_recursive_aligned(input.substr(inner_start_idx, inner_len),
                                               start_offset + inner_start_idx,
                                               token_counter,
                                               cap_next, progress, doc);
@@ -446,16 +453,16 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
 
         if (length > 0 && priority == PHRASE)
         {
-            if (int conflict_start = is_optimal_phrase(input, i, length); conflict_start != -1)
+            if (int conflict_start = is_optimal_phrase(input, static_cast<int>(i), length); conflict_start != -1)
             {
-                int max_allowed_len = conflict_start - i;
+                int max_allowed_len = conflict_start - static_cast<int>(i);
 
                 length = 0;
                 translation = {};
 
                 for (int try_len = max_allowed_len; try_len >= 1; --try_len)
                 {
-                    const auto try_string = input.sliced(i, try_len);
+                    const auto try_string = input.substr(i, try_len);
                     if (current_name_set_id != -1)
                     {
                         if (const auto res_set = name_set_dictionary.find_exact(try_string); !res_set.name.isNull())
@@ -486,19 +493,19 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
                 goto process_single_char;
             }
 
-            QString sv = get_sv(input.sliced(i, length));
-            QString trans = translation.toString();
+            std::u16string sv = get_sv(input.substr(i, length));
+            std::u16string trans(translation);
 
             if (cap_next)
             {
-                if (!trans.isEmpty() && trans[0].isLower()) trans[0] = trans[0].toUpper();
-                sv[0] = sv[0].toUpper();
+                if (!trans.empty() && is_lower_char16(trans[0])) trans[0] = to_upper_char16(trans[0]);
+                if (!sv.empty()) sv[0] = to_upper_char16(sv[0]);
                 cap_next = false;
             }
 
             Token tok;
             tok.id = ++token_counter;
-            tok.cn = input.sliced(i, length).toString();
+            tok.cn = std::u16string(input.substr(i, length));
             tok.sv = std::move(sv);
             tok.vn = std::move(trans);
 
@@ -511,20 +518,20 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
 
     process_single_char:
         {
-            if (Typography::is_latin_or_digit(ch))
+            if (is_latin_or_digit(ch))
             {
-                int start_idx = i;
-                int end_idx = i + 1;
+                size_t start_idx = i;
+                size_t end_idx = i + 1;
                 while (end_idx < input.length())
                 {
-                    if (const QChar next = input[end_idx]; Typography::is_latin_or_digit(next))
+                    if (const char16_t next = input[end_idx]; is_latin_or_digit(next))
                     {
                         end_idx++;
                     }
                     else if ((next == u'.' || next == u',') &&
                         end_idx + 1 < input.length() &&
-                        Typography::is_digit(input[end_idx - 1]) &&
-                        Typography::is_digit(input[end_idx + 1]))
+                        is_digit(input[end_idx - 1]) &&
+                        is_digit(input[end_idx + 1]))
                     {
                         end_idx++;
                     }
@@ -534,20 +541,20 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
                     }
                 }
 
-                const int len = end_idx - start_idx;
-                QString word = input.sliced(start_idx, len).toString();
-                QString sv_word;
+                const size_t len = end_idx - start_idx;
+                std::u16string word(input.substr(start_idx, len));
+                std::u16string sv_word;
                 sv_word.reserve(len);
-                for (int k = start_idx; k < end_idx; ++k)
+                for (size_t k = start_idx; k < end_idx; ++k)
                 {
-                    sv_word.append(normalize_char(input[k]));
+                    sv_word.push_back(normalize_char(input[k]));
                 }
-                QString vn_word = sv_word;
+                std::u16string vn_word = sv_word;
 
-                if (cap_next && !vn_word.isEmpty())
+                if (cap_next && !vn_word.empty())
                 {
-                    if (vn_word[0].isLower()) vn_word[0] = vn_word[0].toUpper();
-                    if (!sv_word.isEmpty() && sv_word[0].isLower()) sv_word[0] = sv_word[0].toUpper();
+                    if (is_lower_char16(vn_word[0])) vn_word[0] = to_upper_char16(vn_word[0]);
+                    if (!sv_word.empty() && is_lower_char16(sv_word[0])) sv_word[0] = to_upper_char16(sv_word[0]);
                     cap_next = false;
                 }
 
@@ -558,18 +565,18 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
                 tok.vn = std::move(vn_word);
 
                 i += len;
-                progress.update(len);
+                progress.update(static_cast<int>(len));
 
                 doc.paragraphs.back().tokens.push_back(std::move(tok));
                 continue;
             }
 
-            const bool is_surrogate = ch.isHighSurrogate() && (i + 1 < input.length()) && input[i + 1].isLowSurrogate();
-            const int char_len = is_surrogate ? 2 : 1;
+            const bool is_surrogate = is_high_surrogate(ch) && (i + 1 < input.length()) && is_low_surrogate(input[i + 1]);
+            const size_t char_len = is_surrogate ? 2 : 1;
 
-            QString source_text = input.sliced(i, char_len).toString();
-            QString translated_text;
-            QString sv_text;
+            std::u16string source_text(input.substr(i, char_len));
+            std::u16string translated_text;
+            std::u16string sv_text;
             bool is_punctuator = false;
 
             if (is_surrogate)
@@ -577,35 +584,41 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
                 translated_text = source_text;
                 sv_text = source_text;
             }
-            else if (sv_readings.contains(ch))
+            else if (auto it = sv_readings.find(ch); it != sv_readings.end())
             {
-                translated_text = sv_readings[ch];
+                translated_text = it->second;
                 sv_text = translated_text;
             }
             else
             {
-                QChar mapped = punctuations.value(ch);
-                translated_text = !mapped.isNull() ? mapped : ch;
+                if (auto pit = punctuations.find(ch); pit != punctuations.end())
+                {
+                    translated_text = pit->second;
+                }
+                else
+                {
+                    translated_text = ch;
+                }
                 sv_text = translated_text;
 
-                static constexpr QStringView punctuators(u".!?…:;\"");
-                static constexpr QStringView comma(u",");
+                static constexpr std::u16string_view punctuators(u".!?…:;\"");
+                static constexpr std::u16string_view comma(u",");
 
-                if (punctuators.contains(translated_text))
+                if (punctuators.find(translated_text) != std::u16string_view::npos)
                 {
                     cap_next = true;
                     is_punctuator = true;
                 }
-                else if (comma.contains(translated_text))
+                else if (comma.find(translated_text) != std::u16string_view::npos)
                 {
                     is_punctuator = true;
                 }
             }
 
-            if (!is_punctuator && cap_next && !translated_text.isEmpty() && !is_surrogate)
+            if (!is_punctuator && cap_next && !translated_text.empty() && !is_surrogate)
             {
-                if (translated_text[0].isLower()) translated_text[0] = translated_text[0].toUpper();
-                if (!sv_text.isEmpty() && sv_text[0].isLower()) sv_text[0] = sv_text[0].toUpper();
+                if (is_lower_char16(translated_text[0])) translated_text[0] = to_upper_char16(translated_text[0]);
+                if (!sv_text.empty() && is_lower_char16(sv_text[0])) sv_text[0] = to_upper_char16(sv_text[0]);
                 cap_next = false;
             }
 
@@ -616,14 +629,14 @@ static void convert_recursive_aligned(const QStringView& input, int start_offset
             tok.vn = std::move(translated_text);
 
             i += char_len;
-            progress.update(char_len);
+            progress.update(static_cast<int>(char_len));
 
             doc.paragraphs.back().tokens.push_back(std::move(tok));
         }
     }
 }
 
-std::shared_ptr<AlignedDocument> convert(const QStringView& input,
+std::shared_ptr<AlignedDocument> convert(std::u16string_view input,
                                          const std::function<void(int)>& progress_callback)
 {
     auto doc = std::make_shared<AlignedDocument>();
@@ -649,21 +662,21 @@ namespace
 {
     struct PlainResult
     {
-        QString text;
+        std::u16string text;
         int length_consumed = 0;
     };
 }
 
-static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_next, Progress& progress, bool& in_quote, bool& in_single_quote)
+static PlainResult convert_recursive_plain(const std::u16string_view& input, bool& cap_next, Progress& progress, bool& in_quote, bool& in_single_quote)
 {
     PlainResult out;
-    int i = 0;
+    size_t i = 0;
 
     while (i < input.length())
     {
-        QChar ch = input[i];
+        char16_t ch = input[i];
 
-        if (ch == '\n')
+        if (ch == u'\n')
         {
             out.text += u"\n";
             cap_next = true;
@@ -673,25 +686,23 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
             out.length_consumed++;
 
             progress.update(1);
-
             continue;
         }
-        if (ch.isSpace())
+        if (ch == u' ' || ch == u'\t' || ch == u'\r' || ch == u'\v' || ch == u'\f' || ch == 0x3000)
         {
             out.text += u" ";
             i++;
             out.length_consumed++;
 
             progress.update(1);
-
             continue;
         }
 
         if (current_name_set_id != -1)
         {
-            if (Match match = name_set_dictionary.find(input, i); match.length > 0 && match.priority == NAME)
+            if (Match match = name_set_dictionary.find(input, static_cast<int>(i)); match.length > 0 && match.priority == NAME)
             {
-                QString trans = match.translation.toString();
+                std::u16string trans(match.translation);
                 if (cap_next)
                 {
                     cap_next = false;
@@ -703,7 +714,7 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
 
                 progress.update(match.length);
 
-                if (should_append_space(input, i, QChar(), in_quote, in_single_quote) && !out.text.endsWith(' '))
+                if (should_append_space(input, i, 0, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
                 {
                     out.text += u" ";
                 }
@@ -712,11 +723,11 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
             }
         }
 
-        auto [length, priority, rules, translation] = dictionary.find(input, i);
+        auto [length, priority, rules, translation] = dictionary.find(input, static_cast<int>(i));
 
         if (length > 0 && priority == NAME)
         {
-            QString trans = translation.toString();
+            std::u16string trans(translation);
             if (cap_next)
             {
                 cap_next = false;
@@ -725,19 +736,18 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
             i += length;
             out.length_consumed += length;
 
-            if (should_append_space(input, i, QChar(), in_quote, in_single_quote) && !out.text.endsWith(' '))
+            if (should_append_space(input, i, 0, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
             {
                 out.text += u" ";
             }
 
             progress.update(length);
-
             continue;
         }
 
         if (rules != nullptr)
         {
-            if (auto rule_match = find_matching_rule(input, i, *rules))
+            if (auto rule_match = find_matching_rule(input, static_cast<int>(i), *rules))
             {
                 const Rule* rule = rule_match->rule;
                 int start_len = static_cast<int>(rule->original_start.length());
@@ -747,41 +757,41 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
 
                 if (!phrase_overrides_rule)
                 {
-                    int inner_start_idx = i + start_len;
+                    int inner_start_idx = static_cast<int>(i) + start_len;
                     int inner_len = rule_match->abs_start_of_end_token - inner_start_idx;
                     int end_len = static_cast<int>(rule->original_end.length());
 
                     progress.update(start_len);
 
-                    QString t_start = rule->translation_start;
-                    if (cap_next && !t_start.isEmpty())
+                    std::u16string t_start = rule->translation_start;
+                    if (cap_next && !t_start.empty())
                     {
-                        if (t_start[0].isLower()) t_start[0] = t_start[0].toUpper();
+                        if (is_lower_char16(t_start[0])) t_start[0] = to_upper_char16(t_start[0]);
                         cap_next = false;
                     }
 
-                    auto [text, _] = convert_recursive_plain(input.sliced(inner_start_idx, inner_len), cap_next,
+                    auto [text, _] = convert_recursive_plain(input.substr(inner_start_idx, inner_len), cap_next,
                                                              progress, in_quote, in_single_quote);
 
                     progress.update(end_len);
 
-                    if (!t_start.isEmpty())
+                    if (!t_start.empty())
                     {
-                        out.text += t_start + " ";
+                        out.text += t_start + u" ";
                     }
 
                     out.text += text;
 
-                    if (!rule->translation_end.isEmpty())
+                    if (!rule->translation_end.empty())
                     {
-                        if (!out.text.endsWith(' ')) out.text += u" ";
+                        if (!out.text.empty() && out.text.back() != u' ') out.text += u" ";
                         out.text += rule->translation_end;
                     }
 
                     i += start_len + inner_len + end_len;
                     out.length_consumed += start_len + inner_len + end_len;
 
-                    if (should_append_space(input, i, QChar(), in_quote, in_single_quote) && !out.text.endsWith(' '))
+                    if (should_append_space(input, i, 0, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
                     {
                         out.text += u" ";
                     }
@@ -792,16 +802,16 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
 
         if (length > 0 && priority == PHRASE)
         {
-            if (int conflict_start = is_optimal_phrase(input, i, length); conflict_start != -1)
+            if (int conflict_start = is_optimal_phrase(input, static_cast<int>(i), length); conflict_start != -1)
             {
-                int max_allowed_len = conflict_start - i;
+                int max_allowed_len = conflict_start - static_cast<int>(i);
 
                 length = 0;
                 translation = {};
 
                 for (int try_len = max_allowed_len; try_len >= 1; --try_len)
                 {
-                    const auto try_string = input.sliced(i, try_len);
+                    const auto try_string = input.substr(i, try_len);
                     if (current_name_set_id != -1)
                     {
                         if (const auto res_set = name_set_dictionary.find_exact(try_string); !res_set.name.isNull())
@@ -832,10 +842,10 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                 goto process_single_char;
             }
 
-            QString trans = translation.toString();
+            std::u16string trans(translation);
             if (cap_next)
             {
-                if (!trans.isEmpty() && trans[0].isLower()) trans[0] = trans[0].toUpper();
+                if (!trans.empty() && is_lower_char16(trans[0])) trans[0] = to_upper_char16(trans[0]);
                 cap_next = false;
             }
 
@@ -843,32 +853,31 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
             i += length;
             out.length_consumed += length;
 
-            if (should_append_space(input, i, QChar(), in_quote, in_single_quote) && !out.text.endsWith(' '))
+            if (should_append_space(input, i, 0, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
             {
                 out.text += u" ";
             }
 
             progress.update(length);
-
             continue;
         }
 
     process_single_char:
         {
-            if (Typography::is_latin_or_digit(ch))
+            if (is_latin_or_digit(ch))
             {
-                int start_idx = i;
-                int end_idx = i + 1;
+                size_t start_idx = i;
+                size_t end_idx = i + 1;
                 while (end_idx < input.length())
                 {
-                    if (const QChar next = input[end_idx]; Typography::is_latin_or_digit(next))
+                    if (const char16_t next = input[end_idx]; is_latin_or_digit(next))
                     {
                         end_idx++;
                     }
                     else if ((next == u'.' || next == u',') &&
                         end_idx + 1 < input.length() &&
-                        Typography::is_digit(input[end_idx - 1]) &&
-                        Typography::is_digit(input[end_idx + 1]))
+                        is_digit(input[end_idx - 1]) &&
+                        is_digit(input[end_idx + 1]))
                     {
                         end_idx++;
                     }
@@ -878,83 +887,89 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                     }
                 }
 
-                const int len = end_idx - start_idx;
-                QString word;
+                const size_t len = end_idx - start_idx;
+                std::u16string word;
                 word.reserve(len);
-                for (int k = start_idx; k < end_idx; ++k)
+                for (size_t k = start_idx; k < end_idx; ++k)
                 {
-                    word.append(normalize_char(input[k]));
+                    word.push_back(normalize_char(input[k]));
                 }
 
-                if (cap_next && !word.isEmpty())
+                if (cap_next && !word.empty())
                 {
-                    if (word[0].isLower()) word[0] = word[0].toUpper();
+                    if (is_lower_char16(word[0])) word[0] = to_upper_char16(word[0]);
                     cap_next = false;
                 }
 
                 out.text += word;
                 i += len;
-                out.length_consumed += len;
+                out.length_consumed += static_cast<int>(len);
 
-                if (should_append_space(input, i, QChar(), in_quote, in_single_quote) && !out.text.endsWith(' '))
+                if (should_append_space(input, i, 0, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
                 {
                     out.text += u" ";
                 }
 
-                progress.update(len);
+                progress.update(static_cast<int>(len));
                 continue;
             }
 
-            const bool is_surrogate = ch.isHighSurrogate() && (i + 1 < input.length()) && input[i + 1].isLowSurrogate();
-            const int char_len = is_surrogate ? 2 : 1;
+            const bool is_surrogate = is_high_surrogate(ch) && (i + 1 < input.length()) && is_low_surrogate(input[i + 1]);
+            const size_t char_len = is_surrogate ? 2 : 1;
 
-            QString translated_text;
+            std::u16string translated_text;
             bool is_punctuator = false;
 
             if (is_surrogate)
             {
-                translated_text = input.sliced(i, 2).toString();
+                translated_text = input.substr(i, 2);
             }
-            else if (sv_readings.contains(ch))
+            else if (auto it = sv_readings.find(ch); it != sv_readings.end())
             {
-                translated_text = sv_readings[ch];
+                translated_text = it->second;
             }
             else
             {
-                QChar mapped = punctuations.value(ch);
-                translated_text = !mapped.isNull() ? mapped : ch;
-                static constexpr QStringView punctuators(u".!?…:;\"");
-                static constexpr QStringView comma(u",");
-                if (punctuators.contains(translated_text))
+                if (auto pit = punctuations.find(ch); pit != punctuations.end())
+                {
+                    translated_text = pit->second;
+                }
+                else
+                {
+                    translated_text = ch;
+                }
+                static constexpr std::u16string_view punctuators(u".!?…:;\"");
+                static constexpr std::u16string_view comma(u",");
+                if (punctuators.find(translated_text) != std::u16string_view::npos)
                 {
                     cap_next = true;
                     is_punctuator = true;
                 }
-                else if (comma.contains(translated_text))
+                else if (comma.find(translated_text) != std::u16string_view::npos)
                 {
                     is_punctuator = true;
                 }
             }
 
-            if (!is_punctuator && cap_next && !translated_text.isEmpty() && !is_surrogate)
+            if (!is_punctuator && cap_next && !translated_text.empty() && !is_surrogate)
             {
-                if (translated_text[0].isLower()) translated_text[0] = translated_text[0].toUpper();
+                if (is_lower_char16(translated_text[0])) translated_text[0] = to_upper_char16(translated_text[0]);
                 cap_next = false;
             }
 
             if ((translated_text == u"\"" && in_quote) || (translated_text == u"'" && in_single_quote))
             {
-                if (out.text.endsWith(u' '))
+                if (!out.text.empty() && out.text.back() == u' ')
                 {
-                    out.text.chop(1);
+                    out.text.pop_back();
                 }
             }
 
             out.text += translated_text;
             i += char_len;
-            out.length_consumed += char_len;
+            out.length_consumed += static_cast<int>(char_len);
 
-            const QChar last_char = is_surrogate ? input[i - 1] : ch;
+            const char16_t last_char = is_surrogate ? input[i - 1] : ch;
 
             if (translated_text == u"\"")
             {
@@ -965,7 +980,7 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                 else
                 {
                     in_quote = false;
-                    if (should_append_space(input, i, last_char, in_quote, in_single_quote) && !out.text.endsWith(' '))
+                    if (should_append_space(input, i, last_char, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
                     {
                         out.text += u" ";
                     }
@@ -980,130 +995,153 @@ static PlainResult convert_recursive_plain(const QStringView& input, bool& cap_n
                 else
                 {
                     in_single_quote = false;
-                    if (should_append_space(input, i, last_char, in_quote, in_single_quote) && !out.text.endsWith(' '))
+                    if (should_append_space(input, i, last_char, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
                     {
                         out.text += u" ";
                     }
                 }
             }
-            else if (!translated_text.isEmpty() && should_append_space(input, i, last_char, in_quote, in_single_quote) && !out.text.endsWith(' '))
+            else if (!translated_text.empty() && should_append_space(input, i, last_char, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
             {
                 out.text += u" ";
             }
 
-            progress.update(char_len);
+            progress.update(static_cast<int>(char_len));
         }
     }
     return out;
 }
 
-QString convert_plain(const QStringView& input, const std::function<void(int)>& progress_callback)
+std::u16string convert_plain(std::u16string_view input, const std::function<void(int)>& progress_callback)
 {
     bool cap_next = true;
     bool in_quote = false;
     bool in_single_quote = false;
     Progress progress(progress_callback);
     auto [text, _] = convert_recursive_plain(input, cap_next, progress, in_quote, in_single_quote);
-    return text.trimmed();
+
+    // trim whitespace
+    size_t start = 0;
+    while (start < text.size() && (text[start] == u' ' || text[start] == u'\t' || text[start] == u'\r' || text[start] == u'\n'))
+    {
+        start++;
+    }
+    size_t end = text.size();
+    while (end > start && (text[end - 1] == u' ' || text[end - 1] == u'\t' || text[end - 1] == u'\r' || text[end - 1] == u'\n'))
+    {
+        end--;
+    }
+    return text.substr(start, end - start);
 }
 
-static QString get_opencc_config_path()
+static std::string get_opencc_config_path()
 {
-    const QString app_dir = QCoreApplication::applicationDirPath();
-    QString candidate = app_dir + "/opencc/t2s.json";
-    if (QFile::exists(candidate))
+    if (std::filesystem::exists("opencc/t2s.json"))
     {
-        return candidate;
+        return std::filesystem::absolute("opencc/t2s.json").string();
     }
-    candidate = app_dir + "/t2s.json";
-    if (QFile::exists(candidate))
+    if (std::filesystem::exists("t2s.json"))
     {
-        return candidate;
+        return std::filesystem::absolute("t2s.json").string();
     }
-    if (QFile::exists("opencc/t2s.json"))
+#ifdef _WIN32
+    wchar_t exe_path[MAX_PATH];
+    if (GetModuleFileNameW(nullptr, exe_path, MAX_PATH) > 0)
     {
-        return QDir("opencc/t2s.json").absolutePath();
+        std::filesystem::path p(exe_path);
+        auto candidate = p.parent_path() / "opencc" / "t2s.json";
+        if (std::filesystem::exists(candidate))
+        {
+            return candidate.string();
+        }
+        candidate = p.parent_path() / "t2s.json";
+        if (std::filesystem::exists(candidate))
+        {
+            return candidate.string();
+        }
     }
+#endif
     return {};
 }
 
-QString to_simplified_chinese(const QString& input)
+std::u16string to_simplified_chinese(std::u16string_view input)
 {
-    if (input.isEmpty()) return input;
+    if (input.empty()) return {};
 
     static std::once_flag init_flag;
     static std::unique_ptr<opencc::SimpleConverter> converter;
 
     std::call_once(init_flag, [] {
-        if (const QString config_path = get_opencc_config_path(); !config_path.isEmpty())
+        const std::string config_path = get_opencc_config_path();
+        if (!config_path.empty())
         {
             try
             {
-                converter = std::make_unique<opencc::SimpleConverter>(config_path.toStdString());
+                converter = std::make_unique<opencc::SimpleConverter>(config_path);
             }
             catch (const std::exception& e)
             {
-                qWarning() << "Failed to initialize OpenCC:" << e.what();
+                std::cerr << "Failed to initialize OpenCC: " << e.what() << std::endl;
                 converter.reset();
             }
         }
         else
         {
-            qWarning() << "OpenCC t2s.json not found in application directory or search paths.";
+            std::cerr << "OpenCC t2s.json not found in application directory or search paths." << std::endl;
         }
     });
 
     if (!converter)
     {
-        return input;
+        return std::u16string(input);
     }
 
     try
     {
-        const std::string utf8_in = input.toStdString();
-        const std::string utf8_out = converter->Convert(utf8_in);
-        return QString::fromStdString(utf8_out);
+        std::string utf8_in = to_utf8(input);
+        std::string utf8_out = converter->Convert(utf8_in);
+        return to_utf16(utf8_out);
     }
     catch (const std::exception& e)
     {
-        qWarning() << "OpenCC conversion error:" << e.what();
-        return input;
+        std::cerr << "OpenCC conversion error: " << e.what() << std::endl;
+        return std::u16string(input);
     }
 }
 
-QString normalize_text(const QString& input)
+std::u16string normalize_text(std::u16string_view input)
 {
-    if (input.isEmpty()) return input;
+    if (input.empty()) return {};
 
-    QString text = to_simplified_chinese(input);
+    std::u16string text = to_simplified_chinese(input);
 
-    for (int i = 0; i < text.size(); ++i)
+    for (size_t i = 0; i < text.size(); ++i)
     {
-        const QChar c = text[i];
-        if (c.isHighSurrogate() && i + 1 < text.size() && text[i + 1].isLowSurrogate())
+        const char16_t c = text[i];
+        if (is_high_surrogate(c) && i + 1 < text.size() && is_low_surrogate(text[i + 1]))
         {
             ++i;
             continue;
         }
 
-        if (const QChar mapped = punctuations.value(c); !mapped.isNull())
+        if (auto it = punctuations.find(c); it != punctuations.end())
         {
-            text[i] = mapped;
+            text[i] = it->second;
             continue;
         }
 
-        const ushort code = c.unicode();
+        const uint16_t code = c;
         if (code >= 0xFF21 && code <= 0xFF3A) // Ａ-Ｚ
         {
-            text[i] = QChar(code - 0xFEE0);
+            text[i] = static_cast<char16_t>(code - 0xFEE0);
         }
         else if (code >= 0xFF41 && code <= 0xFF5A) // ａ-ｚ
         {
-            text[i] = QChar(code - 0xFEE0);
+            text[i] = static_cast<char16_t>(code - 0xFEE0);
         }
         else if (code >= 0xFF10 && code <= 0xFF19) // ０-９
         {
-            text[i] = QChar(code - 0xFEE0);
+            text[i] = static_cast<char16_t>(code - 0xFEE0);
         }
         else if (code == 0x3000) // fullwidth space
         {
@@ -1114,3 +1152,25 @@ QString normalize_text(const QString& input)
     return text;
 }
 
+std::string convert_plain_utf8(std::string_view input, const std::function<void(int)>& progress_callback)
+{
+    std::u16string u16_in = to_utf16(input);
+    std::u16string u16_out = convert_plain(u16_in, progress_callback);
+    return to_utf8(u16_out);
+}
+
+std::string to_simplified_chinese_utf8(std::string_view input)
+{
+    std::u16string u16_in = to_utf16(input);
+    std::u16string u16_out = to_simplified_chinese(u16_in);
+    return to_utf8(u16_out);
+}
+
+std::string normalize_text_utf8(std::string_view input)
+{
+    std::u16string u16_in = to_utf16(input);
+    std::u16string u16_out = normalize_text(u16_in);
+    return to_utf8(u16_out);
+}
+
+} // namespace hanvi
