@@ -26,7 +26,7 @@ NamesetsManager::NamesetsManager(QWidget* parent) :
     connect(ui->add_new, &QPushButton::clicked, this, &NamesetsManager::add_new_name_set);
     connect(ui->import_set, &QPushButton::clicked, this, &NamesetsManager::import_set);
 
-    connect(ui->name_sets_list, &QTableWidget::cellDoubleClicked, this, [this](int row, int column) {
+    connect(ui->name_sets_list, &QTableWidget::cellDoubleClicked, this, [this](const int row, const int column) {
         if (column == 2) return;
         if (row < 0 || row >= ui->name_sets_list->rowCount()) return;
         auto* title_item = ui->name_sets_list->item(row, 0);

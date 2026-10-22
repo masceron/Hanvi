@@ -54,7 +54,7 @@ namespace Typography
     using hanvi::is_latin;
     using hanvi::is_latin_or_digit;
 
-    inline bool should_insert_space_before(std::u16string_view text, std::u16string_view tok_str, bool& in_quote,
+    inline bool should_insert_space_before(const std::u16string_view text, const std::u16string_view tok_str, bool& in_quote,
                                            bool& in_single_quote,
                                            const Token* prev_tok = nullptr, const Token* cur_tok = nullptr,
                                            const Token* prev_prev_tok = nullptr) noexcept
@@ -131,7 +131,7 @@ namespace Typography
         return true;
     }
 
-    inline bool should_insert_space_before(std::u16string_view text, std::u16string_view tok_str, bool& in_quote,
+    inline bool should_insert_space_before(const std::u16string_view text, const std::u16string_view tok_str, bool& in_quote,
                                            const Token* prev_tok = nullptr, const Token* cur_tok = nullptr,
                                            const Token* prev_prev_tok = nullptr) noexcept
     {

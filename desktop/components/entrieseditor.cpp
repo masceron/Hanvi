@@ -27,7 +27,7 @@ int EntriesModel::columnCount(const QModelIndex &parent) const {
     return 2;
 }
 
-QVariant EntriesModel::data(const QModelIndex &index, int role) const {
+QVariant EntriesModel::data(const QModelIndex &index, const int role) const {
     if (!index.isValid() || index.row() < 0 || index.row() >= static_cast<int>(items_.size())) {
         return {};
     }
@@ -69,7 +69,7 @@ QVariant EntriesModel::data(const QModelIndex &index, int role) const {
     return {};
 }
 
-QVariant EntriesModel::headerData(int section, Qt::Orientation orientation, int role) const {
+QVariant EntriesModel::headerData(const int section, const Qt::Orientation orientation, const int role) const {
     if (orientation == Qt::Horizontal && role == Qt::DisplayRole) {
         if (section == 0) return QStringLiteral("Original (Chinese)");
         if (section == 1) return QStringLiteral("Translation (Vietnamese)");
@@ -159,7 +159,7 @@ entrieseditor::entrieseditor(QWidget *parent) : QDialog(parent), ui(new Ui::entr
 
     connect(model_, &EntriesModel::fetch_more_requested, this, &entrieseditor::fetch_down);
     connect(ui->entries_table->verticalScrollBar(), &QScrollBar::valueChanged, this, &entrieseditor::handle_scroll);
-    connect(ui->entries_table->verticalScrollBar(), &QScrollBar::rangeChanged, this, [this](int /*min*/, int max) {
+    connect(ui->entries_table->verticalScrollBar(), &QScrollBar::rangeChanged, this, [this](int /*min*/, const int max) {
         if (!is_updating_window_ && max == 0 && has_more_below_) {
             fetch_down();
         }

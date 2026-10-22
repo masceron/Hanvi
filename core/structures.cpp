@@ -1,6 +1,5 @@
 #include "structures.h"
 #include <algorithm>
-#include <cstring>
 #include <ranges>
 
 namespace hanvi {
@@ -56,7 +55,7 @@ namespace {
         }
     };
 
-    std::vector<std::u16string_view> split_u16(std::u16string_view str, char16_t sep)
+    std::vector<std::u16string_view> split_u16(std::u16string_view str, const char16_t sep)
     {
         std::vector<std::u16string_view> result;
         size_t start = 0;
@@ -74,7 +73,7 @@ namespace {
         return result;
     }
 
-    std::u16string join_u16(const std::vector<std::u16string>& parts, char16_t sep)
+    std::u16string join_u16(const std::vector<std::u16string>& parts, const char16_t sep)
     {
         if (parts.empty()) return {};
         std::u16string res = parts[0];
@@ -114,7 +113,7 @@ NodePool::~NodePool()
     clear();
 }
 
-const char16_t* TextArena::allocate(std::u16string_view str)
+const char16_t* TextArena::allocate(const std::u16string_view str)
 {
     const size_t len = str.length();
     int sep = -1;
@@ -313,7 +312,7 @@ StringView TrieNode::get_name() const
     {
         const auto* ptr = reinterpret_cast<const char16_t*>(data & ~TAG_MASK);
         const uint16_t len = ptr[-2];
-        return StringView(ptr, len);
+        return {ptr, len};
     }
     if (tag == TAG_COMPLEX)
     {
@@ -321,7 +320,7 @@ StringView TrieNode::get_name() const
         if (comp->name)
         {
             const uint16_t len = comp->name[-2];
-            return StringView(comp->name, len);
+            return {comp->name, len};
         }
     }
     return {};
@@ -330,11 +329,10 @@ StringView TrieNode::get_name() const
 StringView TrieNode::get_first_phrase() const
 {
     const uintptr_t tag = data & TAG_MASK;
-    if (tag == TAG_PHRASE)
-    {
+    if (tag == TAG_PHRASE) {
         const auto* ptr = reinterpret_cast<const char16_t*>(data & ~TAG_MASK);
         const uint16_t first_len = ptr[-1];
-        return StringView(ptr, first_len);
+        return {ptr, first_len};
     }
     if (tag == TAG_COMPLEX)
     {
@@ -342,7 +340,7 @@ StringView TrieNode::get_first_phrase() const
         if (comp->phrase)
         {
             const uint16_t first_len = comp->phrase[-1];
-            return StringView(comp->phrase, first_len);
+            return {comp->phrase, first_len};
         }
     }
     return {};
@@ -355,15 +353,14 @@ StringView TrieNode::get_full_phrase() const
     {
         const auto* ptr = reinterpret_cast<const char16_t*>(data & ~TAG_MASK);
         const uint16_t total_len = ptr[-2];
-        return StringView(ptr, total_len);
+        return {ptr, total_len};
     }
     if (tag == TAG_COMPLEX)
     {
-        const auto* comp = reinterpret_cast<const ComplexNodeData*>(data & ~TAG_MASK);
-        if (comp->phrase)
+        if (const auto* comp = reinterpret_cast<const ComplexNodeData*>(data & ~TAG_MASK); comp->phrase)
         {
             const uint16_t total_len = comp->phrase[-2];
-            return StringView(comp->phrase, total_len);
+            return {comp->phrase, total_len};
         }
     }
     return {};
@@ -417,8 +414,7 @@ void TrieNode::set_name_ptr(const char16_t* ptr)
 
 void TrieNode::set_phrase_ptr(const char16_t* ptr)
 {
-    const uintptr_t tag = data & TAG_MASK;
-    if (tag == TAG_NULL)
+    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_NULL)
     {
         data = reinterpret_cast<uintptr_t>(ptr) | TAG_PHRASE;
     }
@@ -538,7 +534,7 @@ Dictionary& Dictionary::operator=(Dictionary&& other) noexcept
     return *this;
 }
 
-void Dictionary::insert(std::u16string_view key, std::u16string_view value, const Priority priority)
+void Dictionary::insert(const std::u16string_view key, std::u16string_view value, const Priority priority)
 {
     TrieNode* node = root;
     for (const char16_t ch : key)
@@ -582,7 +578,7 @@ void Dictionary::insert(std::u16string_view key, std::u16string_view value, cons
     }
 }
 
-void Dictionary::insert_bulk(std::u16string_view key, const Priority priority, std::u16string_view value)
+void Dictionary::insert_bulk(const std::u16string_view key, const Priority priority, const std::u16string_view value)
 {
     TrieNode* node = root;
     for (const char16_t ch : key)
@@ -607,7 +603,7 @@ void Dictionary::insert_bulk(std::u16string_view key, const Priority priority, s
     }
 }
 
-ExactResult Dictionary::find_exact(std::u16string_view key) const
+ExactResult Dictionary::find_exact(const std::u16string_view key) const
 {
     const TrieNode* node = walk_node(key);
     if (!node) return {};
@@ -618,7 +614,7 @@ ExactResult Dictionary::find_exact(std::u16string_view key) const
     return result;
 }
 
-void Dictionary::reorder(std::u16string_view key, const std::vector<std::u16string>& new_order) const
+void Dictionary::reorder(const std::u16string_view key, const std::vector<std::u16string>& new_order) const
 {
     TrieNode* node = walk_node(key);
     if (!node) return;
@@ -633,7 +629,7 @@ void Dictionary::reorder(std::u16string_view key, const std::vector<std::u16stri
     node->set_phrase_ptr(text_arena.allocate(combined));
 }
 
-void Dictionary::remove_meaning(std::u16string_view key, std::u16string_view value) const
+void Dictionary::remove_meaning(const std::u16string_view key, const std::u16string_view value) const
 {
     TrieNode* node = walk_node(key);
     if (!node) return;
@@ -662,7 +658,7 @@ void Dictionary::remove_meaning(std::u16string_view key, std::u16string_view val
     }
 }
 
-Match Dictionary::find(std::u16string_view text, const int startPos) const
+Match Dictionary::find(const std::u16string_view text, const int startPos) const
 {
     const TrieNode* node = root;
     int best_len_found = 0;
@@ -703,7 +699,7 @@ Match Dictionary::find(std::u16string_view text, const int startPos) const
     return {.length = best_len_found, .priority = priority, .rules = rules, .translation = translated};
 }
 
-void Dictionary::insert_rule(std::u16string_view start, std::u16string_view end, std::u16string_view t_start, std::u16string_view t_end)
+void Dictionary::insert_rule(const std::u16string_view start, const std::u16string_view end, const std::u16string_view t_start, const std::u16string_view t_end)
 {
     TrieNode* node = root;
     for (const char16_t ch : start)
@@ -725,7 +721,7 @@ void Dictionary::insert_rule(std::u16string_view start, std::u16string_view end,
     });
 }
 
-const Rule* Dictionary::find_exact_rule(std::u16string_view start, std::u16string_view end) const
+const Rule* Dictionary::find_exact_rule(const std::u16string_view start, std::u16string_view end) const
 {
     const TrieNode* node = walk_node(start);
     if (!node) return nullptr;
@@ -745,8 +741,7 @@ const Rule* Dictionary::find_exact_rule(std::u16string_view start, std::u16strin
     return nullptr;
 }
 
-void Dictionary::remove_rule(std::u16string_view start, std::u16string_view end)
-{
+void Dictionary::remove_rule(const std::u16string_view start, const std::u16string_view end) const {
     const TrieNode* node = walk_node(start);
     if (!node) return;
 
@@ -764,7 +759,7 @@ void Dictionary::remove_rule(std::u16string_view start, std::u16string_view end)
     }
 }
 
-void Dictionary::edit_rule(std::u16string_view start, std::u16string_view end, std::u16string_view t_start, std::u16string_view t_end) const
+void Dictionary::edit_rule(const std::u16string_view start, const std::u16string_view end, const std::u16string_view t_start, const std::u16string_view t_end) const
 {
     const TrieNode* node = walk_node(start);
     if (!node) return;
@@ -784,7 +779,7 @@ void Dictionary::edit_rule(std::u16string_view start, std::u16string_view end, s
     }
 }
 
-TrieNode* Dictionary::walk_node(std::u16string_view key) const
+TrieNode* Dictionary::walk_node(const std::u16string_view key) const
 {
     TrieNode* node = root;
     for (const char16_t ch : key)
@@ -795,7 +790,7 @@ TrieNode* Dictionary::walk_node(std::u16string_view key) const
     return node;
 }
 
-void Dictionary::remove(std::u16string_view key, const Priority priority) const
+void Dictionary::remove(const std::u16string_view key, const Priority priority) const
 {
     TrieNode* node = walk_node(key);
     if (!node) return;

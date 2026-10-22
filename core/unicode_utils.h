@@ -5,31 +5,31 @@
 
 namespace hanvi {
 
-inline bool is_high_surrogate(char16_t c) noexcept {
+inline bool is_high_surrogate(const char16_t c) noexcept {
     return c >= 0xD800 && c <= 0xDBFF;
 }
 
-inline bool is_low_surrogate(char16_t c) noexcept {
+inline bool is_low_surrogate(const char16_t c) noexcept {
     return c >= 0xDC00 && c <= 0xDFFF;
 }
 
-inline bool is_closer_char(char16_t c) noexcept {
+inline bool is_closer_char(const char16_t c) noexcept {
     return c == u'.' || c == u',' || c == u'!' || c == u'?' ||
            c == u':' || c == u';' || c == u'…' ||
            c == u')' || c == u']' || c == u'}' || c == u'>' ||
            c == u'”' || c == u'’';
 }
 
-inline bool is_opener_char(char16_t c) noexcept {
+inline bool is_opener_char(const char16_t c) noexcept {
     return c == u'(' || c == u'[' || c == u'{' || c == u'<' ||
            c == u'“' || c == u'‘';
 }
 
-inline bool is_digit(char16_t c) noexcept {
+inline bool is_digit(const char16_t c) noexcept {
     return (c >= u'0' && c <= u'9') || (c >= 0xFF10 && c <= 0xFF19);
 }
 
-inline bool is_latin(char16_t c) noexcept {
+inline bool is_latin(const char16_t c) noexcept {
     if ((c >= u'A' && c <= u'Z') || (c >= u'a' && c <= u'z')) return true;
     if ((c >= 0xFF21 && c <= 0xFF3A) || (c >= 0xFF41 && c <= 0xFF5A)) return true;
     if ((c >= 0x00C0 && c <= 0x00D6) || (c >= 0x00D8 && c <= 0x00F6) || (c >= 0x00F8 && c <= 0x00FF)) return true;
@@ -39,11 +39,11 @@ inline bool is_latin(char16_t c) noexcept {
     return false;
 }
 
-inline bool is_latin_or_digit(char16_t c) noexcept {
+inline bool is_latin_or_digit(const char16_t c) noexcept {
     return is_digit(c) || is_latin(c);
 }
 
-inline char16_t to_upper_char16(char16_t c) noexcept {
+inline char16_t to_upper_char16(const char16_t c) noexcept {
     if (c >= u'a' && c <= u'z') {
         return static_cast<char16_t>(c - u'a' + u'A');
     }
@@ -66,11 +66,11 @@ inline char16_t to_upper_char16(char16_t c) noexcept {
     return c;
 }
 
-inline bool is_lower_char16(char16_t c) noexcept {
+inline bool is_lower_char16(const char16_t c) noexcept {
     return to_upper_char16(c) != c;
 }
 
-inline std::string to_utf8(std::u16string_view u16) {
+inline std::string to_utf8(const std::u16string_view u16) {
     std::string out;
     out.reserve(u16.size() * 3 / 2);
     for (size_t i = 0; i < u16.size(); ++i) {
@@ -98,7 +98,7 @@ inline std::string to_utf8(std::u16string_view u16) {
     return out;
 }
 
-inline std::u16string to_utf16(std::string_view u8) {
+inline std::u16string to_utf16(const std::string_view u8) {
     std::u16string out;
     out.reserve(u8.size());
     size_t i = 0;

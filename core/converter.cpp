@@ -636,7 +636,7 @@ static void convert_recursive_aligned(const std::u16string_view& input, int star
     }
 }
 
-std::shared_ptr<AlignedDocument> convert(std::u16string_view input,
+std::shared_ptr<AlignedDocument> convert(const std::u16string_view input,
                                          const std::function<void(int)>& progress_callback)
 {
     auto doc = std::make_shared<AlignedDocument>();
@@ -678,7 +678,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
 
         if (ch == u'\n')
         {
-            out.text += u"\n";
+            out.text += u'\n';
             cap_next = true;
             in_quote = false;
             in_single_quote = false;
@@ -690,7 +690,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
         }
         if (ch == u' ' || ch == u'\t' || ch == u'\r' || ch == u'\v' || ch == u'\f' || ch == 0x3000)
         {
-            out.text += u" ";
+            out.text += u' ';
             i++;
             out.length_consumed++;
 
@@ -716,7 +716,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
 
                 if (should_append_space(input, i, 0, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
                 {
-                    out.text += u" ";
+                    out.text += u' ';
                 }
 
                 continue;
@@ -738,7 +738,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
 
             if (should_append_space(input, i, 0, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
             {
-                out.text += u" ";
+                out.text += u' ';
             }
 
             progress.update(length);
@@ -784,7 +784,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
 
                     if (!rule->translation_end.empty())
                     {
-                        if (!out.text.empty() && out.text.back() != u' ') out.text += u" ";
+                        if (!out.text.empty() && out.text.back() != u' ') out.text += u' ';
                         out.text += rule->translation_end;
                     }
 
@@ -793,7 +793,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
 
                     if (should_append_space(input, i, 0, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
                     {
-                        out.text += u" ";
+                        out.text += u' ';
                     }
                     continue;
                 }
@@ -855,7 +855,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
 
             if (should_append_space(input, i, 0, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
             {
-                out.text += u" ";
+                out.text += u' ';
             }
 
             progress.update(length);
@@ -907,7 +907,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
 
                 if (should_append_space(input, i, 0, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
                 {
-                    out.text += u" ";
+                    out.text += u' ';
                 }
 
                 progress.update(static_cast<int>(len));
@@ -982,7 +982,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
                     in_quote = false;
                     if (should_append_space(input, i, last_char, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
                     {
-                        out.text += u" ";
+                        out.text += u' ';
                     }
                 }
             }
@@ -997,13 +997,13 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
                     in_single_quote = false;
                     if (should_append_space(input, i, last_char, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
                     {
-                        out.text += u" ";
+                        out.text += u' ';
                     }
                 }
             }
             else if (!translated_text.empty() && should_append_space(input, i, last_char, in_quote, in_single_quote) && (out.text.empty() || out.text.back() != u' '))
             {
-                out.text += u" ";
+                out.text += u' ';
             }
 
             progress.update(static_cast<int>(char_len));
@@ -1012,7 +1012,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
     return out;
 }
 
-std::u16string convert_plain(std::u16string_view input, const std::function<void(int)>& progress_callback)
+std::u16string convert_plain(const std::u16string_view input, const std::function<void(int)>& progress_callback)
 {
     bool cap_next = true;
     bool in_quote = false;
@@ -1070,7 +1070,7 @@ static std::unique_ptr<opencc::SimpleConverter> g_opencc_converter;
 
 void init_opencc(const std::string& config_path)
 {
-    std::lock_guard<std::mutex> lock(g_opencc_mutex);
+    std::lock_guard lock(g_opencc_mutex);
     g_opencc_custom_config_path = config_path;
     try
     {
@@ -1083,11 +1083,11 @@ void init_opencc(const std::string& config_path)
     }
 }
 
-std::u16string to_simplified_chinese(std::u16string_view input)
+std::u16string to_simplified_chinese(const std::u16string_view input)
 {
     if (input.empty()) return {};
 
-    std::lock_guard<std::mutex> lock(g_opencc_mutex);
+    std::lock_guard lock(g_opencc_mutex);
     if (!g_opencc_converter)
     {
         std::string config_path = g_opencc_custom_config_path;
@@ -1131,7 +1131,7 @@ std::u16string to_simplified_chinese(std::u16string_view input)
     }
 }
 
-std::u16string normalize_text(std::u16string_view input)
+std::u16string normalize_text(const std::u16string_view input)
 {
     if (input.empty()) return {};
 
@@ -1174,21 +1174,21 @@ std::u16string normalize_text(std::u16string_view input)
     return text;
 }
 
-std::string convert_plain_utf8(std::string_view input, const std::function<void(int)>& progress_callback)
+std::string convert_plain_utf8(const std::string_view input, const std::function<void(int)>& progress_callback)
 {
     std::u16string u16_in = to_utf16(input);
     std::u16string u16_out = convert_plain(u16_in, progress_callback);
     return to_utf8(u16_out);
 }
 
-std::string to_simplified_chinese_utf8(std::string_view input)
+std::string to_simplified_chinese_utf8(const std::string_view input)
 {
     std::u16string u16_in = to_utf16(input);
     std::u16string u16_out = to_simplified_chinese(u16_in);
     return to_utf8(u16_out);
 }
 
-std::string normalize_text_utf8(std::string_view input)
+std::string normalize_text_utf8(const std::string_view input)
 {
     std::u16string u16_in = to_utf16(input);
     std::u16string u16_out = normalize_text(u16_in);

@@ -37,7 +37,7 @@ std::vector<std::u16string_view> paginate(const std::u16string_view input_text, 
     return pages;
 }
 
-void io_insert(const int id, std::u16string_view key, std::u16string_view value, const Priority priority)
+void io_insert(const int id, const std::u16string_view key, const std::u16string_view value, const Priority priority)
 {
     if (id == -1)
     {
@@ -51,13 +51,13 @@ void io_insert(const int id, std::u16string_view key, std::u16string_view value,
     }
 }
 
-void io_reorder(std::u16string_view key, const std::vector<std::u16string>& new_order)
+void io_reorder(const std::u16string_view key, const std::vector<std::u16string>& new_order)
 {
     dictionary.reorder(key, new_order);
     db_reorder(key, new_order);
 }
 
-void io_remove(const int id, std::u16string_view key, const Priority priority)
+void io_remove(const int id, const std::u16string_view key, const Priority priority)
 {
     if (id == -1)
     {
@@ -71,7 +71,7 @@ void io_remove(const int id, std::u16string_view key, const Priority priority)
     }
 }
 
-void io_remove_meaning(std::u16string_view key, std::u16string_view value)
+void io_remove_meaning(const std::u16string_view key, const std::u16string_view value)
 {
     dictionary.remove_meaning(key, value);
     db_remove_meaning(key, value);

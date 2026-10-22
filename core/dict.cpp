@@ -13,7 +13,7 @@ static std::mutex g_db_mutex;
 
 void init_db(const std::string& db_path)
 {
-    std::lock_guard<std::mutex> lock(g_db_mutex);
+    std::lock_guard lock(g_db_mutex);
     if (g_db) return;
 
     g_db_path = db_path;
@@ -30,7 +30,7 @@ void init_db(const std::string& db_path)
 
 void close_db()
 {
-    std::lock_guard<std::mutex> lock(g_db_mutex);
+    std::lock_guard lock(g_db_mutex);
     if (g_db)
     {
         sqlite3_close(g_db);

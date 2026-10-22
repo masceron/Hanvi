@@ -2,7 +2,6 @@
 #include <QIcon>
 #include <QFontDatabase>
 #include <QFile>
-#include <QSqlDatabase>
 #include <QSqlQuery>
 
 #include "app.h"
