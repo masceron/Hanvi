@@ -33,8 +33,8 @@ struct Rule
 struct StringView : public std::u16string_view
 {
     constexpr StringView() noexcept = default;
-    constexpr StringView(const char16_t* str, size_t len) noexcept : std::u16string_view(str, len) {}
-    constexpr StringView(std::u16string_view sv) noexcept : std::u16string_view(sv) {}
+    constexpr StringView(const char16_t* str, const size_t len) noexcept : std::u16string_view(str, len) {}
+    constexpr StringView(const std::u16string_view sv) noexcept : std::u16string_view(sv) {}
 
     [[nodiscard]] bool isNull() const noexcept { return data() == nullptr; }
     [[nodiscard]] bool isEmpty() const noexcept { return empty(); }
@@ -228,7 +228,7 @@ public:
     void insert_rule(std::u16string_view start, std::u16string_view end, std::u16string_view t_start, std::u16string_view t_end);
     [[nodiscard]] const Rule* find_exact_rule(std::u16string_view start, std::u16string_view end) const;
     void edit_rule(std::u16string_view start, std::u16string_view end, std::u16string_view t_start, std::u16string_view t_end) const;
-    void remove_rule(std::u16string_view start, std::u16string_view end);
+    void remove_rule(std::u16string_view start, std::u16string_view end) const;
 
 #ifdef QT_CORE_LIB
     [[nodiscard]] Match find(const QString& text, int startPos) const {
@@ -291,7 +291,7 @@ struct NameSet
     std::u16string title;
 
     NameSet() = default;
-    NameSet(int idx, std::u16string t) : index(idx), title(std::move(t)) {}
+    NameSet(const int idx, std::u16string t) : index(idx), title(std::move(t)) {}
 #ifdef QT_CORE_LIB
     NameSet(int idx, const QString& t) : index(idx), title(t.toStdU16String()) {}
 #endif

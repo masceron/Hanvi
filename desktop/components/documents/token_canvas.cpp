@@ -1,7 +1,6 @@
 #include "token_canvas.h"
 #include <QPainter>
 #include <QMouseEvent>
-#include <QWheelEvent>
 #include <QScrollBar>
 #include <QGuiApplication>
 #include <QClipboard>

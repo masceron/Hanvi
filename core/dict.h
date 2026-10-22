@@ -3,7 +3,6 @@
 #include <unordered_map>
 #include <vector>
 #include <string>
-#include <string_view>
 #include <functional>
 #include <sqlite3.h>
 #include "structures.h"

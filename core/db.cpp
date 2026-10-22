@@ -6,7 +6,7 @@
 
 namespace hanvi {
 
-static std::vector<std::u16string_view> split_u16(std::u16string_view str, char16_t sep)
+static std::vector<std::u16string_view> split_u16(std::u16string_view str, const char16_t sep)
 {
     std::vector<std::u16string_view> result;
     size_t start = 0;
@@ -24,7 +24,7 @@ static std::vector<std::u16string_view> split_u16(std::u16string_view str, char1
     return result;
 }
 
-static std::u16string join_u16(const std::vector<std::u16string>& parts, char16_t sep)
+static std::u16string join_u16(const std::vector<std::u16string>& parts, const char16_t sep)
 {
     if (parts.empty()) return {};
     std::u16string res = parts[0];
@@ -84,7 +84,7 @@ void db_insert(std::u16string_view key, std::u16string_view value, const Priorit
     }
 }
 
-void db_reorder(std::u16string_view key, const std::vector<std::u16string>& new_order)
+void db_reorder(const std::u16string_view key, const std::vector<std::u16string>& new_order)
 {
     sqlite3* db = get_db_handle();
     if (!db) return;
@@ -96,7 +96,7 @@ void db_reorder(std::u16string_view key, const std::vector<std::u16string>& new_
     q.exec();
 }
 
-void db_remove(std::u16string_view key, const Priority priority)
+void db_remove(const std::u16string_view key, const Priority priority)
 {
     if (priority == NONE) return;
     sqlite3* db = get_db_handle();
@@ -109,7 +109,7 @@ void db_remove(std::u16string_view key, const Priority priority)
     q.exec();
 }
 
-void db_remove_meaning(std::u16string_view key, std::u16string_view value)
+void db_remove_meaning(const std::u16string_view key, const std::u16string_view value)
 {
     sqlite3* db = get_db_handle();
     if (!db) return;
@@ -148,7 +148,7 @@ void db_remove_meaning(std::u16string_view key, std::u16string_view value)
     }
 }
 
-void nameset_db_insert(std::u16string_view key, std::u16string_view value)
+void nameset_db_insert(const std::u16string_view key, const std::u16string_view value)
 {
     sqlite3* db = get_db_handle();
     if (!db) return;
@@ -166,7 +166,7 @@ void nameset_db_insert(std::u16string_view key, std::u16string_view value)
     q.exec();
 }
 
-void nameset_db_remove(std::u16string_view key)
+void nameset_db_remove(const std::u16string_view key)
 {
     sqlite3* db = get_db_handle();
     if (!db) return;

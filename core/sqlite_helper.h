@@ -1,6 +1,5 @@
 #pragma once
 #include <sqlite3.h>
-#include <string>
 #include <string_view>
 #include <cstdint>
 
@@ -34,17 +33,17 @@ public:
     [[nodiscard]] sqlite3_stmt* get() const noexcept { return stmt_; }
     [[nodiscard]] bool is_valid() const noexcept { return stmt_ != nullptr; }
 
-    bool bind_int(int index, int val) {
+    bool bind_int(const int index, const int val) {
         return sqlite3_bind_int(stmt_, index, val) == SQLITE_OK;
     }
 
-    bool bind_text16(int index, std::u16string_view val) {
+    bool bind_text16(const int index, const std::u16string_view val) {
         return sqlite3_bind_text16(stmt_, index, val.data(),
                                    static_cast<int>(val.size() * sizeof(char16_t)),
                                    SQLITE_TRANSIENT) == SQLITE_OK;
     }
 
-    bool bind_text(int index, std::string_view val) {
+    bool bind_text(const int index, const std::string_view val) {
         return sqlite3_bind_text(stmt_, index, val.data(),
                                  static_cast<int>(val.size()),
                                  SQLITE_TRANSIENT) == SQLITE_OK;
@@ -65,18 +64,18 @@ public:
         }
     }
 
-    [[nodiscard]] int column_int(int col) const {
+    [[nodiscard]] int column_int(const int col) const {
         return sqlite3_column_int(stmt_, col);
     }
 
-    [[nodiscard]] std::u16string_view column_text16(int col) const {
+    [[nodiscard]] std::u16string_view column_text16(const int col) const {
         const auto* ptr = reinterpret_cast<const char16_t*>(sqlite3_column_text16(stmt_, col));
         if (!ptr) return {};
         const size_t bytes = sqlite3_column_bytes16(stmt_, col);
         return std::u16string_view(ptr, bytes / sizeof(char16_t));
     }
 
-    [[nodiscard]] std::string_view column_text(int col) const {
+    [[nodiscard]] std::string_view column_text(const int col) const {
         const auto* ptr = reinterpret_cast<const char*>(sqlite3_column_text(stmt_, col));
         if (!ptr) return {};
         const size_t bytes = sqlite3_column_bytes(stmt_, col);

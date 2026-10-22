@@ -8,10 +8,21 @@ if (ANDROID OR CMAKE_CROSSCOMPILING)
     set(HANVI_BUILD_OPENCC_DICTIONARIES OFF CACHE BOOL "" FORCE)
 endif ()
 
+set(_opencc_patch_cmd "")
+if (NOT HANVI_BUILD_OPENCC_DICTIONARIES)
+    set(_opencc_patch_script "${CMAKE_CURRENT_BINARY_DIR}/patch_opencc_data.cmake")
+    file(WRITE "${_opencc_patch_script}"
+            "file(WRITE \"data/CMakeLists.txt\" \"add_custom_target(Dictionaries COMMENT \\\"OpenCC dictionaries disabled for cross-compilation\\\")\\n\")\n"
+    )
+    set(_opencc_patch_cmd PATCH_COMMAND ${CMAKE_COMMAND} -P "${_opencc_patch_script}")
+endif ()
+
 FetchContent_Declare(OpenCC
         GIT_REPOSITORY https://github.com/BYVoid/OpenCC.git
         GIT_TAG        ver.1.4.2
-        GIT_SHALLOW    TRUE)
+        GIT_SHALLOW    TRUE
+        EXCLUDE_FROM_ALL
+        ${_opencc_patch_cmd})
 
 set(BUILD_DOCUMENTATION OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
@@ -21,16 +32,7 @@ set(ENABLE_DARTS OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(OPENCC_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
 
-FetchContent_GetProperties(OpenCC)
-if (NOT opencc_POPULATED)
-    FetchContent_Populate(OpenCC)
-    if (NOT HANVI_BUILD_OPENCC_DICTIONARIES)
-        # Stub data/CMakeLists.txt so OpenCC doesn't try to invoke target-compiled tools on the host
-        file(WRITE "${opencc_SOURCE_DIR}/data/CMakeLists.txt"
-            "add_custom_target(Dictionaries COMMENT \"OpenCC dictionaries disabled for cross-compilation\")\n")
-    endif ()
-    add_subdirectory(${opencc_SOURCE_DIR} ${opencc_BINARY_DIR} EXCLUDE_FROM_ALL)
-endif ()
+FetchContent_MakeAvailable(OpenCC)
 
 if (COMPILER_RUNTIMES AND TARGET Dictionaries)
     set(_opencc_tools_stamp "${opencc_BINARY_DIR}/src/tools/runtimes.stamp")
