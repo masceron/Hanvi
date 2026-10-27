@@ -1,6 +1,7 @@
 #include "entrieseditor.h"
 #include "ui_entrieseditor.h"
 #include "dictpopup.h"
+#include "qt_utils.h"
 #include "core/db.h"
 #include "core/dict.h"
 #include "core/structures.h"
@@ -532,11 +533,11 @@ void entrieseditor::add_entry() {
         if (parts.isEmpty()) return;
         const QString db_val = parts.join(u'\x1F');
 
-        db_insert(orig, db_val, PHRASE);
-        dictionary.insert(orig, db_val, PHRASE);
+        db_insert(q_to_u16(orig), q_to_u16(db_val), PHRASE);
+        dictionary.insert(q_to_u16(orig), q_to_u16(db_val), PHRASE);
     } else if (mode_ == EditorMode::GlobalNames) {
-        db_insert(orig, trans, NAME);
-        dictionary.insert(orig, trans, NAME);
+        db_insert(q_to_u16(orig), q_to_u16(trans), NAME);
+        dictionary.insert(q_to_u16(orig), q_to_u16(trans), NAME);
     } else if (mode_ == EditorMode::Nameset) {
         QSqlQuery q;
         q.prepare(QStringLiteral(
@@ -548,7 +549,7 @@ void entrieseditor::add_entry() {
         q.exec();
 
         if (set_id_ == current_name_set_id) {
-            name_set_dictionary.insert(orig, trans, NAME);
+            name_set_dictionary.insert(q_to_u16(orig), q_to_u16(trans), NAME);
         }
     }
 
@@ -573,11 +574,11 @@ void entrieseditor::delete_entry() {
     const QString original_key = item->original;
 
     if (mode_ == EditorMode::Phrases) {
-        db_remove(original_key, PHRASE);
-        dictionary.remove(original_key, PHRASE);
+        db_remove(q_to_u16(original_key), PHRASE);
+        dictionary.remove(q_to_u16(original_key), PHRASE);
     } else if (mode_ == EditorMode::GlobalNames) {
-        db_remove(original_key, NAME);
-        dictionary.remove(original_key, NAME);
+        db_remove(q_to_u16(original_key), NAME);
+        dictionary.remove(q_to_u16(original_key), NAME);
     } else if (mode_ == EditorMode::Nameset) {
         QSqlQuery q;
         q.prepare(QStringLiteral("DELETE FROM name_set_entries WHERE set_id = :id AND original = :original"));
@@ -586,7 +587,7 @@ void entrieseditor::delete_entry() {
         q.exec();
 
         if (set_id_ == current_name_set_id) {
-            name_set_dictionary.remove(original_key, NAME);
+            name_set_dictionary.remove(q_to_u16(original_key), NAME);
         }
     }
 
@@ -663,11 +664,11 @@ void entrieseditor::edit_entry() {
                 q.exec();
 
                 if (set_id_ == current_name_set_id) {
-                    name_set_dictionary.insert(original_key, new_trans, NAME);
+                    name_set_dictionary.insert(q_to_u16(original_key), q_to_u16(new_trans), NAME);
                 }
             } else if (mode_ == EditorMode::GlobalNames) {
-                db_insert(original_key, new_trans, NAME);
-                dictionary.insert(original_key, new_trans, NAME);
+                db_insert(q_to_u16(original_key), q_to_u16(new_trans), NAME);
+                dictionary.insert(q_to_u16(original_key), q_to_u16(new_trans), NAME);
             }
 
             changes_made_ = true;

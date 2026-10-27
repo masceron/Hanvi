@@ -40,22 +40,28 @@ Your compiler must support **C++23** (Clang 17+, GCC 13+, or MSVC 19.38+). Inclu
 Any application running `CoreLogic` must provide access to two asset groups:
 
 1. **`dict.db`**:
-   The SQLite database containing:
-   - `phrases`: Multi-word dictionary definitions (`\x1F`-separated for multiple meanings).
-   - `names`: Proper noun dictionary definitions.
-   - `sv_readings`: Character-by-character Sino-Vietnamese readings (Hán Việt).
-   - `punctuations`: Mapping of Chinese full-width punctuations to standard Latin punctuations.
-   - `grammar_rules`: Multi-part grammatical transformation rules.
-   - `name_sets` and `name_set_entries`: User-defined per-novel character name sets.
+   The SQLite database operates with `PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;` and contains 7 core tables:
+   - `phrases`: `(original TEXT PRIMARY KEY, translated TEXT) WITHOUT ROWID` — Multi-word dictionary definitions (`\x1F` / ASCII Unit Separator `0x1F` separated for multiple ordered meanings, where the first meaning is the default).
+   - `names`: `(original TEXT PRIMARY KEY, translated TEXT) WITHOUT ROWID` — Proper noun dictionary definitions.
+   - `sv_readings`: `(original CHAR(1) PRIMARY KEY, translated TEXT) WITHOUT ROWID` — Character-by-character Sino-Vietnamese readings (Hán Việt). Loaded in memory by `char32_t` code points (supporting BMP and surrogate pairs).
+   - `punctuations`: `(original CHAR(1) PRIMARY KEY, normalized CHAR(1)) WITHOUT ROWID` — Mapping Chinese full-width punctuations (e.g., `，`, `。`, `！`, `？`, `：`) to standard Latin equivalents.
+   - `grammar_rules`: `(original_start, original_end, translated_start, translated_end, PRIMARY KEY(original_start, original_end)) WITHOUT ROWID` — Multi-part grammatical transformation rules (handling split patterns like `被...` or `把...`).
+   - `name_sets`: `(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT UNIQUE NOT NULL COLLATE NOCASE)` — User-defined per-novel character name sets.
+   - `name_set_entries`: `(original TEXT NOT NULL, translated TEXT NOT NULL, set_id INTEGER, PRIMARY KEY(set_id, original), FOREIGN KEY(set_id) REFERENCES name_sets(id) ON DELETE CASCADE) WITHOUT ROWID` — Book-specific name translations associated with a `name_sets.id`.
+   - `variants`: `(original TEXT PRIMARY KEY, canonical TEXT NOT NULL) WITHOUT ROWID` — Mapping variant, archaic, or non-standard Chinese characters to canonical Simplified equivalents. Used during text normalization and as a fallback lookup for Sino-Vietnamese readings.
 
 2. **OpenCC Assets** (`t2s.json` and `*.ocd2` dictionaries):
-   - `t2s.json`
+   - `t2s.json` (OpenCC configuration file)
    - `TSPhrases.ocd2`
    - `TSCharacters.ocd2`
    - `TSCharactersExt.ocd2`
    - `CJK_Compatibility_Ideographs.ocd2`
 
-   *Lookup strategy*: OpenCC looks in the working directory, `<exe_directory>/opencc/`, or `<exe_directory>/`.
+   *Lookup strategy*:
+   - Can be explicitly specified at runtime via `hanvi::init_opencc("path/to/t2s.json")` (recommended for mobile/Android internal app storage).
+   - If unconfigured, automatically searches:
+     1. Relative paths: `./opencc/t2s.json` or `./t2s.json` (relative to current working directory).
+     2. Executable directory: `<exe_dir>/opencc/t2s.json` or `<exe_dir>/t2s.json` (on Windows).
 
 ---
 
@@ -69,6 +75,7 @@ Any application running `CoreLogic` must provide access to two asset groups:
   Dictionary translations can be valid but **empty** (e.g. grammatical particle `的` translating to `""` to omit it in certain contexts).
   - `view.isNull()` $\rightarrow$ Checks `data() == nullptr` (entry does not exist).
   - `view.empty()` / `view.isEmpty()` $\rightarrow$ Checks `size() == 0` (entry exists, but translation is empty string).
+  - `view.split(char16_t sep)` $\rightarrow$ Utility returning `std::vector<StringView>` slices (e.g. `view.split(u'\x1F')` to unpack multi-meaning phrases without copying string memory).
 
 ---
 
@@ -186,14 +193,15 @@ std::u16string sv_text = doc->get_text_range(selection, hanvi::LanguageRole::Sin
 
 ---
 
-### D. Dictionary Editing & Persistent CRUD (`core/io.h`)
+### D. Dictionary Editing & Persistent CRUD (`core/io.h` vs. `core/db.h`)
 
-Functions in `core/io.h` update the in-memory Trie and simultaneously write changes to `dict.db` via SQLite transactions.
+- **`core/io.h` (`io_*`)**: High-level transactional CRUD that updates **both** the in-memory Trie/maps and writes the change to `dict.db`. Always use this for interactive editing.
+- **`core/db.h` (`db_*`)**: Low-level database operations that write directly to `dict.db` without altering in-memory state (useful for offline migrations or CLI batch import tools).
 
 ```cpp
 #include "core/io.h"
 
-// Add or update an entry:
+// 1. Add or update a phrase or name:
 // - id: -1 for global dictionary, or positive ID for a book-specific nameset
 // - priority: hanvi::Priority::PHRASE or hanvi::Priority::NAME
 hanvi::io_insert(
@@ -203,14 +211,20 @@ hanvi::io_insert(
     /*priority=*/ hanvi::Priority::NAME
 );
 
-// Reorder translations for a key (the first element becomes the primary meaning):
+// 2. Reorder translations for a key (the first element becomes the primary meaning):
 hanvi::io_reorder(u"的", { u"", u"như thế", u"đích" });
 
-// Remove a specific meaning from an entry:
+// 3. Remove a specific meaning from an entry:
 hanvi::io_remove_meaning(u"测试", u"thử nghiệm");
 
-// Remove an entire entry:
+// 4. Remove an entire entry:
 hanvi::io_remove(/*id=*/ -1, u"林恩", hanvi::Priority::NAME);
+
+// 5. Add or update character variant mapping:
+hanvi::io_insert_variant(u"羣", u"群");
+
+// 6. Remove a variant mapping:
+hanvi::io_remove_variant(u"羣");
 ```
 
 ---
@@ -248,9 +262,9 @@ bool is_letter_or_num = hanvi::is_latin_or_digit(u'A');
 bool is_quote_opener  = hanvi::is_opener_char(u'“');
 bool is_quote_closer  = hanvi::is_closer_char(u'”');
 
-// Case conversion:
+// Case conversion & checks:
 char16_t upper = hanvi::to_upper_char16(u'đ'); // Returns u'Đ'
-char16_t lower = hanvi::to_lower_char16(u'Â'); // Returns u'â'
+bool is_lower  = hanvi::is_lower_char16(u'â'); // Returns true
 ```
 
 ---
@@ -266,4 +280,6 @@ When porting to Android:
 3. **Threading**:
    - `convert_plain` and `convert` are stateless and reentrant for read operations. They can be safely called from background coroutines/threads.
    - Dictionary mutation functions (`io_insert`, `io_remove`) use SQLite transactions and update shared memory state; avoid calling mutations concurrently from multiple threads without external synchronization.
+4. **CMake Cross-Compilation**:
+   - `core/CMakeLists.txt` automatically sets `HANVI_BUILD_OPENCC_DICTIONARIES=OFF` when cross-compiling (`ANDROID` or `CMAKE_CROSSCOMPILING`). This avoids attempting to run target-compiled binary dictionary tools on the host machine. Pre-built `.ocd2` files should be placed directly in the app's `assets/opencc/` bundle.
 

@@ -6,18 +6,6 @@
 #include <string_view>
 #include <cstdint>
 
-#ifdef QT_CORE_LIB
-#include <QString>
-#include <QStringView>
-#include <QStringList>
-
-namespace hanvi {
-inline std::u16string_view q_to_u16(QStringView sv) noexcept {
-    return std::u16string_view(reinterpret_cast<const char16_t*>(sv.utf16()), static_cast<size_t>(sv.size()));
-}
-}
-#endif
-
 namespace hanvi {
 
 enum Priority { NONE, PHRASE, NAME };
@@ -39,11 +27,7 @@ struct StringView : public std::u16string_view
     [[nodiscard]] bool isNull() const noexcept { return data() == nullptr; }
     [[nodiscard]] bool isEmpty() const noexcept { return empty(); }
 
-#ifdef QT_CORE_LIB
-    [[nodiscard]] QString toString() const {
-        return QString::fromUtf16(data(), static_cast<qsizetype>(size()));
-    }
-    [[nodiscard]] std::vector<StringView> split(char16_t sep) const {
+    [[nodiscard]] std::vector<StringView> split(const char16_t sep) const {
         std::vector<StringView> parts;
         size_t start = 0;
         while (start < size()) {
@@ -57,7 +41,6 @@ struct StringView : public std::u16string_view
         }
         return parts;
     }
-#endif
 };
 
 struct TrieNode;
@@ -230,53 +213,6 @@ public:
     void edit_rule(std::u16string_view start, std::u16string_view end, std::u16string_view t_start, std::u16string_view t_end) const;
     void remove_rule(std::u16string_view start, std::u16string_view end) const;
 
-#ifdef QT_CORE_LIB
-    [[nodiscard]] Match find(const QString& text, int startPos) const {
-        return find(q_to_u16(text), startPos);
-    }
-    [[nodiscard]] Match find(QStringView text, int startPos) const {
-        return find(q_to_u16(text), startPos);
-    }
-    [[nodiscard]] ExactResult find_exact(const QString& key) const {
-        return find_exact(q_to_u16(key));
-    }
-    [[nodiscard]] ExactResult find_exact(QStringView key) const {
-        return find_exact(q_to_u16(key));
-    }
-    void insert(const QString& key, const QString& value, Priority priority) {
-        insert(q_to_u16(key), q_to_u16(value), priority);
-    }
-    void insert_bulk(const QString& key, Priority priority, const QString& value) {
-        insert_bulk(q_to_u16(key), priority, q_to_u16(value));
-    }
-    void remove(const QString& key, Priority priority) const {
-        remove(q_to_u16(key), priority);
-    }
-    void remove_meaning(const QString& key, const QString& value) const {
-        remove_meaning(q_to_u16(key), q_to_u16(value));
-    }
-    void reorder(const QString& key, const QStringList& new_order) const {
-        std::vector<std::u16string> order;
-        order.reserve(new_order.size());
-        for (const auto& s : new_order) {
-            order.push_back(s.toStdU16String());
-        }
-        reorder(q_to_u16(key), order);
-    }
-    void insert_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end) {
-        insert_rule(q_to_u16(start), q_to_u16(end), q_to_u16(t_start), q_to_u16(t_end));
-    }
-    [[nodiscard]] const Rule* find_exact_rule(const QString& start, const QString& end) const {
-        return find_exact_rule(q_to_u16(start), q_to_u16(end));
-    }
-    void edit_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end) const {
-        edit_rule(q_to_u16(start), q_to_u16(end), q_to_u16(t_start), q_to_u16(t_end));
-    }
-    void remove_rule(const QString& start, const QString& end) const {
-        remove_rule(q_to_u16(start), q_to_u16(end));
-    }
-#endif
-
 private:
     TrieNode* root;
     NodePool pool;
@@ -292,9 +228,6 @@ struct NameSet
 
     NameSet() = default;
     NameSet(const int idx, std::u16string t) : index(idx), title(std::move(t)) {}
-#ifdef QT_CORE_LIB
-    NameSet(int idx, const QString& t) : index(idx), title(t.toStdU16String()) {}
-#endif
 };
 
 } // namespace hanvi

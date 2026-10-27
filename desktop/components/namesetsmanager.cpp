@@ -199,7 +199,7 @@ void NamesetsManager::add_new_name_set()
         if (q.exec())
         {
             const int new_id = q.lastInsertId().toInt();
-            name_sets.emplace_back(new_id, text);
+            name_sets.emplace_back(new_id, text.toStdU16String());
             load_data();
         }
         else
@@ -296,7 +296,7 @@ void NamesetsManager::import_set()
     {
         if (QSqlDatabase::database().commit())
         {
-            name_sets.emplace_back(new_set_id, text);
+            name_sets.emplace_back(new_set_id, text.toStdU16String());
             load_data();
             QMessageBox::information(this, "Success", "Nameset imported successfully.");
         }

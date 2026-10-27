@@ -1,6 +1,7 @@
 #include "dictpopup.h"
 #include "chiplist.h"
 #include "ui_DictPopup.h"
+#include "qt_utils.h"
 #include "../core/structures.h"
 #include "../core/io.h"
 #include "../core/dict.h"
@@ -22,13 +23,13 @@ DictPopup::DictPopup(QWidget* parent) :
 
     connect(ui->delete_name, &QPushButton::clicked, this, [this]
     {
-        io_remove(ui->use_current_nameset->isChecked() ? current_name_set_id : -1, ui->original->text(), NAME);
+        io_remove(ui->use_current_nameset->isChecked() ? current_name_set_id : -1, q_to_u16(ui->original->text()), NAME);
         accept();
     });
 
     connect(ui->delete_node_phrase, &QPushButton::clicked, this, [this]
     {
-        io_remove(-1, ui->original->text(), PHRASE);
+        io_remove(-1, q_to_u16(ui->original->text()), PHRASE);
         accept();
     });
 
@@ -37,7 +38,7 @@ DictPopup::DictPopup(QWidget* parent) :
     connect(phrase_chip_delegate, &ChipDelegate::request_delete, this, [this](const QModelIndex& index)
     {
         const auto item = ui->list_phrases->takeItem(index.row());
-        io_remove_meaning(ui->original->text(), item->text());
+        io_remove_meaning(q_to_u16(ui->original->text()), q_to_u16(item->text()));
         delete item;
         changed = true;
     });
@@ -160,7 +161,7 @@ DictPopup::DictPopup(QWidget* parent) :
             {
                 list.append(ui->list_phrases->item(i)->text());
             }
-            io_reorder(ui->original->text(), list);
+            io_reorder(q_to_u16(ui->original->text()), to_u16_vector(list));
             changed = true;
         }
     });
@@ -199,7 +200,7 @@ void DictPopup::edit_finished_name()
     }
     else
     {
-        io_insert(ui->use_current_nameset->isChecked() ? current_name_set_id : -1, ui->original->text(), new_text,
+        io_insert(ui->use_current_nameset->isChecked() ? current_name_set_id : -1, q_to_u16(ui->original->text()), q_to_u16(new_text),
                   NAME);
 
         original_name = new_text;
@@ -221,7 +222,7 @@ void DictPopup::edit_finished_phrase()
     }
     item->setFlags(item->flags() & ~Qt::ItemIsEditable);
 
-    io_insert(-1, ui->original->text(), item->text(), PHRASE);
+    io_insert(-1, q_to_u16(ui->original->text()), q_to_u16(item->text()), PHRASE);
     changed = true;
 }
 
@@ -322,18 +323,18 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
     if (current_name_set_id != -1)
     {
         ui->use_current_nameset->setChecked(true);
-        if (const auto res_set = name_set_dictionary.find_exact(selected_chinese_text); !res_set.name.isNull())
+        if (const auto res_set = name_set_dictionary.find_exact(q_to_u16(selected_chinese_text)); !res_set.name.isNull())
         {
             set_name_found = true;
             ui->use_current_nameset->setCheckState(Qt::CheckState::Checked);
-            ui->current_name->setText(res_set.name.toString());
+            ui->current_name->setText(to_qstring(res_set.name));
         }
     }
 
-    const auto res = dictionary.find_exact(selected_chinese_text);
+    const auto res = dictionary.find_exact(q_to_u16(selected_chinese_text));
     if (!set_name_found && !res.name.isNull())
     {
-        ui->current_name->setText(res.name.toString());
+        ui->current_name->setText(to_qstring(res.name));
         ui->use_current_nameset->setChecked(false);
     }
 
@@ -342,7 +343,7 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
         const auto phrases = res.full_phrase.split(u'\x1F');
         for (const auto& phrase : phrases)
         {
-            auto* item = new QListWidgetItem(phrase.toString());
+            auto* item = new QListWidgetItem(to_qstring(phrase));
             item->setFlags(item->flags() & ~Qt::ItemIsEditable);
             ui->list_phrases->addItem(item);
         }

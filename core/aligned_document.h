@@ -8,11 +8,6 @@
 #include "structures.h"
 #include "unicode_utils.h"
 
-#ifdef QT_CORE_LIB
-#include <QString>
-#include <QStringView>
-#endif
-
 namespace hanvi {
 
 enum class LanguageRole : uint8_t
@@ -138,26 +133,6 @@ namespace Typography
         bool dummy_single_quote = false;
         return should_insert_space_before(text, tok_str, in_quote, dummy_single_quote, prev_tok, cur_tok, prev_prev_tok);
     }
-
-#ifdef QT_CORE_LIB
-    inline bool should_insert_space_before(const QString& text, const QString& tok_str, bool& in_quote,
-                                           bool& in_single_quote,
-                                           const Token* prev_tok = nullptr, const Token* cur_tok = nullptr,
-                                           const Token* prev_prev_tok = nullptr) noexcept
-    {
-        return should_insert_space_before(q_to_u16(text),
-                                          q_to_u16(tok_str),
-                                          in_quote, in_single_quote, prev_tok, cur_tok, prev_prev_tok);
-    }
-
-    inline bool should_insert_space_before(const QString& text, const QString& tok_str, bool& in_quote,
-                                           const Token* prev_tok = nullptr, const Token* cur_tok = nullptr,
-                                           const Token* prev_prev_tok = nullptr) noexcept
-    {
-        bool dummy_single_quote = false;
-        return should_insert_space_before(text, tok_str, in_quote, dummy_single_quote, prev_tok, cur_tok, prev_prev_tok);
-    }
-#endif
 } // namespace Typography
 
 struct DocumentPosition
@@ -198,17 +173,6 @@ public:
     [[nodiscard]] std::optional<DocumentPosition> find_token_position(uint32_t id) const noexcept;
     [[nodiscard]] std::u16string get_text_range(const DocumentSelection& selection, LanguageRole role) const;
     [[nodiscard]] std::u16string get_chinese_for_range(const DocumentSelection& selection) const;
-
-#ifdef QT_CORE_LIB
-    [[nodiscard]] QString get_qtext_range(const DocumentSelection& selection, LanguageRole role) const {
-        auto res = get_text_range(selection, role);
-        return QString::fromUtf16(res.data(), static_cast<qsizetype>(res.size()));
-    }
-    [[nodiscard]] QString get_qchinese_for_range(const DocumentSelection& selection) const {
-        auto res = get_chinese_for_range(selection);
-        return QString::fromUtf16(res.data(), static_cast<qsizetype>(res.size()));
-    }
-#endif
 
     [[nodiscard]] size_t total_tokens() const noexcept { return total_tokens_; }
     void clear() noexcept;

@@ -1,8 +1,16 @@
 #include <print>
+#include <iostream>
 #include <QCoreApplication>
+#include <QCommandLineParser>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QTextStream>
 #include <QtConcurrent>
 #include <QThreadPool>
 #include <QElapsedTimer>
+#include <QMutex>
+#include <QMutexLocker>
 
 #include "core/converter.h"
 #include "core/dict.h"
@@ -10,15 +18,6 @@
 #ifdef Q_OS_WIN
 #include <windows.h>
 #endif
-
-void write_std_out(const QString& text)
-{
-    QTextStream out(stdout);
-#ifdef Q_OS_WIN
-    out.setEncoding(QStringConverter::Utf8);
-#endif
-    out << text;
-}
 
 int main(int argc, char* argv[])
 {
@@ -29,6 +28,7 @@ int main(int argc, char* argv[])
     const QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName("Hanvi-CLI");
     QCoreApplication::setApplicationVersion("1.0");
+
     QCommandLineParser parser;
     parser.setApplicationDescription("Convert Chinese text to Vietnamese via CLI.");
     parser.addHelpOption();
@@ -50,11 +50,27 @@ int main(int argc, char* argv[])
                                         "Number of conversion jobs, default 0 (all).", "jobs", "0");
     parser.addOption(job_number);
 
-    parser.process(app);
+    if (!parser.parse(QCoreApplication::arguments()))
+    {
+        std::println(stderr, "Error: {}", parser.errorText().toStdString());
+        return 1;
+    }
+
+    if (parser.isSet("help"))
+    {
+        std::println("{}", parser.helpText().toStdString());
+        return 0;
+    }
+
+    if (parser.isSet("version"))
+    {
+        std::println("Hanvi-CLI 1.0");
+        return 0;
+    }
 
     if (!parser.isSet(input_option_folder) || !parser.isSet(output_option_folder))
     {
-        qCritical() << "Error: Both -i and -o must be specified.";
+        std::println(stderr, "Error: Both -i and -o must be specified.");
         return 1;
     }
 
@@ -63,7 +79,7 @@ int main(int argc, char* argv[])
 
     if (!inDir.exists())
     {
-        qCritical() << "Error: Input folder does not exist:" << inDir.absolutePath();
+        std::println(stderr, "Error: Input folder does not exist: {}", inDir.absolutePath().toStdString());
         return 1;
     }
 
@@ -71,7 +87,7 @@ int main(int argc, char* argv[])
     {
         if (!out_dir.mkpath("."))
         {
-            qCritical() << "Error: Could not create output folder:" << out_dir.absolutePath();
+            std::println(stderr, "Error: Could not create output folder: {}", out_dir.absolutePath().toStdString());
             return 1;
         }
     }
@@ -82,101 +98,94 @@ int main(int argc, char* argv[])
     std::print("Loading dictionaries...");
     std::fflush(stdout);
 
-    load_dict([&]
+    // Synchronous dictionary load on main thread
+    load_dict();
+
+    std::println(" {}s.", static_cast<double>(timer_dict.elapsed()) / 1000);
+    std::fflush(stdout);
+
+    if (const int jobs = parser.value(job_number).toInt(); jobs > 0)
     {
-        std::println(" {}s.", static_cast<double>(timer_dict.elapsed()) / 1000);
-        std::fflush(stdout);
+        QThreadPool::globalInstance()->setMaxThreadCount(jobs);
+    }
 
-        if (const int jobs = parser.value(job_number).toInt(); jobs > 0)
+    if (const auto set_specified = parser.value(name_set_used); !set_specified.isEmpty())
+    {
+        const auto set_chosen = std::ranges::find_if(name_sets, [&](const NameSet& name_set)
         {
-            QThreadPool::globalInstance()->setMaxThreadCount(jobs);
+            return QString::fromUtf16(name_set.title.data(), static_cast<qsizetype>(name_set.title.size())).compare(set_specified, Qt::CaseInsensitive) == 0;
+        });
+        if (set_chosen == name_sets.end())
+        {
+            std::println(stderr, "Cannot find the specified nameset: {}. Ignoring...", set_specified.toStdString());
         }
-
-        if (const auto set_specified = parser.value(name_set_used); !set_specified.isEmpty())
+        else
         {
-            const auto set_chosen = std::ranges::find_if(name_sets, [&](const NameSet& name_set)
-            {
-                return QString::fromUtf16(name_set.title.data(), static_cast<qsizetype>(name_set.title.size())).compare(set_specified, Qt::CaseInsensitive) == 0;
-            });
-            if (set_chosen == name_sets.end())
-            {
-                qWarning().nospace() << "Cannot find the specified nameset: " << set_specified << ". Ignoring...";
-            }
-            else
-            {
-                const auto& [index, title] = *set_chosen;
-                load_name_set(index);
-            }
+            const auto& [index, title] = *set_chosen;
+            load_name_set(index);
         }
+    }
 
-        QStringList filters;
-        filters << "*.txt";
-        inDir.setNameFilters(filters);
-        QFileInfoList files = inDir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
+    QStringList filters;
+    filters << "*.txt";
+    inDir.setNameFilters(filters);
+    const QFileInfoList files = inDir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
 
-        if (files.isEmpty())
+    if (files.isEmpty())
+    {
+        std::println("Warning: No .txt files found in {}", inDir.absolutePath().toStdString());
+        return 0;
+    }
+
+    std::println("Processing {} files.", files.size());
+    std::fflush(stdout);
+
+    QMutex console_mutex;
+
+    auto process_file = [&](const QFileInfo& file_info)
+    {
+        QElapsedTimer timer;
+        timer.start();
+
+        QFile in_file(file_info.absoluteFilePath());
+        if (!in_file.open(QIODevice::ReadOnly | QIODevice::Text))
         {
-            qWarning() << "Warning: No .txt files found in" << inDir.absolutePath();
-            QCoreApplication::quit();
+            QMutexLocker locker(&console_mutex);
+            std::println(stderr, "Skipping: Cannot open {}", file_info.fileName().toStdString());
             return;
         }
 
-        std::println("Processing {} files.", files.size());
+        QTextStream in(&in_file);
+        in.setEncoding(QStringConverter::Utf8);
+        const QString content = in.readAll();
+        in_file.close();
 
-        QMutex console_mutex;
+        const QString result = QString::fromStdU16String(convert_plain(normalize_text(content.toStdU16String())));
+        const QString out_name = file_info.baseName() + "_converted.txt";
+        const QString out_path = out_dir.filePath(out_name);
 
-        auto process_file = [&](const QFileInfo& file_info)
+        QFile out_file(out_path);
+        if (!out_file.open(QIODevice::WriteOnly | QIODevice::Text))
         {
-            QElapsedTimer timer;
-            timer.start();
-
-            QFile in_file(file_info.absoluteFilePath());
-            if (!in_file.open(QIODevice::ReadOnly | QIODevice::Text))
-            {
-                qWarning() << "Skipping: Cannot open" << file_info.fileName();
-                return;
-            }
-
-            QTextStream in(&in_file);
-            in.setEncoding(QStringConverter::Utf8);
-            const QString content = in.readAll();
-            in_file.close();
-
-            const QString result = convert_plain(normalize_text(content));
-            const QString out_name = file_info.baseName() + "_converted.txt";
-            const QString out_path = out_dir.filePath(out_name);
-
-            QFile out_file(out_path);
-            if (!out_file.open(QIODevice::WriteOnly | QIODevice::Text))
-            {
-                qWarning() << "Skipping: Cannot write to" << out_name;
-                return;
-            }
-
-            QTextStream out(&out_file);
-            out.setEncoding(QStringConverter::Utf8);
-            out << result;
-            out_file.close();
-
             QMutexLocker locker(&console_mutex);
+            std::println(stderr, "Skipping: Cannot write to {}", out_name.toStdString());
+            return;
+        }
 
-            QString log;
-            QTextStream ts(&log);
+        QTextStream out(&out_file);
+        out.setEncoding(QStringConverter::Utf8);
+        out << result;
+        out_file.close();
 
-            ts << "Converted "
-                << file_info.absoluteFilePath()
-                << " -> "
-                << out_path
-                << ": "
-                << QString::number(static_cast<double>(timer.elapsed()) / 1000.0, 'f', 3)
-                << "s.\n";
+        QMutexLocker locker(&console_mutex);
+        std::println("Converted {} -> {}: {:.3f}s.",
+                     file_info.absoluteFilePath().toStdString(),
+                     out_path.toStdString(),
+                     static_cast<double>(timer.elapsed()) / 1000.0);
+        std::fflush(stdout);
+    };
 
-            write_std_out(log);
-        };
+    QtConcurrent::blockingMap(files, process_file);
 
-        QtConcurrent::blockingMap(files, process_file);
-        QCoreApplication::quit();
-    });
-
-    return QCoreApplication::exec();
+    return 0;
 }

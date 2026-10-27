@@ -28,6 +28,7 @@
 #include "namesetsmanager.h"
 #include "namesetchooser.h"
 #include "core/converter.h"
+#include "qt_utils.h"
 #include "core/dict.h"
 #include "documents/token_canvas.h"
 #include "findbar.h"
@@ -100,12 +101,12 @@ namespace {
 }
 
 void NovelTab::set_text(const QString &text) {
-    input_text = normalize_text(text);
+    input_text = to_qstring(normalize_text(q_to_u16(text)));
     repaginate();
 }
 
 void NovelTab::repaginate() {
-    pages = paginate(input_text, page_length);
+    pages = paginate_q(input_text, page_length);
     if (current_page >= pages.size()) {
         current_page = std::max(0, static_cast<int>(pages.size()) - 1);
     }
@@ -1223,7 +1224,7 @@ void MainWindow::convert_and_display(const bool scroll_back) {
         };
 
         const QFuture<std::shared_ptr<AlignedDocument> > future = QtConcurrent::run(
-            [page = cur->pages[cur->current_page].toString(), reporter]() {
+            [page = std::u16string(q_to_u16(cur->pages[cur->current_page])), reporter]() {
                 return convert(page, reporter);
             });
         watcher.setFuture(future);
@@ -1246,8 +1247,8 @@ void MainWindow::convert_to_file() {
     };
 
     const QFuture<QString> future = QtConcurrent::run(
-        [text = cur->input_text, reporter]() {
-            return convert_plain(text, reporter);
+        [text = cur->input_text.toStdU16String(), reporter]() {
+            return to_qstring(convert_plain(text, reporter));
         });
     plain_watcher.setFuture(future);
 }

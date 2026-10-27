@@ -1,6 +1,5 @@
 #include "desktop_io.h"
 
-#ifdef QT_CORE_LIB
 #include <QApplication>
 #include <QClipboard>
 #include <QFile>
@@ -53,5 +52,5 @@ int save_to_file(const QString& name, const QString& text)
 
     return 1;
 }
-#endif
+
 

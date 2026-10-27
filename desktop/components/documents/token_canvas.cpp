@@ -1,4 +1,5 @@
 #include "token_canvas.h"
+#include "qt_utils.h"
 #include <QPainter>
 #include <QMouseEvent>
 #include <QScrollBar>
@@ -276,7 +277,7 @@ void TokenCanvas::rebuild_paragraph_data()
                     continue;
                 }
 
-                if (Typography::should_insert_space_before(pl.text, tok_str, in_quote, in_single_quote))
+                if (Typography::should_insert_space_before(q_to_u16(pl.text), q_to_u16(tok_str), in_quote, in_single_quote))
                 {
                     pl.text += u' ';
                 }
