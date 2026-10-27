@@ -20,6 +20,8 @@ void io_insert(int id, std::u16string_view key, std::u16string_view value, Prior
 void io_reorder(std::u16string_view key, const std::vector<std::u16string>& new_order);
 void io_remove(int id, std::u16string_view key, Priority priority);
 void io_remove_meaning(std::u16string_view key, std::u16string_view value);
+void io_insert_variant(std::u16string_view original, std::u16string_view canonical);
+void io_remove_variant(std::u16string_view original);
 
 #ifdef QT_CORE_LIB
 inline QList<QStringView> paginate(const QString& input_text, int min_length) {
@@ -49,6 +51,12 @@ inline void io_remove(int id, const QString& key, Priority priority) {
 inline void io_remove_meaning(const QString& key, const QString& value) {
     hanvi::io_remove_meaning(q_to_u16(key), q_to_u16(value));
 }
+inline void io_insert_variant(const QString& original, const QString& canonical) {
+    hanvi::io_insert_variant(q_to_u16(original), q_to_u16(canonical));
+}
+inline void io_remove_variant(const QString& original) {
+    hanvi::io_remove_variant(q_to_u16(original));
+}
 #endif
 
 } // namespace hanvi
@@ -58,3 +66,5 @@ using hanvi::io_insert;
 using hanvi::io_reorder;
 using hanvi::io_remove;
 using hanvi::io_remove_meaning;
+using hanvi::io_insert_variant;
+using hanvi::io_remove_variant;

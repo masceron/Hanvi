@@ -1,5 +1,6 @@
 #include "dict.h"
 #include "sqlite_helper.h"
+#include "unicode_utils.h"
 #include <future>
 #include <thread>
 #include <mutex>
@@ -26,6 +27,8 @@ void init_db(const std::string& db_path)
     char* errmsg = nullptr;
     sqlite3_exec(g_db, "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;", nullptr, nullptr, &errmsg);
     if (errmsg) sqlite3_free(errmsg);
+
+    sqlite3_exec(g_db, "CREATE TABLE IF NOT EXISTS variants (original TEXT PRIMARY KEY, canonical TEXT NOT NULL) WITHOUT ROWID;", nullptr, nullptr, nullptr);
 }
 
 void close_db()
@@ -75,7 +78,19 @@ static void load_global_data(const std::function<void()>& on_finished)
                     auto trans = stmt.column_text16(1);
                     if (!orig.empty())
                     {
-                        sv_readings.insert_or_assign(orig[0], std::u16string(trans));
+                        if (orig.front() == 0xFEFF)
+                        {
+                            orig.remove_prefix(1);
+                        }
+                        if (!orig.empty())
+                        {
+                            char32_t cp = orig[0];
+                            if (is_high_surrogate(orig[0]) && orig.size() >= 2 && is_low_surrogate(orig[1]))
+                            {
+                                cp = to_code_point(orig[0], orig[1]);
+                            }
+                            sv_readings.insert_or_assign(cp, std::u16string(trans));
+                        }
                     }
                 }
                 sqlite3_close(db_sv);
@@ -130,9 +145,40 @@ static void load_global_data(const std::function<void()>& on_finished)
             }
         });
 
+        auto fut_var = std::async(std::launch::async, [path] {
+            sqlite3* db_var = nullptr;
+            if (sqlite3_open_v2(path.c_str(), &db_var, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, nullptr) == SQLITE_OK)
+            {
+                SqliteStmt stmt(db_var, "SELECT original, canonical FROM variants");
+                if (stmt.is_valid())
+                {
+                    while (stmt.step())
+                    {
+                        auto orig = stmt.column_text16(0);
+                        auto canon = stmt.column_text16(1);
+                        if (!orig.empty() && !canon.empty())
+                        {
+                            if (orig.front() == 0xFEFF) orig.remove_prefix(1);
+                            if (!orig.empty())
+                            {
+                                char32_t cp = orig[0];
+                                if (is_high_surrogate(orig[0]) && orig.size() >= 2 && is_low_surrogate(orig[1]))
+                                {
+                                    cp = to_code_point(orig[0], orig[1]);
+                                }
+                                variants.insert_or_assign(cp, std::u16string(canon));
+                            }
+                        }
+                    }
+                }
+                sqlite3_close(db_var);
+            }
+        });
+
         fut_sv.get();
         fut_punc.get();
         fut_trie.get();
+        fut_var.get();
 
         if (on_finished)
         {
@@ -186,6 +232,7 @@ void load_name_set(const int id)
 void reload_dict(const std::function<void()>& on_finished)
 {
     sv_readings.clear();
+    variants.clear();
     punctuations.clear();
     dictionary = Dictionary();
     name_sets.clear();

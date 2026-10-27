@@ -21,6 +21,7 @@ std::u16string convert_plain(std::u16string_view input,
                              const std::function<void(int)>& progress_callback = nullptr);
 
 std::u16string to_simplified_chinese(std::u16string_view input);
+std::u16string canonicalize_variants(std::u16string_view input);
 std::u16string normalize_text(std::u16string_view input);
 
 // UTF-8 helpers
@@ -51,6 +52,10 @@ inline QString to_simplified_chinese(const QString& input) {
     auto res = to_simplified_chinese(q_to_u16(input));
     return QString::fromUtf16(res.data(), static_cast<qsizetype>(res.size()));
 }
+inline QString canonicalize_variants(const QString& input) {
+    auto res = canonicalize_variants(q_to_u16(input));
+    return QString::fromUtf16(res.data(), static_cast<qsizetype>(res.size()));
+}
 inline QString normalize_text(const QString& input) {
     auto res = normalize_text(q_to_u16(input));
     return QString::fromUtf16(res.data(), static_cast<qsizetype>(res.size()));
@@ -62,4 +67,5 @@ inline QString normalize_text(const QString& input) {
 using hanvi::convert;
 using hanvi::convert_plain;
 using hanvi::to_simplified_chinese;
+using hanvi::canonicalize_variants;
 using hanvi::normalize_text;

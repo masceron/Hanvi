@@ -13,6 +13,19 @@ inline bool is_low_surrogate(const char16_t c) noexcept {
     return c >= 0xDC00 && c <= 0xDFFF;
 }
 
+inline char32_t to_code_point(const char16_t high, const char16_t low) noexcept {
+    return 0x10000 + (((static_cast<char32_t>(high) & 0x3FF) << 10) | (static_cast<char32_t>(low) & 0x3FF));
+}
+
+inline char32_t utf16_code_point_at(const std::u16string_view str, const size_t idx) noexcept {
+    if (idx >= str.size()) return 0;
+    const char16_t c = str[idx];
+    if (is_high_surrogate(c) && idx + 1 < str.size() && is_low_surrogate(str[idx + 1])) {
+        return to_code_point(c, str[idx + 1]);
+    }
+    return static_cast<char32_t>(c);
+}
+
 inline bool is_closer_char(const char16_t c) noexcept {
     return c == u'.' || c == u',' || c == u'!' || c == u'?' ||
            c == u':' || c == u';' || c == u'…' ||
@@ -76,7 +89,7 @@ inline std::string to_utf8(const std::u16string_view u16) {
     for (size_t i = 0; i < u16.size(); ++i) {
         char32_t cp = u16[i];
         if (is_high_surrogate(static_cast<char16_t>(cp)) && i + 1 < u16.size() && is_low_surrogate(u16[i + 1])) {
-            cp = 0x10000 + (((cp & 0x3FF) << 10) | (u16[i + 1] & 0x3FF));
+            cp = to_code_point(static_cast<char16_t>(cp), u16[i + 1]);
             ++i;
         }
         if (cp <= 0x7F) {

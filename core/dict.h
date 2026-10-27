@@ -9,7 +9,8 @@
 
 namespace hanvi {
 
-inline std::unordered_map<char16_t, std::u16string> sv_readings;
+inline std::unordered_map<char32_t, std::u16string> sv_readings;
+inline std::unordered_map<char32_t, std::u16string> variants;
 inline std::unordered_map<char16_t, char16_t> punctuations;
 inline Dictionary dictionary;
 inline Dictionary name_set_dictionary;
@@ -28,6 +29,7 @@ void reload_dict(const std::function<void()>& on_finished = nullptr);
 } // namespace hanvi
 
 using hanvi::sv_readings;
+using hanvi::variants;
 using hanvi::punctuations;
 using hanvi::dictionary;
 using hanvi::name_set_dictionary;

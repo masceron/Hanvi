@@ -1,6 +1,7 @@
 #include "io.h"
 #include "db.h"
 #include "dict.h"
+#include "unicode_utils.h"
 
 namespace hanvi {
 
@@ -75,6 +76,30 @@ void io_remove_meaning(const std::u16string_view key, const std::u16string_view 
 {
     dictionary.remove_meaning(key, value);
     db_remove_meaning(key, value);
+}
+
+void io_insert_variant(const std::u16string_view original, const std::u16string_view canonical)
+{
+    if (original.empty() || canonical.empty()) return;
+    char32_t cp = original[0];
+    if (is_high_surrogate(original[0]) && original.size() >= 2 && is_low_surrogate(original[1]))
+    {
+        cp = to_code_point(original[0], original[1]);
+    }
+    variants.insert_or_assign(cp, std::u16string(canonical));
+    db_insert_variant(original, canonical);
+}
+
+void io_remove_variant(const std::u16string_view original)
+{
+    if (original.empty()) return;
+    char32_t cp = original[0];
+    if (is_high_surrogate(original[0]) && original.size() >= 2 && is_low_surrogate(original[1]))
+    {
+        cp = to_code_point(original[0], original[1]);
+    }
+    variants.erase(cp);
+    db_remove_variant(original);
 }
 
 } // namespace hanvi

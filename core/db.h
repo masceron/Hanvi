@@ -19,6 +19,9 @@ void db_remove_meaning(std::u16string_view key, std::u16string_view value);
 void nameset_db_insert(std::u16string_view key, std::u16string_view value);
 void nameset_db_remove(std::u16string_view key);
 
+void db_insert_variant(std::u16string_view original, std::u16string_view canonical);
+void db_remove_variant(std::u16string_view original);
+
 #ifdef QT_CORE_LIB
 inline void db_insert(const QString& key, const QString& value, Priority priority) {
     db_insert(q_to_u16(key), q_to_u16(value), priority);
@@ -43,6 +46,12 @@ inline void nameset_db_insert(const QString& key, const QString& value) {
 inline void nameset_db_remove(const QString& key) {
     nameset_db_remove(q_to_u16(key));
 }
+inline void db_insert_variant(const QString& original, const QString& canonical) {
+    db_insert_variant(q_to_u16(original), q_to_u16(canonical));
+}
+inline void db_remove_variant(const QString& original) {
+    db_remove_variant(q_to_u16(original));
+}
 #endif
 
 } // namespace hanvi
@@ -53,3 +62,5 @@ using hanvi::db_remove;
 using hanvi::db_remove_meaning;
 using hanvi::nameset_db_insert;
 using hanvi::nameset_db_remove;
+using hanvi::db_insert_variant;
+using hanvi::db_remove_variant;

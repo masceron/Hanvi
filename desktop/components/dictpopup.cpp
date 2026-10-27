@@ -4,6 +4,7 @@
 #include "../core/structures.h"
 #include "../core/io.h"
 #include "../core/dict.h"
+#include "../core/unicode_utils.h"
 
 
 DictPopup::DictPopup(QWidget* parent) :
@@ -266,27 +267,49 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
     while (idx < selected_chinese_text.length())
     {
         const QChar ch = selected_chinese_text[idx];
-        if (ch.isHighSurrogate() && idx + 1 < selected_chinese_text.length() && selected_chinese_text[idx + 1].isLowSurrogate())
-        {
-            sv_reading.append(selected_chinese_text.sliced(idx, 2));
-            idx += 2;
-            if (idx < selected_chinese_text.length() && !(selected_chinese_text[idx].isHighSurrogate() && idx + 1 < selected_chinese_text.length() && selected_chinese_text[idx + 1].isLowSurrogate()))
-            {
-                sv_reading.append(" ");
-            }
-            continue;
-        }
+        const bool is_surrogate = ch.isHighSurrogate() && idx + 1 < selected_chinese_text.length() && selected_chinese_text[idx + 1].isLowSurrogate();
+        const int char_len = is_surrogate ? 2 : 1;
+        const char32_t cp = is_surrogate
+            ? QChar::surrogateToUcs4(ch, selected_chinese_text[idx + 1])
+            : static_cast<char32_t>(ch.unicode());
 
-        if (auto it = sv_readings.find(static_cast<char16_t>(ch.unicode())); it != sv_readings.end())
+        bool found_sv = false;
+        if (auto it = sv_readings.find(cp); it != sv_readings.end())
         {
             sv_reading.append(QString::fromUtf16(it->second.data(), static_cast<qsizetype>(it->second.size())));
+            found_sv = true;
         }
-        else
+        else if (auto vit = variants.find(cp); vit != variants.end())
         {
-            sv_reading.append(ch);
+            const char32_t canon_cp = hanvi::utf16_code_point_at(vit->second, 0);
+            if (auto it2 = sv_readings.find(canon_cp); it2 != sv_readings.end())
+            {
+                sv_reading.append(QString::fromUtf16(it2->second.data(), static_cast<qsizetype>(it2->second.size())));
+                found_sv = true;
+            }
         }
-        sv_reading.append(" ");
-        idx++;
+        if (!found_sv)
+        {
+            sv_reading.append(selected_chinese_text.sliced(idx, char_len));
+        }
+
+        idx += char_len;
+
+        if (idx < selected_chinese_text.length())
+        {
+            const bool next_is_surrogate = selected_chinese_text[idx].isHighSurrogate() && idx + 1 < selected_chinese_text.length() && selected_chinese_text[idx + 1].isLowSurrogate();
+            if (is_surrogate && !found_sv && next_is_surrogate)
+            {
+                const char32_t next_cp = QChar::surrogateToUcs4(selected_chinese_text[idx], selected_chinese_text[idx + 1]);
+                const bool next_has_sv = sv_readings.contains(next_cp) ||
+                    (variants.contains(next_cp) && sv_readings.contains(hanvi::utf16_code_point_at(variants.at(next_cp), 0)));
+                if (!next_has_sv)
+                {
+                    continue;
+                }
+            }
+            sv_reading.append(" ");
+        }
     }
     if (!sv_reading.isEmpty() && sv_reading.endsWith(' '))
     {

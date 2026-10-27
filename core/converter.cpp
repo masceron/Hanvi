@@ -42,31 +42,58 @@ static std::u16string get_sv(const std::u16string_view& cn)
     while (idx < cn.length())
     {
         const char16_t ch = cn[idx];
-        if (is_high_surrogate(ch) && idx + 1 < cn.length() && is_low_surrogate(cn[idx + 1]))
-        {
-            sv_reading += cn.substr(idx, 2);
-            idx += 2;
-            if (idx < cn.length() && !(is_high_surrogate(cn[idx]) && idx + 1 < cn.length() && is_low_surrogate(cn[idx + 1])))
-            {
-                sv_reading.push_back(u' ');
-            }
-            continue;
-        }
+        const bool is_surrogate = is_high_surrogate(ch) && (idx + 1 < cn.length()) && is_low_surrogate(cn[idx + 1]);
+        const size_t char_len = is_surrogate ? 2 : 1;
+        const char32_t cp = is_surrogate ? to_code_point(ch, cn[idx + 1]) : static_cast<char32_t>(ch);
 
-        if (auto it = sv_readings.find(ch); it != sv_readings.end())
+        bool found_sv = false;
+        if (auto it = sv_readings.find(cp); it != sv_readings.end())
         {
             sv_reading += it->second;
+            found_sv = true;
         }
-        else
+        else if (auto vit = variants.find(cp); vit != variants.end())
         {
-            if (auto pit = punctuations.find(ch); pit != punctuations.end())
+            const char32_t canon_cp = utf16_code_point_at(vit->second, 0);
+            if (auto it2 = sv_readings.find(canon_cp); it2 != sv_readings.end())
+            {
+                sv_reading += it2->second;
+                found_sv = true;
+            }
+        }
+        if (!found_sv)
+        {
+            if (is_surrogate)
+            {
+                sv_reading += cn.substr(idx, 2);
+            }
+            else if (auto pit = punctuations.find(ch); pit != punctuations.end())
             {
                 sv_reading.push_back(pit->second);
             }
-            else sv_reading.push_back(ch);
+            else
+            {
+                sv_reading.push_back(ch);
+            }
         }
-        sv_reading.push_back(u' ');
-        idx++;
+
+        idx += char_len;
+
+        if (idx < cn.length())
+        {
+            const bool next_is_surrogate = is_high_surrogate(cn[idx]) && (idx + 1 < cn.length()) && is_low_surrogate(cn[idx + 1]);
+            if (is_surrogate && !found_sv && next_is_surrogate)
+            {
+                const char32_t next_cp = to_code_point(cn[idx], cn[idx + 1]);
+                const bool next_has_sv = sv_readings.contains(next_cp) ||
+                    (variants.contains(next_cp) && sv_readings.contains(utf16_code_point_at(variants.at(next_cp), 0)));
+                if (!next_has_sv)
+                {
+                    continue;
+                }
+            }
+            sv_reading.push_back(u' ');
+        }
     }
     if (!sv_reading.empty() && sv_reading.back() == u' ')
     {
@@ -156,7 +183,25 @@ static bool should_append_space(const std::u16string_view& input, const size_t c
         {
             if (is_low_surrogate(prev_char) && is_high_surrogate(next_char))
             {
-                return false;
+                auto has_sv = [](const char32_t c_point) {
+                    if (sv_readings.contains(c_point)) return true;
+                    if (auto vit = variants.find(c_point); vit != variants.end()) {
+                        return sv_readings.contains(utf16_code_point_at(vit->second, 0));
+                    }
+                    return false;
+                };
+
+                const bool prev_is_known = current_end_idx >= 2 &&
+                    has_sv(to_code_point(input[current_end_idx - 2], prev_char));
+                const bool next_is_known = current_end_idx + 1 < input.length() && is_low_surrogate(input[current_end_idx + 1]) &&
+                    (has_sv(to_code_point(next_char, input[current_end_idx + 1])) ||
+                     dictionary.find(input, static_cast<int>(current_end_idx)).length > 0 ||
+                     (current_name_set_id != -1 && name_set_dictionary.find(input, static_cast<int>(current_end_idx)).length > 0));
+
+                if (!prev_is_known && !next_is_known)
+                {
+                    return false;
+                }
             }
 
             if (is_latin_or_digit(prev_char) && is_latin_or_digit(next_char))
@@ -573,21 +618,41 @@ static void convert_recursive_aligned(const std::u16string_view& input, int star
 
             const bool is_surrogate = is_high_surrogate(ch) && (i + 1 < input.length()) && is_low_surrogate(input[i + 1]);
             const size_t char_len = is_surrogate ? 2 : 1;
+            const char32_t cp = is_surrogate ? to_code_point(ch, input[i + 1]) : static_cast<char32_t>(ch);
 
             std::u16string source_text(input.substr(i, char_len));
             std::u16string translated_text;
             std::u16string sv_text;
             bool is_punctuator = false;
 
-            if (is_surrogate)
-            {
-                translated_text = source_text;
-                sv_text = source_text;
-            }
-            else if (auto it = sv_readings.find(ch); it != sv_readings.end())
+            if (auto it = sv_readings.find(cp); it != sv_readings.end())
             {
                 translated_text = it->second;
                 sv_text = translated_text;
+            }
+            else if (auto vit = variants.find(cp); vit != variants.end())
+            {
+                const char32_t canon_cp = utf16_code_point_at(vit->second, 0);
+                if (auto it2 = sv_readings.find(canon_cp); it2 != sv_readings.end())
+                {
+                    translated_text = it2->second;
+                    sv_text = translated_text;
+                }
+                else if (is_surrogate)
+                {
+                    translated_text = source_text;
+                    sv_text = source_text;
+                }
+                else
+                {
+                    translated_text = ch;
+                    sv_text = translated_text;
+                }
+            }
+            else if (is_surrogate)
+            {
+                translated_text = source_text;
+                sv_text = source_text;
             }
             else
             {
@@ -615,11 +680,23 @@ static void convert_recursive_aligned(const std::u16string_view& input, int star
                 }
             }
 
-            if (!is_punctuator && cap_next && !translated_text.empty() && !is_surrogate)
+            if (!is_punctuator && cap_next && !translated_text.empty())
             {
-                if (is_lower_char16(translated_text[0])) translated_text[0] = to_upper_char16(translated_text[0]);
-                if (!sv_text.empty() && is_lower_char16(sv_text[0])) sv_text[0] = to_upper_char16(sv_text[0]);
-                cap_next = false;
+                bool capitalized = false;
+                if (is_lower_char16(translated_text[0]))
+                {
+                    translated_text[0] = to_upper_char16(translated_text[0]);
+                    capitalized = true;
+                }
+                if (!sv_text.empty() && is_lower_char16(sv_text[0]))
+                {
+                    sv_text[0] = to_upper_char16(sv_text[0]);
+                    capitalized = true;
+                }
+                if (capitalized || !is_surrogate)
+                {
+                    cap_next = false;
+                }
             }
 
             Token tok;
@@ -916,17 +993,34 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
 
             const bool is_surrogate = is_high_surrogate(ch) && (i + 1 < input.length()) && is_low_surrogate(input[i + 1]);
             const size_t char_len = is_surrogate ? 2 : 1;
+            const char32_t cp = is_surrogate ? to_code_point(ch, input[i + 1]) : static_cast<char32_t>(ch);
 
             std::u16string translated_text;
             bool is_punctuator = false;
 
-            if (is_surrogate)
-            {
-                translated_text = input.substr(i, 2);
-            }
-            else if (auto it = sv_readings.find(ch); it != sv_readings.end())
+            if (auto it = sv_readings.find(cp); it != sv_readings.end())
             {
                 translated_text = it->second;
+            }
+            else if (auto vit = variants.find(cp); vit != variants.end())
+            {
+                const char32_t canon_cp = utf16_code_point_at(vit->second, 0);
+                if (auto it2 = sv_readings.find(canon_cp); it2 != sv_readings.end())
+                {
+                    translated_text = it2->second;
+                }
+                else if (is_surrogate)
+                {
+                    translated_text = input.substr(i, 2);
+                }
+                else
+                {
+                    translated_text = ch;
+                }
+            }
+            else if (is_surrogate)
+            {
+                translated_text = input.substr(i, 2);
             }
             else
             {
@@ -951,10 +1045,18 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
                 }
             }
 
-            if (!is_punctuator && cap_next && !translated_text.empty() && !is_surrogate)
+            if (!is_punctuator && cap_next && !translated_text.empty())
             {
-                if (is_lower_char16(translated_text[0])) translated_text[0] = to_upper_char16(translated_text[0]);
-                cap_next = false;
+                bool capitalized = false;
+                if (is_lower_char16(translated_text[0]))
+                {
+                    translated_text[0] = to_upper_char16(translated_text[0]);
+                    capitalized = true;
+                }
+                if (capitalized || !is_surrogate)
+                {
+                    cap_next = false;
+                }
             }
 
             if ((translated_text == u"\"" && in_quote) || (translated_text == u"'" && in_single_quote))
@@ -1131,11 +1233,41 @@ std::u16string to_simplified_chinese(const std::u16string_view input)
     }
 }
 
+std::u16string canonicalize_variants(const std::u16string_view input)
+{
+    if (input.empty() || variants.empty()) return std::u16string(input);
+
+    std::u16string result;
+    result.reserve(input.size());
+
+    size_t i = 0;
+    while (i < input.size())
+    {
+        const char16_t c = input[i];
+        const bool is_surrogate = is_high_surrogate(c) && (i + 1 < input.size()) && is_low_surrogate(input[i + 1]);
+        const size_t char_len = is_surrogate ? 2 : 1;
+        const char32_t cp = is_surrogate ? to_code_point(c, input[i + 1]) : static_cast<char32_t>(c);
+
+        if (auto it = variants.find(cp); it != variants.end())
+        {
+            result += it->second;
+        }
+        else
+        {
+            result += input.substr(i, char_len);
+        }
+        i += char_len;
+    }
+
+    return result;
+}
+
 std::u16string normalize_text(const std::u16string_view input)
 {
     if (input.empty()) return {};
 
-    std::u16string text = to_simplified_chinese(input);
+    std::u16string canon = canonicalize_variants(input);
+    std::u16string text = to_simplified_chinese(canon);
 
     for (size_t i = 0; i < text.size(); ++i)
     {

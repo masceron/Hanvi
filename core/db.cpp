@@ -177,4 +177,25 @@ void nameset_db_remove(const std::u16string_view key)
     q.exec();
 }
 
+void db_insert_variant(const std::u16string_view original, const std::u16string_view canonical)
+{
+    sqlite3* db = get_db_handle();
+    if (!db) return;
+
+    SqliteStmt q(db, "INSERT OR REPLACE INTO variants (original, canonical) VALUES (?, ?)");
+    q.bind_text16(1, original);
+    q.bind_text16(2, canonical);
+    q.exec();
+}
+
+void db_remove_variant(const std::u16string_view original)
+{
+    sqlite3* db = get_db_handle();
+    if (!db) return;
+
+    SqliteStmt q(db, "DELETE FROM variants WHERE original = ?");
+    q.bind_text16(1, original);
+    q.exec();
+}
+
 } // namespace hanvi
