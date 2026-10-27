@@ -782,6 +782,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
                 std::u16string trans(match.translation);
                 if (cap_next)
                 {
+                    if (!trans.empty() && is_lower_char16(trans[0])) trans[0] = to_upper_char16(trans[0]);
                     cap_next = false;
                 }
 
@@ -807,6 +808,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
             std::u16string trans(translation);
             if (cap_next)
             {
+                if (!trans.empty() && is_lower_char16(trans[0])) trans[0] = to_upper_char16(trans[0]);
                 cap_next = false;
             }
             out.text += trans;

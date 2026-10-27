@@ -272,7 +272,7 @@ public:
     void edit_rule(const QString& start, const QString& end, const QString& t_start, const QString& t_end) const {
         edit_rule(q_to_u16(start), q_to_u16(end), q_to_u16(t_start), q_to_u16(t_end));
     }
-    void remove_rule(const QString& start, const QString& end) {
+    void remove_rule(const QString& start, const QString& end) const {
         remove_rule(q_to_u16(start), q_to_u16(end));
     }
 #endif

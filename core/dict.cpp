@@ -75,7 +75,6 @@ static void load_global_data(const std::function<void()>& on_finished)
                 while (stmt.step())
                 {
                     auto orig = stmt.column_text16(0);
-                    auto trans = stmt.column_text16(1);
                     if (!orig.empty())
                     {
                         if (orig.front() == 0xFEFF)
@@ -89,6 +88,7 @@ static void load_global_data(const std::function<void()>& on_finished)
                             {
                                 cp = to_code_point(orig[0], orig[1]);
                             }
+                            auto trans = stmt.column_text16(1);
                             sv_readings.insert_or_assign(cp, std::u16string(trans));
                         }
                     }

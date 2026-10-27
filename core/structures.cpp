@@ -282,13 +282,13 @@ void TrieNode::add_child(const char16_t ch, TrieNode* node)
         auto* new_nd_ptr = new_header->nodes();
 
         std::memcpy(new_ch_ptr, ch_ptr, idx * sizeof(char16_t));
-        std::memcpy(new_nd_ptr, nd_ptr, idx * sizeof(TrieNode*));
+        std::memcpy(new_nd_ptr, nd_ptr, idx * sizeof(*nd_ptr));
 
         new_ch_ptr[idx] = ch;
         new_nd_ptr[idx] = node;
 
         std::memcpy(new_ch_ptr + idx + 1, ch_ptr + idx, (n - idx) * sizeof(char16_t));
-        std::memcpy(new_nd_ptr + idx + 1, nd_ptr + idx, (n - idx) * sizeof(TrieNode*));
+        std::memcpy(new_nd_ptr + idx + 1, nd_ptr + idx, (n - idx) * sizeof(*nd_ptr));
 
         operator delete(header);
         first_child = reinterpret_cast<TrieNode*>(new_header);
@@ -297,7 +297,7 @@ void TrieNode::add_child(const char16_t ch, TrieNode* node)
     }
 
     std::memmove(ch_ptr + idx + 1, ch_ptr + idx, (n - idx) * sizeof(char16_t));
-    std::memmove(nd_ptr + idx + 1, nd_ptr + idx, (n - idx) * sizeof(TrieNode*));
+    std::memmove(nd_ptr + idx + 1, nd_ptr + idx, (n - idx) * sizeof(*nd_ptr));
 
     ch_ptr[idx] = ch;
     nd_ptr[idx] = node;
@@ -396,8 +396,7 @@ void TrieNode::ensure_complex()
 
 void TrieNode::set_name_ptr(const char16_t* ptr)
 {
-    const uintptr_t tag = data & TAG_MASK;
-    if (tag == TAG_NULL)
+    if (const uintptr_t tag = data & TAG_MASK; tag == TAG_NULL)
     {
         data = reinterpret_cast<uintptr_t>(ptr) | TAG_NAME;
     }
@@ -639,6 +638,7 @@ void Dictionary::remove_meaning(const std::u16string_view key, const std::u16str
 
     const auto list = split_u16(existing_full, u'\x1F');
     std::vector<std::u16string> remaining;
+    remaining.reserve(list.size());
     for (const auto& item : list)
     {
         if (item != value)

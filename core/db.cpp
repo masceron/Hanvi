@@ -123,6 +123,7 @@ void db_remove_meaning(const std::u16string_view key, const std::u16string_view 
         auto list = split_u16(raw, u'\x1F');
 
         std::vector<std::u16string> remaining;
+        remaining.reserve(list.size());
         for (const auto& item : list)
         {
             if (item != value && !item.empty())
