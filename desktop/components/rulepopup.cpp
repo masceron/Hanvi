@@ -1,5 +1,5 @@
 #include "rulepopup.h"
-#include "ui_RulePopup.h"
+#include "ui_rulepopup.h"
 #include "core/structures.h"
 
 RulePopup::RulePopup(QWidget* parent) :

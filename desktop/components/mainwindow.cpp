@@ -477,10 +477,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     create_new_tab("Untitled");
 
+#ifdef Q_OS_WIN
     m_powerNotify = RegisterSuspendResumeNotification(
         reinterpret_cast<HANDLE>(winId()),
         DEVICE_NOTIFY_WINDOW_HANDLE
     );
+#endif
 
     connect(ui->previous_page, &QPushButton::clicked, this, [this] {
         if (auto *cur = current_tab(); cur && cur->current_page > 0) {
@@ -727,6 +729,7 @@ void MainWindow::update_max_restore_button() const {
     max_btn->setIconSize(QSize(16, 16));
 }
 
+#ifdef Q_OS_WIN
 void MainWindow::triggerDpiRecovery() {
     QTimer::singleShot(500, this, [this]() {
         const auto hwnd = reinterpret_cast<HWND>(winId());
@@ -758,6 +761,7 @@ void MainWindow::triggerDpiRecovery() {
         this->repaint();
     });
 }
+#endif
 
 void MainWindow::changeEvent(QEvent *event) {
     if (event->type() == QEvent::WindowStateChange) {
@@ -767,6 +771,12 @@ void MainWindow::changeEvent(QEvent *event) {
 }
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
+#ifndef Q_OS_WIN
+    if (obj == windowHandle() && handle_edge_resize(event)) {
+        return true;
+    }
+#endif
+
     if (ui && ui->vn_output && obj == ui->vn_output->viewport() && event->type() == QEvent::Resize) {
         reposition_findbar();
     }
@@ -879,6 +889,66 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
     }
     return QMainWindow::eventFilter(obj, event);
 }
+
+#ifndef Q_OS_WIN
+// Frameless windows get no resize borders from the window manager, so emulate
+// them here; on Windows this is done by WM_NCHITTEST in nativeEvent.
+Qt::Edges MainWindow::resize_edges_at(const QPointF &pos) const {
+    if (isMaximized() || isFullScreen()) return {};
+
+    constexpr int border_width = 8;
+    Qt::Edges edges;
+    if (pos.x() < border_width) edges |= Qt::LeftEdge;
+    if (pos.x() >= width() - border_width) edges |= Qt::RightEdge;
+    if (pos.y() < border_width) edges |= Qt::TopEdge;
+    if (pos.y() >= height() - border_width) edges |= Qt::BottomEdge;
+    return edges;
+}
+
+void MainWindow::update_resize_cursor(const Qt::Edges edges) {
+    if (edges == resize_cursor_edges) return;
+
+    Qt::CursorShape shape;
+    if (edges == (Qt::LeftEdge | Qt::TopEdge) || edges == (Qt::RightEdge | Qt::BottomEdge)) {
+        shape = Qt::SizeFDiagCursor;
+    } else if (edges == (Qt::RightEdge | Qt::TopEdge) || edges == (Qt::LeftEdge | Qt::BottomEdge)) {
+        shape = Qt::SizeBDiagCursor;
+    } else if (edges & (Qt::LeftEdge | Qt::RightEdge)) {
+        shape = Qt::SizeHorCursor;
+    } else {
+        shape = Qt::SizeVerCursor;
+    }
+
+    if (resize_cursor_edges) QGuiApplication::restoreOverrideCursor();
+    if (edges) QGuiApplication::setOverrideCursor(shape);
+    resize_cursor_edges = edges;
+}
+
+bool MainWindow::handle_edge_resize(QEvent *event) {
+    switch (event->type()) {
+        case QEvent::MouseMove:
+            if (const auto *me = dynamic_cast<QMouseEvent *>(event); me->buttons() == Qt::NoButton) {
+                update_resize_cursor(resize_edges_at(me->position()));
+            }
+            break;
+        case QEvent::MouseButtonPress:
+            if (const auto *me = dynamic_cast<QMouseEvent *>(event); me->button() == Qt::LeftButton) {
+                if (const Qt::Edges edges = resize_edges_at(me->position());
+                    edges && windowHandle()->startSystemResize(edges)) {
+                    update_resize_cursor({});
+                    return true;
+                }
+            }
+            break;
+        case QEvent::Leave:
+            update_resize_cursor({});
+            break;
+        default:
+            break;
+    }
+    return false;
+}
+#endif
 
 #ifdef Q_OS_WIN
 bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result) {
@@ -1184,10 +1254,12 @@ void MainWindow::update_pagination_controls() const {
 }
 
 MainWindow::~MainWindow() {
+#ifdef Q_OS_WIN
     if (m_powerNotify) {
         UnregisterSuspendResumeNotification(m_powerNotify);
         m_powerNotify = nullptr;
     }
+#endif
 
     qApp->removeEventFilter(this);
     delete ui;

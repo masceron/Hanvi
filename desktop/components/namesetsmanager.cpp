@@ -5,7 +5,7 @@
 #include <QDesktopServices>
 
 #include "namesetsmanager.h"
-#include "ui_NamesetsManager.h"
+#include "ui_namesetsmanager.h"
 #include "entrieseditor.h"
 #include "core/dict.h"
 #include "core/structures.h"

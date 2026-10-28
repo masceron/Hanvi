@@ -1148,11 +1148,19 @@ static std::string get_opencc_config_path()
     {
         return std::filesystem::absolute("t2s.json").string();
     }
+    std::filesystem::path p;
 #ifdef _WIN32
     wchar_t exe_path[MAX_PATH];
     if (GetModuleFileNameW(nullptr, exe_path, MAX_PATH) > 0)
     {
-        std::filesystem::path p(exe_path);
+        p = exe_path;
+    }
+#elif defined(__linux__)
+    std::error_code ec;
+    p = std::filesystem::read_symlink("/proc/self/exe", ec);
+#endif
+    if (!p.empty())
+    {
         auto candidate = p.parent_path() / "opencc" / "t2s.json";
         if (std::filesystem::exists(candidate))
         {
@@ -1164,7 +1172,6 @@ static std::string get_opencc_config_path()
             return candidate.string();
         }
     }
-#endif
     return {};
 }
 

@@ -100,8 +100,15 @@ private:
     void setup_hamburger_menu(QPushButton* btn);
     void update_max_restore_button() const;
 
+#ifdef Q_OS_WIN
     void triggerDpiRecovery();
     HPOWERNOTIFY m_powerNotify = nullptr;
+#else
+    Qt::Edges resize_cursor_edges;
+    [[nodiscard]] Qt::Edges resize_edges_at(const QPointF& pos) const;
+    void update_resize_cursor(Qt::Edges edges);
+    bool handle_edge_resize(QEvent* event);
+#endif
 
     findbar* find_bar = nullptr;
     void show_findbar() const;

@@ -7,10 +7,27 @@ on:
 permissions:
   contents: write
 
+env:
+  QT_VERSION: '6.12.0'
+  AQT_SOURCE: 'git+https://github.com/miurahr/aqtinstall.git'
+
 jobs:
   build:
-    runs-on: windows-latest
-    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            qt_host: windows
+            qt_arch: win64_llvm_mingw
+            artifact: windows
+          - os: ubuntu-latest
+            qt_host: linux
+            qt_arch: linux_gcc_64
+            artifact: linux
+
+    runs-on: ${{ matrix.os }}
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v6
@@ -18,32 +35,62 @@ jobs:
     - name: Install Qt
       uses: jurplel/install-qt-action@v4
       with:
-        version: '6.12.0'
-        host: 'windows'
+        version: ${{ env.QT_VERSION }}
+        host: ${{ matrix.qt_host }}
         target: 'desktop'
-        arch: 'win64_llvm_mingw'
-        aqtsource: 'git+https://github.com/miurahr/aqtinstall.git'
+        arch: ${{ matrix.qt_arch }}
+        aqtsource: ${{ env.AQT_SOURCE }}
 
     - name: Install LLVM-MinGW
+      if: runner.os == 'Windows'
       run: |
         curl -L -o llvm-mingw.zip https://github.com/mstorsjo/llvm-mingw/releases/download/nightly/llvm-mingw-nightly-ucrt-x86_64.zip
         7z x llvm-mingw.zip -o"C:\" -y
         echo "C:\llvm-mingw-nightly-ucrt-x86_64\bin" >> $env:GITHUB_PATH
 
-    - name: Configure CMake
+    # Clang builds against the runner's libstdc++, so the archive runs on
+    # distributions at least as new as ubuntu-latest.
+    - name: Install LLVM
+      if: runner.os == 'Linux'
       run: |
-        $env:PATH = "C:\llvm-mingw-nightly-ucrt-x86_64\bin;" + $env:PATH
-        cmake -B build -S . -G "Ninja" -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Release
+        sudo apt-get update
+        sudo apt-get install -y ninja-build 7zip libgl-dev libegl-dev libxkbcommon-dev
+        curl -sSfL -o llvm.sh https://apt.llvm.org/llvm.sh
+        sudo bash llvm.sh
+        ls -d /usr/lib/llvm-*/bin | sort -V | tail -n 1 >> "$GITHUB_PATH"
+
+    - name: Configure CMake
+      run: cmake -B build -S . -G "Ninja" -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
-      run: |
-        $env:PATH = "C:\llvm-mingw-nightly-ucrt-x86_64\bin;" + $env:PATH
-        cmake --build build --config Release -j 16
+      run: cmake --build build --config Release -j 16
 
     - name: Create Portable Archive
+      run: cmake --build build --target MakePortableZip --config Release -j 16
+
+    - name: Upload Archive
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact }}
+        path: build/Hanvi.7z
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Download Archives
+      uses: actions/download-artifact@v4
+      with:
+        path: dist
+
+    - name: Name Archives
       run: |
-        $env:PATH = "C:\llvm-mingw-nightly-ucrt-x86_64\bin;" + $env:PATH
-        cmake --build build --target MakePortableZip --config Release -j 16
+        mv dist/windows/Hanvi.7z dist/Hanvi-windows-x64.7z
+        mv dist/linux/Hanvi.7z dist/Hanvi-linux-x64.7z
 
     - name: Update Nightly Tag
       run: |
@@ -59,6 +106,8 @@ jobs:
         tag_name: nightly
         name: Hanvi
         body: "Latest automatic build of Hanvi."
-        files: build/Hanvi.7z
+        files: |
+          dist/Hanvi-windows-x64.7z
+          dist/Hanvi-linux-x64.7z
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

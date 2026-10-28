@@ -1,7 +1,6 @@
 add_executable(Hanvi WIN32
         main.cpp
         resources.qrc
-        resources/icon.rc
         app/app.cpp
         app/app.h
         app/desktop_io.cpp
@@ -52,13 +51,17 @@ target_link_libraries(Hanvi PRIVATE
         Qt::Widgets
         Qt::Sql
         Qt::Concurrent
-        dwmapi
         hanvi_flags
+        $<$<PLATFORM_ID:Windows>:dwmapi>
 )
 
-if (MSVC)
-    target_sources(Hanvi PRIVATE resources/app.manifest)
-else ()
-    target_sources(Hanvi PRIVATE resources/manifest.rc)
+if (WIN32)
+    target_sources(Hanvi PRIVATE resources/icon.rc)
+    # MSVC's linker embeds the manifest itself; MinGW needs it as a resource.
+    if (MSVC)
+        target_sources(Hanvi PRIVATE resources/app.manifest)
+    else ()
+        target_sources(Hanvi PRIVATE resources/manifest.rc)
+    endif ()
 endif ()
 

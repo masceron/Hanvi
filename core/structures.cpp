@@ -1,5 +1,6 @@
 #include "structures.h"
 #include <algorithm>
+#include <cstring>
 #include <ranges>
 
 namespace hanvi {

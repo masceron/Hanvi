@@ -1,6 +1,6 @@
 #include "dictpopup.h"
 #include "chiplist.h"
-#include "ui_DictPopup.h"
+#include "ui_dictpopup.h"
 #include "qt_utils.h"
 #include "../core/structures.h"
 #include "../core/io.h"

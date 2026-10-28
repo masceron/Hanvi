@@ -13,7 +13,7 @@ int main(int argc, char* argv[])
 
     MainWindow w;
 
-    load_dict([&]
+    load_dict(dict_db_path().toStdString(), [&]
     {
         QMetaObject::invokeMethod(&w, [&]()
         {

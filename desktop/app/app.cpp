@@ -6,10 +6,16 @@
 
 #include "app.h"
 
+QString dict_db_path()
+{
+    const QString path = QCoreApplication::applicationDirPath() + "/dict.db";
+    return QFile::exists(path) ? path : "dict.db";
+}
+
 static void init_desktop_db()
 {
     auto db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName("dict.db");
+    db.setDatabaseName(dict_db_path());
     if (db.open())
     {
         QSqlQuery query(db);
