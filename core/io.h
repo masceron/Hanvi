@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <vector>
 #include <string>
 #include <string_view>
@@ -16,6 +17,13 @@ void io_remove_meaning(std::u16string_view key, std::u16string_view value);
 void io_insert_variant(std::u16string_view original, std::u16string_view canonical);
 void io_remove_variant(std::u16string_view original);
 
+// Nameset management; keeps name_sets in sync. create/import return the new set id, or nullopt
+// on failure (e.g. a duplicate title); import is all-or-nothing.
+std::optional<int> io_create_name_set(std::u16string_view title);
+std::optional<int> io_import_name_set(std::u16string_view title, const std::vector<Entry>& entries);
+bool io_rename_name_set(int id, std::u16string_view title);
+void io_delete_name_set(int id);
+
 } // namespace hanvi
 
 using hanvi::paginate;
@@ -25,3 +33,7 @@ using hanvi::io_remove;
 using hanvi::io_remove_meaning;
 using hanvi::io_insert_variant;
 using hanvi::io_remove_variant;
+using hanvi::io_create_name_set;
+using hanvi::io_import_name_set;
+using hanvi::io_rename_name_set;
+using hanvi::io_delete_name_set;

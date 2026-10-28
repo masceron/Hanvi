@@ -230,6 +230,12 @@ struct NameSet
     NameSet(const int idx, std::u16string t) : index(idx), title(std::move(t)) {}
 };
 
+struct Entry
+{
+    std::u16string original;
+    std::u16string translated;
+};
+
 } // namespace hanvi
 
 using hanvi::Priority;
@@ -242,6 +248,7 @@ using hanvi::ExactResult;
 using hanvi::Match;
 using hanvi::Dictionary;
 using hanvi::NameSet;
+using hanvi::Entry;
 using hanvi::NONE;
 using hanvi::PHRASE;
 using hanvi::NAME;

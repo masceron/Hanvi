@@ -2,7 +2,6 @@
 #include <QIcon>
 #include <QFontDatabase>
 #include <QFile>
-#include <QSqlQuery>
 
 #include "app.h"
 
@@ -12,23 +11,10 @@ QString dict_db_path()
     return QFile::exists(path) ? path : "dict.db";
 }
 
-static void init_desktop_db()
-{
-    auto db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName(dict_db_path());
-    if (db.open())
-    {
-        QSqlQuery query(db);
-        query.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
-    }
-}
-
 void init_style(QApplication& app)
 {
     QApplication::setWindowIcon(QIcon(":/resources/icon.ico"));
     QApplication::setStyle(QStyleFactory::create("Fusion"));
-
-    init_desktop_db();
 
     const QString font_path = QCoreApplication::applicationDirPath() + "/NotoSansSC.ttf";
     if (QFile::exists(font_path))

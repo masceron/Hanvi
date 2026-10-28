@@ -3,6 +3,7 @@
 #include <QDialog>
 #include <QAbstractTableModel>
 #include <vector>
+#include "core/structures.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -117,6 +118,8 @@ private:
     void fetch_down();
 
     void fetch_up();
+
+    [[nodiscard]] Priority priority() const noexcept;
 
     [[nodiscard]] std::vector<EntryItem> query_items(const QString &filter, int offset, int limit) const;
 

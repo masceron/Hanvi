@@ -149,7 +149,71 @@ void db_remove_meaning(const std::u16string_view key, const std::u16string_view 
     }
 }
 
-void nameset_db_insert(const std::u16string_view key, const std::u16string_view value)
+// Returns "<table> WHERE <condition>"; for namesets, ?1 must be bound to the set id.
+static std::string entries_source(const int set_id, const Priority priority)
+{
+    if (set_id != -1) return "name_set_entries WHERE set_id = ?1";
+    return std::string(get_table_name(priority)) + " WHERE TRUE";
+}
+
+std::vector<Entry> db_list_entries(const int set_id, const Priority priority, const std::u16string_view filter,
+                                   const int offset, const int limit)
+{
+    std::vector<Entry> entries;
+    sqlite3* db = get_db_handle();
+    if (!db) return entries;
+
+    std::string sql = "SELECT original, translated FROM " + entries_source(set_id, priority);
+    if (!filter.empty()) sql += " AND (original LIKE ?2 OR translated LIKE ?2)";
+    sql += " ORDER BY original LIMIT ?3 OFFSET ?4";
+
+    SqliteStmt q(db, sql.c_str());
+    if (set_id != -1) q.bind_int(1, set_id);
+    if (!filter.empty())
+    {
+        std::u16string pattern = u"%";
+        pattern += filter;
+        pattern += u'%';
+        q.bind_text16(2, pattern);
+    }
+    q.bind_int(3, limit);
+    q.bind_int(4, offset);
+
+    while (q.step())
+    {
+        entries.push_back(Entry{
+            .original = std::u16string(q.column_text16(0)),
+            .translated = std::u16string(q.column_text16(1))
+        });
+    }
+    return entries;
+}
+
+int db_count_entries(const int set_id, const Priority priority)
+{
+    sqlite3* db = get_db_handle();
+    if (!db) return 0;
+
+    const std::string sql = "SELECT COUNT(*) FROM " + entries_source(set_id, priority);
+    SqliteStmt q(db, sql.c_str());
+    if (set_id != -1) q.bind_int(1, set_id);
+    return q.step() ? q.column_int(0) : 0;
+}
+
+std::optional<std::u16string> db_get_translation(const std::u16string_view key, const Priority priority)
+{
+    if (priority == NONE) return std::nullopt;
+    sqlite3* db = get_db_handle();
+    if (!db) return std::nullopt;
+
+    const std::string sql = std::string("SELECT translated FROM ") + get_table_name(priority) + " WHERE original = ?";
+    SqliteStmt q(db, sql.c_str());
+    q.bind_text16(1, key);
+    if (!q.step()) return std::nullopt;
+    return std::u16string(q.column_text16(0));
+}
+
+void nameset_db_insert(const int set_id, const std::u16string_view key, const std::u16string_view value)
 {
     sqlite3* db = get_db_handle();
     if (!db) return;
@@ -162,19 +226,93 @@ void nameset_db_insert(const std::u16string_view key, const std::u16string_view 
 
     SqliteStmt q(db, sql);
     q.bind_text16(1, key);
-    q.bind_int(2, current_name_set_id);
+    q.bind_int(2, set_id);
     q.bind_text16(3, value);
     q.exec();
 }
 
-void nameset_db_remove(const std::u16string_view key)
+void nameset_db_remove(const int set_id, const std::u16string_view key)
 {
     sqlite3* db = get_db_handle();
     if (!db) return;
 
     SqliteStmt q(db, "DELETE FROM name_set_entries WHERE set_id = ? AND original = ?");
-    q.bind_int(1, current_name_set_id);
+    q.bind_int(1, set_id);
     q.bind_text16(2, key);
+    q.exec();
+}
+
+std::unordered_map<int, int> nameset_db_entry_counts()
+{
+    std::unordered_map<int, int> counts;
+    sqlite3* db = get_db_handle();
+    if (!db) return counts;
+
+    SqliteStmt q(db, "SELECT set_id, COUNT(*) FROM name_set_entries GROUP BY set_id");
+    while (q.step())
+    {
+        counts.emplace(q.column_int(0), q.column_int(1));
+    }
+    return counts;
+}
+
+std::optional<int> nameset_db_create(const std::u16string_view title)
+{
+    sqlite3* db = get_db_handle();
+    if (!db) return std::nullopt;
+
+    SqliteStmt q(db, "INSERT INTO name_sets (title) VALUES (?)");
+    q.bind_text16(1, title);
+    if (q.exec() != SQLITE_DONE) return std::nullopt;
+    return static_cast<int>(sqlite3_last_insert_rowid(db));
+}
+
+std::optional<int> nameset_db_import(const std::u16string_view title, const std::vector<Entry>& entries)
+{
+    sqlite3* db = get_db_handle();
+    if (!db) return std::nullopt;
+    if (sqlite3_exec(db, "BEGIN", nullptr, nullptr, nullptr) != SQLITE_OK) return std::nullopt;
+
+    const auto set_id = nameset_db_create(title);
+    bool ok = set_id.has_value();
+    if (ok)
+    {
+        SqliteStmt q(db, "INSERT INTO name_set_entries (original, translated, set_id) VALUES (?, ?, ?)");
+        for (const auto& [original, translated] : entries)
+        {
+            q.bind_text16(1, original);
+            q.bind_text16(2, translated);
+            q.bind_int(3, *set_id);
+            ok = q.exec() == SQLITE_DONE;
+            q.reset();
+            if (!ok) break;
+        }
+    }
+
+    if (ok && sqlite3_exec(db, "COMMIT", nullptr, nullptr, nullptr) == SQLITE_OK) return set_id;
+    sqlite3_exec(db, "ROLLBACK", nullptr, nullptr, nullptr);
+    return std::nullopt;
+}
+
+bool nameset_db_rename(const int set_id, const std::u16string_view title)
+{
+    sqlite3* db = get_db_handle();
+    if (!db) return false;
+
+    SqliteStmt q(db, "UPDATE name_sets SET title = ? WHERE id = ?");
+    q.bind_text16(1, title);
+    q.bind_int(2, set_id);
+    return q.exec() == SQLITE_DONE;
+}
+
+void nameset_db_delete(const int set_id)
+{
+    sqlite3* db = get_db_handle();
+    if (!db) return;
+
+    // name_set_entries rows go with it through ON DELETE CASCADE.
+    SqliteStmt q(db, "DELETE FROM name_sets WHERE id = ?");
+    q.bind_int(1, set_id);
     q.exec();
 }
 

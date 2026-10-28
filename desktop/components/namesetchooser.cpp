@@ -1,6 +1,6 @@
-#include <QSqlQuery>
 #include "namesetchooser.h"
 #include "ui_namesetchooser.h"
+#include "core/db.h"
 #include "core/dict.h"
 #include "core/structures.h"
 
@@ -46,12 +46,7 @@ int namesetchooser::get_chosen_id() const
 void namesetchooser::load_data(const QString& filter)
 {
     ui->name_set_list->setRowCount(0);
-    QMap<int, int> counts;
-    QSqlQuery query("SELECT set_id, COUNT(*) FROM name_set_entries GROUP BY set_id");
-    while (query.next())
-    {
-        counts.insert(query.value(0).toInt(), query.value(1).toInt());
-    }
+    const auto counts = nameset_db_entry_counts();
 
     for (const auto& [index, title] : name_sets)
     {
@@ -68,7 +63,8 @@ void namesetchooser::load_data(const QString& filter)
         titleItem->setFlags(titleItem->flags() & ~Qt::ItemIsEditable);
         ui->name_set_list->setItem(row, 0, titleItem);
 
-        const int count = counts.value(index, 0);
+        const auto count_it = counts.find(index);
+        const int count = count_it != counts.end() ? count_it->second : 0;
         auto* count_item = new QTableWidgetItem(QString::number(count));
 
         count_item->setTextAlignment(Qt::AlignCenter);

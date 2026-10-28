@@ -6,7 +6,6 @@
 #include "core/dict.h"
 #include "core/structures.h"
 
-#include <QSqlQuery>
 #include <QInputDialog>
 #include <QHeaderView>
 #include <QFont>
@@ -268,82 +267,18 @@ void entrieseditor::update_match_count_label() const {
     }
 }
 
+Priority entrieseditor::priority() const noexcept {
+    return mode_ == EditorMode::Phrases ? PHRASE : NAME;
+}
+
 std::vector<EntryItem> entrieseditor::query_items(const QString &filter, const int offset, const int limit) const {
     std::vector<EntryItem> items;
-
-    if (mode_ == EditorMode::Nameset) {
-        QSqlQuery q;
-        if (filter.isEmpty()) {
-            q.prepare(QStringLiteral(
-                "SELECT original, translated FROM name_set_entries WHERE set_id = :id ORDER BY original LIMIT :limit OFFSET :offset"));
-            q.bindValue(QStringLiteral(":id"), set_id_);
-            q.bindValue(QStringLiteral(":limit"), limit);
-            q.bindValue(QStringLiteral(":offset"), offset);
-        } else {
-            q.prepare(QStringLiteral("SELECT original, translated FROM name_set_entries WHERE set_id = :id AND "
-                "(original LIKE :filter OR translated LIKE :filter) ORDER BY original LIMIT :limit OFFSET :offset"));
-            q.bindValue(QStringLiteral(":id"), set_id_);
-            q.bindValue(QStringLiteral(":filter"), QStringLiteral("%%1%").arg(filter));
-            q.bindValue(QStringLiteral(":limit"), limit);
-            q.bindValue(QStringLiteral(":offset"), offset);
-        }
-
-        if (q.exec()) {
-            while (q.next()) {
-                items.push_back(EntryItem{
-                    .original = q.value(0).toString(),
-                    .translated = q.value(1).toString()
-                });
-            }
-        }
-    } else if (mode_ == EditorMode::Phrases) {
-        QSqlQuery q;
-        if (filter.isEmpty()) {
-            q.prepare(QStringLiteral(
-                "SELECT original, translated FROM phrases ORDER BY original LIMIT :limit OFFSET :offset"));
-            q.bindValue(QStringLiteral(":limit"), limit);
-            q.bindValue(QStringLiteral(":offset"), offset);
-        } else {
-            q.prepare(QStringLiteral(
-                "SELECT original, translated FROM phrases WHERE original LIKE :filter OR translated LIKE :filter ORDER BY original LIMIT :limit OFFSET :offset"));
-            q.bindValue(QStringLiteral(":filter"), QStringLiteral("%%1%").arg(filter));
-            q.bindValue(QStringLiteral(":limit"), limit);
-            q.bindValue(QStringLiteral(":offset"), offset);
-        }
-
-        if (q.exec()) {
-            while (q.next()) {
-                items.push_back(EntryItem{
-                    .original = q.value(0).toString(),
-                    .translated = q.value(1).toString()
-                });
-            }
-        }
-    } else if (mode_ == EditorMode::GlobalNames) {
-        QSqlQuery q;
-        if (filter.isEmpty()) {
-            q.prepare(QStringLiteral(
-                "SELECT original, translated FROM names ORDER BY original LIMIT :limit OFFSET :offset"));
-            q.bindValue(QStringLiteral(":limit"), limit);
-            q.bindValue(QStringLiteral(":offset"), offset);
-        } else {
-            q.prepare(QStringLiteral(
-                "SELECT original, translated FROM names WHERE original LIKE :filter OR translated LIKE :filter ORDER BY original LIMIT :limit OFFSET :offset"));
-            q.bindValue(QStringLiteral(":filter"), QStringLiteral("%%1%").arg(filter));
-            q.bindValue(QStringLiteral(":limit"), limit);
-            q.bindValue(QStringLiteral(":offset"), offset);
-        }
-
-        if (q.exec()) {
-            while (q.next()) {
-                items.push_back(EntryItem{
-                    .original = q.value(0).toString(),
-                    .translated = q.value(1).toString()
-                });
-            }
-        }
+    for (const auto &[original, translated] : db_list_entries(set_id_, priority(), q_to_u16(filter), offset, limit)) {
+        items.push_back(EntryItem{
+            .original = to_qstring(original),
+            .translated = to_qstring(translated)
+        });
     }
-
     return items;
 }
 
@@ -353,24 +288,7 @@ void entrieseditor::execute_query(const QString &filter) {
     constexpr int initial_count = 200;
 
     if (filter.isEmpty() && cached_total_count_ < 0) {
-        if (mode_ == EditorMode::Nameset) {
-            QSqlQuery count_q;
-            count_q.prepare(QStringLiteral("SELECT COUNT(*) FROM name_set_entries WHERE set_id = :id"));
-            count_q.bindValue(QStringLiteral(":id"), set_id_);
-            if (count_q.exec() && count_q.next()) {
-                cached_total_count_ = count_q.value(0).toInt();
-            }
-        } else if (mode_ == EditorMode::Phrases) {
-            QSqlQuery count_q;
-            if (count_q.exec(QStringLiteral("SELECT COUNT(*) FROM phrases")) && count_q.next()) {
-                cached_total_count_ = count_q.value(0).toInt();
-            }
-        } else if (mode_ == EditorMode::GlobalNames) {
-            QSqlQuery count_q;
-            if (count_q.exec(QStringLiteral("SELECT COUNT(*) FROM names")) && count_q.next()) {
-                cached_total_count_ = count_q.value(0).toInt();
-            }
-        }
+        cached_total_count_ = db_count_entries(set_id_, priority());
     }
 
     std::vector<EntryItem> items = query_items(filter, 0, initial_count);
@@ -521,6 +439,7 @@ void entrieseditor::add_entry() {
 
     if (orig.isEmpty() || trans.isEmpty()) return;
 
+    QString value = trans;
     if (mode_ == EditorMode::Phrases) {
         static const auto splitter = QRegularExpression(QStringLiteral("[/,]"));
         QStringList parts;
@@ -531,27 +450,9 @@ void entrieseditor::add_entry() {
             }
         }
         if (parts.isEmpty()) return;
-        const QString db_val = parts.join(u'\x1F');
-
-        db_insert(q_to_u16(orig), q_to_u16(db_val), PHRASE);
-        dictionary.insert(q_to_u16(orig), q_to_u16(db_val), PHRASE);
-    } else if (mode_ == EditorMode::GlobalNames) {
-        db_insert(q_to_u16(orig), q_to_u16(trans), NAME);
-        dictionary.insert(q_to_u16(orig), q_to_u16(trans), NAME);
-    } else if (mode_ == EditorMode::Nameset) {
-        QSqlQuery q;
-        q.prepare(QStringLiteral(
-            "INSERT INTO name_set_entries (set_id, original, translated) VALUES (:set_id, :original, :translated) "
-            "ON CONFLICT(set_id, original) DO UPDATE SET translated = excluded.translated"));
-        q.bindValue(QStringLiteral(":set_id"), set_id_);
-        q.bindValue(QStringLiteral(":original"), orig);
-        q.bindValue(QStringLiteral(":translated"), trans);
-        q.exec();
-
-        if (set_id_ == current_name_set_id) {
-            name_set_dictionary.insert(q_to_u16(orig), q_to_u16(trans), NAME);
-        }
+        value = parts.join(u'\x1F');
     }
+    io_insert(set_id_, q_to_u16(orig), q_to_u16(value), priority());
 
     changes_made_ = true;
     if (cached_total_count_ >= 0) ++cached_total_count_;
@@ -571,25 +472,7 @@ void entrieseditor::delete_entry() {
     const auto *item = model_->item_at(row);
     if (!item) return;
 
-    const QString original_key = item->original;
-
-    if (mode_ == EditorMode::Phrases) {
-        db_remove(q_to_u16(original_key), PHRASE);
-        dictionary.remove(q_to_u16(original_key), PHRASE);
-    } else if (mode_ == EditorMode::GlobalNames) {
-        db_remove(q_to_u16(original_key), NAME);
-        dictionary.remove(q_to_u16(original_key), NAME);
-    } else if (mode_ == EditorMode::Nameset) {
-        QSqlQuery q;
-        q.prepare(QStringLiteral("DELETE FROM name_set_entries WHERE set_id = :id AND original = :original"));
-        q.bindValue(QStringLiteral(":id"), set_id_);
-        q.bindValue(QStringLiteral(":original"), original_key);
-        q.exec();
-
-        if (set_id_ == current_name_set_id) {
-            name_set_dictionary.remove(q_to_u16(original_key), NAME);
-        }
-    }
+    io_remove(set_id_, q_to_u16(item->original), priority());
 
     changes_made_ = true;
     if (cached_total_count_ > 0) --cached_total_count_;
@@ -632,11 +515,8 @@ void entrieseditor::edit_entry() {
             changes_made_ = true;
             emit entries_changed();
 
-            QSqlQuery q;
-            q.prepare(QStringLiteral("SELECT translated FROM phrases WHERE original = :orig"));
-            q.bindValue(QStringLiteral(":orig"), original_key);
-            if (q.exec() && q.next()) {
-                model_->update_translation(row, q.value(0).toString());
+            if (const auto translated = db_get_translation(q_to_u16(original_key), PHRASE)) {
+                model_->update_translation(row, to_qstring(*translated));
             } else {
                 model_->remove_row(row);
                 if (cached_total_count_ > 0) --cached_total_count_;
@@ -654,22 +534,7 @@ void entrieseditor::edit_entry() {
                                                         QLineEdit::Normal, old_trans, &ok);
 
         if (ok && !new_trans.isEmpty() && new_trans != old_trans) {
-            if (mode_ == EditorMode::Nameset) {
-                QSqlQuery q;
-                q.prepare(QStringLiteral(
-                    "UPDATE name_set_entries SET translated = :trans WHERE set_id = :id AND original = :orig"));
-                q.bindValue(QStringLiteral(":trans"), new_trans);
-                q.bindValue(QStringLiteral(":id"), set_id_);
-                q.bindValue(QStringLiteral(":orig"), original_key);
-                q.exec();
-
-                if (set_id_ == current_name_set_id) {
-                    name_set_dictionary.insert(q_to_u16(original_key), q_to_u16(new_trans), NAME);
-                }
-            } else if (mode_ == EditorMode::GlobalNames) {
-                db_insert(q_to_u16(original_key), q_to_u16(new_trans), NAME);
-                dictionary.insert(q_to_u16(original_key), q_to_u16(new_trans), NAME);
-            }
+            io_insert(set_id_, q_to_u16(original_key), q_to_u16(new_trans), NAME);
 
             changes_made_ = true;
             emit entries_changed();

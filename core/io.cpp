@@ -47,8 +47,8 @@ void io_insert(const int id, const std::u16string_view key, const std::u16string
     }
     else
     {
-        name_set_dictionary.insert(key, value, priority);
-        nameset_db_insert(key, value);
+        if (id == current_name_set_id) name_set_dictionary.insert(key, value, priority);
+        nameset_db_insert(id, key, value);
     }
 }
 
@@ -67,8 +67,8 @@ void io_remove(const int id, const std::u16string_view key, const Priority prior
     }
     else
     {
-        name_set_dictionary.remove(key, priority);
-        nameset_db_remove(key);
+        if (id == current_name_set_id) name_set_dictionary.remove(key, priority);
+        nameset_db_remove(id, key);
     }
 }
 
@@ -100,6 +100,37 @@ void io_remove_variant(const std::u16string_view original)
     }
     variants.erase(cp);
     db_remove_variant(original);
+}
+
+std::optional<int> io_create_name_set(const std::u16string_view title)
+{
+    const auto id = nameset_db_create(title);
+    if (id) name_sets.emplace_back(*id, std::u16string(title));
+    return id;
+}
+
+std::optional<int> io_import_name_set(const std::u16string_view title, const std::vector<Entry>& entries)
+{
+    const auto id = nameset_db_import(title, entries);
+    if (id) name_sets.emplace_back(*id, std::u16string(title));
+    return id;
+}
+
+bool io_rename_name_set(const int id, const std::u16string_view title)
+{
+    if (!nameset_db_rename(id, title)) return false;
+    for (auto& name_set : name_sets)
+    {
+        if (name_set.index == id) name_set.title = title;
+    }
+    return true;
+}
+
+void io_delete_name_set(const int id)
+{
+    nameset_db_delete(id);
+    std::erase_if(name_sets, [id](const NameSet& name_set) { return name_set.index == id; });
+    if (id == current_name_set_id) load_name_set(-1);
 }
 
 } // namespace hanvi

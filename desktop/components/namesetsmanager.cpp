@@ -1,4 +1,3 @@
-#include <QSqlQuery>
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QFileDialog>
@@ -7,6 +6,8 @@
 #include "namesetsmanager.h"
 #include "ui_namesetsmanager.h"
 #include "entrieseditor.h"
+#include "qt_utils.h"
+#include "core/db.h"
 #include "core/dict.h"
 #include "core/structures.h"
 
@@ -52,12 +53,7 @@ NamesetsManager::~NamesetsManager()
 void NamesetsManager::load_data()
 {
     ui->name_sets_list->setRowCount(0);
-    QMap<int, int> counts;
-    QSqlQuery query("SELECT set_id, COUNT(*) FROM name_set_entries GROUP BY set_id");
-    while (query.next())
-    {
-        counts.insert(query.value(0).toInt(), query.value(1).toInt());
-    }
+    const auto counts = nameset_db_entry_counts();
 
     for (const auto& [index, title] : name_sets)
     {
@@ -70,7 +66,8 @@ void NamesetsManager::load_data()
         titleItem->setFlags(titleItem->flags() & ~Qt::ItemIsEditable);
         ui->name_sets_list->setItem(row, 0, titleItem);
 
-        const int count = counts.value(index, 0);
+        const auto count_it = counts.find(index);
+        const int count = count_it != counts.end() ? count_it->second : 0;
         auto* count_item = new QTableWidgetItem(QString::number(count));
 
         count_item->setTextAlignment(Qt::AlignCenter);
@@ -108,11 +105,10 @@ QWidget* NamesetsManager::create_action_widget(int id, const QString& current_ti
                                                    current_title, &ok);
         if (ok && !text.isEmpty())
         {
-            QSqlQuery q;
-            q.prepare("UPDATE name_sets SET title = :title WHERE id = :id");
-            q.bindValue(":title", text);
-            q.bindValue(":id", id);
-            q.exec();
+            if (!io_rename_name_set(id, q_to_u16(text)))
+            {
+                QMessageBox::warning(this, "Error", "Could not rename nameset (Duplicate name?).");
+            }
             load_data();
         }
     });
@@ -127,15 +123,7 @@ QWidget* NamesetsManager::create_action_widget(int id, const QString& current_ti
                                                  QMessageBox::Yes | QMessageBox::No);
         if (reply == QMessageBox::Yes)
         {
-            QSqlQuery q;
-
-            q.prepare("DELETE FROM name_sets WHERE id = :id");
-            q.bindValue(":id", id);
-            q.exec();
-            std::erase_if(name_sets, [id](const NameSet& name_set)
-            {
-                return name_set.index == id;
-            });
+            io_delete_name_set(id);
             load_data();
         }
     });
@@ -156,20 +144,9 @@ QWidget* NamesetsManager::create_action_widget(int id, const QString& current_ti
 
         QTextStream out(&file);
 
-        QSqlQuery q;
-        q.prepare("SELECT original, translated FROM name_set_entries WHERE set_id = :id");
-        q.bindValue(":id", id);
-        if (!q.exec())
+        for (const auto& [original, translated] : db_list_entries(id, NAME, {}, 0, -1))
         {
-            return;
-        }
-
-        while (q.next())
-        {
-            const QString original = q.value(0).toString();
-            const QString translated = q.value(1).toString();
-
-            out << original << "=" << translated << "\n";
+            out << to_qstring(original) << "=" << to_qstring(translated) << "\n";
         }
 
         file.close();
@@ -192,14 +169,8 @@ void NamesetsManager::add_new_name_set()
     if (const QString text = QInputDialog::getText(this, "New Nameset", "Name:", QLineEdit::Normal, "", &ok); ok && !
         text.isEmpty())
     {
-        QSqlQuery q;
-        q.prepare("INSERT INTO name_sets (title) VALUES (:title)");
-        q.bindValue(":title", text);
-
-        if (q.exec())
+        if (io_create_name_set(q_to_u16(text)))
         {
-            const int new_id = q.lastInsertId().toInt();
-            name_sets.emplace_back(new_id, text.toStdU16String());
             load_data();
         }
         else
@@ -226,91 +197,53 @@ void NamesetsManager::import_set()
         return;
     }
 
-    QSqlDatabase::database().transaction();
-
-    bool success = true;
+    std::vector<Entry> entries;
     QString error_message;
+    QTextStream in(&file);
+    int line_number = 0;
 
-    QSqlQuery q;
-    q.prepare("INSERT INTO name_sets (title) VALUES (:title)");
-    q.bindValue(":title", text);
-
-    if (!q.exec())
+    while (!in.atEnd())
     {
-        success = false;
-        error_message = "Could not create nameset. The name might already exist.";
-    }
+        QString line = in.readLine();
+        line_number++;
 
-    int new_set_id;
+        if (line.trimmed().isEmpty()) continue;
 
-    if (success)
-    {
-        new_set_id = q.lastInsertId().toInt();
-        QTextStream in(&file);
-        QSqlQuery insert_q;
-        insert_q.prepare("INSERT INTO name_set_entries (original, translated, set_id) VALUES (:orig, :trans, :id)");
+        const int separator_index = static_cast<int>(line.indexOf('='));
 
-        int line_number = 0;
-
-        while (!in.atEnd())
+        if (separator_index == -1)
         {
-            QString line = in.readLine();
-            line_number++;
-
-            if (line.trimmed().isEmpty()) continue;
-
-            const int separator_index = static_cast<int>(line.indexOf('='));
-
-            if (separator_index == -1)
-            {
-                success = false;
-                error_message = QString("Format error at line %1: Missing '=' separator.").arg(line_number);
-                break;
-            }
-
-            const QString original = line.left(separator_index);
-            const QString translated = line.mid(separator_index + 1);
-
-            if (original.isEmpty() || translated.isEmpty())
-            {
-                success = false;
-                error_message = QString("Format error at line %1: Original or translated text is empty.").arg(
-                    line_number);
-                break;
-            }
-
-            insert_q.bindValue(":orig", original);
-            insert_q.bindValue(":trans", translated);
-            insert_q.bindValue(":id", new_set_id);
-
-            if (!insert_q.exec())
-            {
-                success = false;
-                error_message = QString("Database error at line %1: Could not insert entry.").arg(line_number);
-                break;
-            }
+            error_message = QString("Format error at line %1: Missing '=' separator.").arg(line_number);
+            break;
         }
-    }
 
-    if (success)
-    {
-        if (QSqlDatabase::database().commit())
+        const QString original = line.left(separator_index);
+        const QString translated = line.mid(separator_index + 1);
+
+        if (original.isEmpty() || translated.isEmpty())
         {
-            name_sets.emplace_back(new_set_id, text.toStdU16String());
-            load_data();
-            QMessageBox::information(this, "Success", "Nameset imported successfully.");
+            error_message = QString("Format error at line %1: Original or translated text is empty.").arg(
+                line_number);
+            break;
         }
-        else
-        {
-            QSqlDatabase::database().rollback();
-            QMessageBox::warning(this, "Error", "Transaction commit failed.");
-        }
-    }
-    else
-    {
-        QSqlDatabase::database().rollback();
-        QMessageBox::critical(this, "Import Failed", error_message + "\n\nNo changes were made to the database.");
+
+        entries.push_back(Entry{.original = original.toStdU16String(), .translated = translated.toStdU16String()});
     }
 
     file.close();
+
+    if (error_message.isEmpty() && !io_import_name_set(q_to_u16(text), entries))
+    {
+        error_message = "Could not create nameset. The name might already exist, or the file contains duplicate entries.";
+    }
+
+    if (error_message.isEmpty())
+    {
+        load_data();
+        QMessageBox::information(this, "Success", "Nameset imported successfully.");
+    }
+    else
+    {
+        QMessageBox::critical(this, "Import Failed", error_message + "\n\nNo changes were made to the database.");
+    }
 }

@@ -71,25 +71,27 @@ static void load_global_data(const std::function<void()>& on_finished)
             sqlite3* db_sv = nullptr;
             if (sqlite3_open_v2(path.c_str(), &db_sv, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, nullptr) == SQLITE_OK)
             {
-                SqliteStmt stmt(db_sv, "SELECT original, translated FROM sv_readings");
-                while (stmt.step())
                 {
-                    auto orig = stmt.column_text16(0);
-                    if (!orig.empty())
+                    SqliteStmt stmt(db_sv, "SELECT original, translated FROM sv_readings");
+                    while (stmt.step())
                     {
-                        if (orig.front() == 0xFEFF)
-                        {
-                            orig.remove_prefix(1);
-                        }
+                        auto orig = stmt.column_text16(0);
                         if (!orig.empty())
                         {
-                            char32_t cp = orig[0];
-                            if (is_high_surrogate(orig[0]) && orig.size() >= 2 && is_low_surrogate(orig[1]))
+                            if (orig.front() == 0xFEFF)
                             {
-                                cp = to_code_point(orig[0], orig[1]);
+                                orig.remove_prefix(1);
                             }
-                            auto trans = stmt.column_text16(1);
-                            sv_readings.insert_or_assign(cp, std::u16string(trans));
+                            if (!orig.empty())
+                            {
+                                char32_t cp = orig[0];
+                                if (is_high_surrogate(orig[0]) && orig.size() >= 2 && is_low_surrogate(orig[1]))
+                                {
+                                    cp = to_code_point(orig[0], orig[1]);
+                                }
+                                auto trans = stmt.column_text16(1);
+                                sv_readings.insert_or_assign(cp, std::u16string(trans));
+                            }
                         }
                     }
                 }
@@ -101,14 +103,16 @@ static void load_global_data(const std::function<void()>& on_finished)
             sqlite3* db_punc = nullptr;
             if (sqlite3_open_v2(path.c_str(), &db_punc, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, nullptr) == SQLITE_OK)
             {
-                SqliteStmt stmt(db_punc, "SELECT original, normalized FROM punctuations");
-                while (stmt.step())
                 {
-                    auto orig = stmt.column_text16(0);
-                    auto norm = stmt.column_text16(1);
-                    if (!orig.empty() && !norm.empty())
+                    SqliteStmt stmt(db_punc, "SELECT original, normalized FROM punctuations");
+                    while (stmt.step())
                     {
-                        punctuations.insert_or_assign(orig[0], norm[0]);
+                        auto orig = stmt.column_text16(0);
+                        auto norm = stmt.column_text16(1);
+                        if (!orig.empty() && !norm.empty())
+                        {
+                            punctuations.insert_or_assign(orig[0], norm[0]);
+                        }
                     }
                 }
                 sqlite3_close(db_punc);
@@ -149,24 +153,26 @@ static void load_global_data(const std::function<void()>& on_finished)
             sqlite3* db_var = nullptr;
             if (sqlite3_open_v2(path.c_str(), &db_var, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, nullptr) == SQLITE_OK)
             {
-                SqliteStmt stmt(db_var, "SELECT original, canonical FROM variants");
-                if (stmt.is_valid())
                 {
-                    while (stmt.step())
+                    SqliteStmt stmt(db_var, "SELECT original, canonical FROM variants");
+                    if (stmt.is_valid())
                     {
-                        auto orig = stmt.column_text16(0);
-                        auto canon = stmt.column_text16(1);
-                        if (!orig.empty() && !canon.empty())
+                        while (stmt.step())
                         {
-                            if (orig.front() == 0xFEFF) orig.remove_prefix(1);
-                            if (!orig.empty())
+                            auto orig = stmt.column_text16(0);
+                            auto canon = stmt.column_text16(1);
+                            if (!orig.empty() && !canon.empty())
                             {
-                                char32_t cp = orig[0];
-                                if (is_high_surrogate(orig[0]) && orig.size() >= 2 && is_low_surrogate(orig[1]))
+                                if (orig.front() == 0xFEFF) orig.remove_prefix(1);
+                                if (!orig.empty())
                                 {
-                                    cp = to_code_point(orig[0], orig[1]);
+                                    char32_t cp = orig[0];
+                                    if (is_high_surrogate(orig[0]) && orig.size() >= 2 && is_low_surrogate(orig[1]))
+                                    {
+                                        cp = to_code_point(orig[0], orig[1]);
+                                    }
+                                    variants.insert_or_assign(cp, std::u16string(canon));
                                 }
-                                variants.insert_or_assign(cp, std::u16string(canon));
                             }
                         }
                     }

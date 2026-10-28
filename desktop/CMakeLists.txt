@@ -49,7 +49,6 @@ target_link_libraries(Hanvi PRIVATE
         Qt::Core
         Qt::Gui
         Qt::Widgets
-        Qt::Sql
         Qt::Concurrent
         hanvi_flags
         $<$<PLATFORM_ID:Windows>:dwmapi>

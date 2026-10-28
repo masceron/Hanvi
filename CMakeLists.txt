@@ -16,7 +16,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CompilerOptions)
 
 if (HANVI_BUILD_DESKTOP OR HANVI_BUILD_CLI)
-    find_package(Qt6 REQUIRED COMPONENTS Core Gui Sql Widgets Concurrent)
+    find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Concurrent)
 endif ()
 
 # ---- Core Logic -------------------------------------------------------------

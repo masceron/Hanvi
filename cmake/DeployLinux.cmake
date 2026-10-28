@@ -31,7 +31,6 @@ qt_deploy_runtime_dependencies(
     EXECUTABLE \"\${main_app}\"
     ADDITIONAL_EXECUTABLES \${extra_apps}
     INCLUDE_PLUGINS qwayland
-    EXCLUDE_PLUGINS qsqlibase qsqlmimer qsqlmysql qsqloci qsqlodbc qsqlpsql
     EXCLUDE_PLUGIN_TYPES egldeviceintegrations generic networkinformation tls
     GENERATE_QT_CONF
     NO_TRANSLATIONS
