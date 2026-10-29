@@ -23,7 +23,7 @@ inline char32_t utf16_code_point_at(const std::u16string_view str, const size_t 
     if (is_high_surrogate(c) && idx + 1 < str.size() && is_low_surrogate(str[idx + 1])) {
         return to_code_point(c, str[idx + 1]);
     }
-    return static_cast<char32_t>(c);
+    return c;
 }
 
 inline bool is_closer_char(const char16_t c) noexcept {
@@ -116,7 +116,7 @@ inline std::u16string to_utf16(const std::string_view u8) {
     out.reserve(u8.size());
     size_t i = 0;
     while (i < u8.size()) {
-        const uint8_t c = static_cast<uint8_t>(u8[i++]);
+        const auto c = static_cast<uint8_t>(u8[i++]);
         char32_t cp = 0;
         int extra = 0;
         if (c <= 0x7F) {
@@ -134,7 +134,7 @@ inline std::u16string to_utf16(const std::string_view u8) {
             continue;
         }
         while (extra-- > 0 && i < u8.size()) {
-            const uint8_t next = static_cast<uint8_t>(u8[i++]);
+            const auto next = static_cast<uint8_t>(u8[i++]);
             if ((next & 0xC0) != 0x80) break;
             cp = (cp << 6) | (next & 0x3F);
         }

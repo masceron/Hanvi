@@ -12,7 +12,7 @@ static std::vector<std::u16string_view> split_u16(std::u16string_view str, const
     size_t start = 0;
     while (start < str.size())
     {
-        size_t pos = str.find(sep, start);
+        const size_t pos = str.find(sep, start);
         if (pos == std::u16string_view::npos)
         {
             result.push_back(str.substr(start));
@@ -89,7 +89,7 @@ void db_reorder(const std::u16string_view key, const std::vector<std::u16string>
     sqlite3* db = get_db_handle();
     if (!db) return;
 
-    std::u16string joined = join_u16(new_order, u'\x1F');
+    const std::u16string joined = join_u16(new_order, u'\x1F');
     SqliteStmt q(db, "INSERT OR REPLACE INTO phrases (original, translated) VALUES (?, ?)");
     q.bind_text16(1, key);
     q.bind_text16(2, joined);
@@ -103,7 +103,7 @@ void db_remove(const std::u16string_view key, const Priority priority)
     if (!db) return;
 
     const char* table = get_table_name(priority);
-    std::string sql = std::string("DELETE FROM ") + table + " WHERE original = ?";
+    const std::string sql = std::string("DELETE FROM ") + table + " WHERE original = ?";
     SqliteStmt q(db, sql.c_str());
     q.bind_text16(1, key);
     q.exec();
@@ -119,8 +119,8 @@ void db_remove_meaning(const std::u16string_view key, const std::u16string_view 
 
     if (q.step())
     {
-        auto raw = q.column_text16(0);
-        auto list = split_u16(raw, u'\x1F');
+        const auto raw = q.column_text16(0);
+        const auto list = split_u16(raw, u'\x1F');
 
         std::vector<std::u16string> remaining;
         remaining.reserve(list.size());
@@ -140,7 +140,7 @@ void db_remove_meaning(const std::u16string_view key, const std::u16string_view 
         }
         else
         {
-            std::u16string joined = join_u16(remaining, u'\x1F');
+            const std::u16string joined = join_u16(remaining, u'\x1F');
             SqliteStmt update(db, "UPDATE phrases SET translated = ? WHERE original = ?");
             update.bind_text16(1, joined);
             update.bind_text16(2, key);

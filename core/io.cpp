@@ -20,7 +20,7 @@ std::vector<std::u16string_view> paginate(const std::u16string_view input_text, 
             pages.push_back(input_text.substr(cursor));
             break;
         }
-        size_t cutoff = input_text.find(u'\n', target_end);
+        const size_t cutoff = input_text.find(u'\n', target_end);
         if (cutoff == std::u16string_view::npos)
         {
             pages.push_back(input_text.substr(cursor));

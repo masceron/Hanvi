@@ -975,7 +975,7 @@ void TokenCanvas::scroll_to_token(const uint32_t token_id) const
         {
             if (span.token_id == token_id)
             {
-                const_cast<TokenCanvas*>(this)->scroll_to_char(p, span.start_char);
+                this->scroll_to_char(p, span.start_char);
                 return;
             }
         }

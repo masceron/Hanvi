@@ -105,7 +105,7 @@ static std::u16string get_sv(const std::u16string_view& cn)
 
 static char16_t normalize_char(const char16_t c) noexcept
 {
-    if (auto it = punctuations.find(c); it != punctuations.end())
+    if (const auto it = punctuations.find(c); it != punctuations.end())
     {
         return it->second;
     }
@@ -185,7 +185,7 @@ static bool should_append_space(const std::u16string_view& input, const size_t c
             {
                 auto has_sv = [](const char32_t c_point) {
                     if (sv_readings.contains(c_point)) return true;
-                    if (auto vit = variants.find(c_point); vit != variants.end()) {
+                    if (const auto vit = variants.find(c_point); vit != variants.end()) {
                         return sv_readings.contains(utf16_code_point_at(vit->second, 0));
                     }
                     return false;
@@ -1231,8 +1231,8 @@ std::u16string to_simplified_chinese(const std::u16string_view input)
 
     try
     {
-        std::string utf8_in = to_utf8(input);
-        std::string utf8_out = g_opencc_converter->Convert(utf8_in);
+        const std::string utf8_in = to_utf8(input);
+        const std::string utf8_out = g_opencc_converter->Convert(utf8_in);
         return to_utf16(utf8_out);
     }
     catch (const std::exception& e)
@@ -1275,7 +1275,7 @@ std::u16string normalize_text(const std::u16string_view input)
 {
     if (input.empty()) return {};
 
-    std::u16string canon = canonicalize_variants(input);
+    const std::u16string canon = canonicalize_variants(input);
     std::u16string text = to_simplified_chinese(canon);
 
     for (size_t i = 0; i < text.size(); ++i)
@@ -1317,22 +1317,22 @@ std::u16string normalize_text(const std::u16string_view input)
 
 std::string convert_plain_utf8(const std::string_view input, const std::function<void(int)>& progress_callback)
 {
-    std::u16string u16_in = to_utf16(input);
-    std::u16string u16_out = convert_plain(u16_in, progress_callback);
+    const std::u16string u16_in = to_utf16(input);
+    const std::u16string u16_out = convert_plain(u16_in, progress_callback);
     return to_utf8(u16_out);
 }
 
 std::string to_simplified_chinese_utf8(const std::string_view input)
 {
-    std::u16string u16_in = to_utf16(input);
-    std::u16string u16_out = to_simplified_chinese(u16_in);
+    const std::u16string u16_in = to_utf16(input);
+    const std::u16string u16_out = to_simplified_chinese(u16_in);
     return to_utf8(u16_out);
 }
 
 std::string normalize_text_utf8(const std::string_view input)
 {
-    std::u16string u16_in = to_utf16(input);
-    std::u16string u16_out = normalize_text(u16_in);
+    const std::u16string u16_in = to_utf16(input);
+    const std::u16string u16_out = normalize_text(u16_in);
     return to_utf8(u16_out);
 }
 

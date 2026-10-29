@@ -1,16 +1,9 @@
 #include <print>
 #include <iostream>
-#include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QCommandLineParser>
 #include <QDir>
-#include <QFile>
-#include <QFileInfo>
-#include <QTextStream>
-#include <QtConcurrent>
-#include <QThreadPool>
-#include <QElapsedTimer>
-#include <QMutex>
-#include <QMutexLocker>
+#include <QtConcurrentMap>
 
 #include "core/converter.h"
 #include "core/dict.h"

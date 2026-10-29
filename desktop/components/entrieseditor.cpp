@@ -3,7 +3,6 @@
 #include "dictpopup.h"
 #include "qt_utils.h"
 #include "core/db.h"
-#include "core/dict.h"
 #include "core/structures.h"
 
 #include <QInputDialog>

@@ -31,7 +31,7 @@ struct StringView : public std::u16string_view
         std::vector<StringView> parts;
         size_t start = 0;
         while (start < size()) {
-            size_t pos = find(sep, start);
+            const size_t pos = find(sep, start);
             if (pos == npos) {
                 parts.emplace_back(substr(start));
                 break;
