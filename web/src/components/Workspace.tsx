@@ -1,41 +1,76 @@
-import { useMemo, useState } from 'react'
-import type { Paragraph, TabData, Token } from '../core/types'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { DocumentState, Paragraph, Token } from '../core/types'
 import { SearchIcon } from '../icons/SvgIcons'
 import { FindBar } from './FindBar'
 import { PageControls } from './PageControls'
+import { Splitter } from './Splitter'
 import { TokenView } from './TokenView'
+import type { EditTarget } from './editTarget'
+
+const NO_PARAGRAPHS: Paragraph[] = []
+
+// Pane proportions. The desktop splits extra width 1:4 on top of each side's preferred size,
+// which leaves the left column at about 30% of a typical window; Chinese and Hán Việt share it evenly.
+const DEFAULT_LAYOUT = { left: 0.3, top: 0.5 }
+const LAYOUT_KEY = 'hanvi.layout'
+// Smallest pane size, in pixels, the dividers can be dragged to.
+const MIN_COLUMN = 200
+const MIN_ROW = 100
+
+type Layout = typeof DEFAULT_LAYOUT
+
+// The divider positions are a per-browser convenience: storage may be unavailable, and then
+// the defaults are used.
+function loadLayout(): Layout {
+  try {
+    const stored = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? 'null')
+    if (typeof stored?.left === 'number' && typeof stored?.top === 'number') return stored
+  } catch {
+    // ignore
+  }
+  return DEFAULT_LAYOUT
+}
+
+function saveLayout(layout: Layout) {
+  try {
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout))
+  } catch {
+    // ignore
+  }
+}
 
 interface WorkspaceProps {
-  tab: TabData | null
-  hoveredTokenId: number | null
+  doc: DocumentState
   activeTokenId: number | null
-  isBusy: boolean
-  onHoverToken: (id: number | null) => void
-  onClickToken: (token: Token) => void
-  onConvertText: (text: string) => void
+  onClickToken: (token: Token | null) => void
+  onEditRequest: (target: EditTarget) => void
   onPageChange: (page: number) => void
-  onToggleEdit: () => void
   onCopyVietnamese: () => void
 }
 
 export function Workspace({
-  tab,
-  hoveredTokenId,
+  doc,
   activeTokenId,
-  isBusy,
-  onHoverToken,
   onClickToken,
-  onConvertText,
+  onEditRequest,
   onPageChange,
-  onToggleEdit,
   onCopyVietnamese,
 }: WorkspaceProps) {
   const [isFindBarOpen, setIsFindBarOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0)
-  const [draftText, setDraftText] = useState('')
+  const [hoveredTokenId, setHoveredTokenId] = useState<number | null>(null)
+  const [layout, setLayout] = useState(loadLayout)
 
-  const rawDocs = tab?.document
+  function resize(change: Partial<Layout>) {
+    setLayout((current) => {
+      const updated = { ...current, ...change }
+      saveLayout(updated)
+      return updated
+    })
+  }
+
+  const rawDocs = doc.document
 
   // Count matches in Vietnamese view
   const matchCount = useMemo(() => {
@@ -62,61 +97,63 @@ export function Workspace({
     setCurrentMatchIndex((prev) => (prev - 1 + matchCount) % matchCount)
   }
 
-  const isEditing = tab ? tab.isEditing || tab.pages.length === 0 : false
-  const paragraphs: Paragraph[] = rawDocs ?? []
+  // A new page starts at the top in every pane. currentPage changes together with the
+  // converted document, so this runs once the new page is rendered.
+  const workspaceRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    workspaceRef.current?.querySelectorAll('.pane-content').forEach((pane) => pane.scrollTo(0, 0))
+  }, [doc.currentPage])
+
+  // The highlighted token (clicked, or moved to with the arrow keys) is kept in view in every
+  // pane: a pane where it is not comfortably visible scrolls to centre it.
+  useEffect(() => {
+    if (activeTokenId === null) return
+    workspaceRef.current?.querySelectorAll('.pane-content').forEach((pane) => {
+      const token = pane.querySelector(`.token[data-tid="${activeTokenId}"]`)
+      if (!token) return
+      const view = pane.getBoundingClientRect()
+      const box = token.getBoundingClientRect()
+      const margin = box.height
+      if (box.top < view.top + margin || box.bottom > view.bottom - margin) {
+        token.scrollIntoView({ block: 'center' })
+      }
+    })
+  }, [activeTokenId])
+
+  const paragraphs = rawDocs ?? NO_PARAGRAPHS
+
+  // Highlights the hovered and selected token in every pane. Only this rule changes on hover:
+  // the panes keep their DOM, and no font metrics change, so text never shifts.
+  const highlighted = [hoveredTokenId, activeTokenId]
+    .filter((id) => id !== null)
+    .map((id) => `.token-canvas .token[data-tid="${id}"]`)
+  const highlightCss = highlighted.length
+    ? `${highlighted.join(', ')} { color: var(--accent-hover-token); background-color: var(--highlight-token-bg); }`
+    : ''
 
   return (
-    <main className="workspace-splitter">
+    <main className="workspace-splitter" ref={workspaceRef}>
+      <style>{highlightCss}</style>
       {/* Left Column: Chinese (top) & Sino-Vietnamese (bottom) */}
-      <section className="column-left">
+      <section className="column-left" style={{ flexBasis: `calc((100% - 6px) * ${layout.left})` }}>
         {/* Top Pane: Chinese */}
-        <div className="pane-container pane-cn">
+        <div className="pane-container pane-cn" style={{ flexBasis: `calc((100% - 6px) * ${layout.top})` }}>
           <div className="pane-header">
             <span className="pane-title">Chinese Source</span>
-            {tab && tab.pages.length > 0 && (
-              <button className="btn-sm" onClick={onToggleEdit}>
-                {tab.isEditing ? 'Cancel Edit' : 'Edit Source'}
-              </button>
-            )}
           </div>
 
           <div className="pane-content">
-            {isEditing ? (
-              <div className="edit-source-container">
-                <textarea
-                  className="source-textarea"
-                  placeholder="Paste or type Chinese novel text here…"
-                  value={draftText || tab?.rawText || ''}
-                  onChange={(e) => setDraftText(e.target.value)}
-                />
-                <div className="edit-source-actions">
-                  <button
-                    className="btn btn-primary"
-                    disabled={isBusy || !(draftText || tab?.rawText)}
-                    onClick={() => {
-                      onConvertText(draftText || tab?.rawText || '')
-                      setDraftText('')
-                    }}
-                  >
-                    {isBusy ? 'Converting…' : 'Convert & Align'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <TokenView
-                paragraphs={paragraphs}
-                role="cn"
-                hoveredTokenId={hoveredTokenId}
-                activeTokenId={activeTokenId}
-                onHoverToken={onHoverToken}
-                onClickToken={onClickToken}
-              />
-            )}
+            <TokenView
+              paragraphs={paragraphs}
+              role="cn"
+              onHoverToken={setHoveredTokenId}
+              onClickToken={onClickToken}
+              onEditRequest={onEditRequest}
+            />
           </div>
         </div>
 
-        {/* Divider */}
-        <div className="pane-splitter-h" />
+        <Splitter direction="rows" minSize={MIN_ROW} onResize={(top) => resize({ top })} />
 
         {/* Bottom Pane: Sino-Vietnamese */}
         <div className="pane-container pane-sv">
@@ -128,17 +165,15 @@ export function Workspace({
             <TokenView
               paragraphs={paragraphs}
               role="sv"
-              hoveredTokenId={hoveredTokenId}
-              activeTokenId={activeTokenId}
-              onHoverToken={onHoverToken}
+              onHoverToken={setHoveredTokenId}
               onClickToken={onClickToken}
+              onEditRequest={onEditRequest}
             />
           </div>
         </div>
       </section>
 
-      {/* Main Divider */}
-      <div className="workspace-splitter-v" />
+      <Splitter direction="columns" minSize={MIN_COLUMN} onResize={(left) => resize({ left })} />
 
       {/* Right Column: Vietnamese & Page Navigation */}
       <section className="column-right">
@@ -178,19 +213,18 @@ export function Workspace({
             <TokenView
               paragraphs={paragraphs}
               role="vn"
-              hoveredTokenId={hoveredTokenId}
-              activeTokenId={activeTokenId}
               searchQuery={searchQuery}
               currentMatchIndex={currentMatchIndex}
-              onHoverToken={onHoverToken}
+              onHoverToken={setHoveredTokenId}
               onClickToken={onClickToken}
+              onEditRequest={onEditRequest}
             />
           </div>
 
           {/* Page navigation controls right under Vietnamese output */}
           <PageControls
-            currentPage={tab?.currentPage ?? 0}
-            totalPages={tab?.pages.length ?? 0}
+            currentPage={doc.currentPage}
+            totalPages={doc.pages.length}
             onPageChange={onPageChange}
           />
         </div>

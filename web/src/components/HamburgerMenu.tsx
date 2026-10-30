@@ -10,10 +10,12 @@ interface HamburgerMenuProps {
   onSaveToFile: () => void
   onCopyVietnamese: () => void
   onOpenNamesetChooser: () => void
+  onOpenNamesetEntries: () => void
+  onOpenNamesetsManager: () => void
+  onOpenPhrases: () => void
+  onOpenNames: () => void
   onReconvert: () => void
   onReloadDict: () => void
-  onNewTab: () => void
-  onCloseTab: () => void
 }
 
 export function HamburgerMenu({
@@ -25,10 +27,12 @@ export function HamburgerMenu({
   onSaveToFile,
   onCopyVietnamese,
   onOpenNamesetChooser,
+  onOpenNamesetEntries,
+  onOpenNamesetsManager,
+  onOpenPhrases,
+  onOpenNames,
   onReconvert,
   onReloadDict,
-  onNewTab,
-  onCloseTab,
 }: HamburgerMenuProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -77,7 +81,7 @@ export function HamburgerMenu({
             }}
           >
             <span>Read from Clipboard</span>
-            <span className="shortcut">Ctrl+Q</span>
+            <span className="shortcut">Ctrl+V</span>
           </button>
 
           <button
@@ -114,6 +118,50 @@ export function HamburgerMenu({
             <span>Choose Nameset…</span>
           </button>
 
+          <button
+            className="menu-item"
+            onClick={() => {
+              onOpenNamesetEntries()
+              onClose()
+            }}
+          >
+            <span>Active Nameset Entries…</span>
+          </button>
+
+          <button
+            className="menu-item"
+            onClick={() => {
+              onOpenNamesetsManager()
+              onClose()
+            }}
+          >
+            <span>Namesets Manager…</span>
+          </button>
+
+          <div className="menu-separator" />
+
+          <button
+            className="menu-item"
+            onClick={() => {
+              onOpenPhrases()
+              onClose()
+            }}
+          >
+            <span>Dictionary: Phrases…</span>
+            <span className="shortcut">Ctrl+D</span>
+          </button>
+
+          <button
+            className="menu-item"
+            onClick={() => {
+              onOpenNames()
+              onClose()
+            }}
+          >
+            <span>Dictionary: Global Names…</span>
+            <span className="shortcut">Ctrl+Shift+D</span>
+          </button>
+
           <div className="menu-separator" />
 
           <button
@@ -135,30 +183,6 @@ export function HamburgerMenu({
             }}
           >
             <span>Reload Dictionary</span>
-          </button>
-
-          <div className="menu-separator" />
-
-          <button
-            className="menu-item"
-            onClick={() => {
-              onNewTab()
-              onClose()
-            }}
-          >
-            <span>New Tab</span>
-            <span className="shortcut">Ctrl+T</span>
-          </button>
-
-          <button
-            className="menu-item"
-            onClick={() => {
-              onCloseTab()
-              onClose()
-            }}
-          >
-            <span>Close Tab</span>
-            <span className="shortcut">Ctrl+W</span>
           </button>
         </div>
       )}

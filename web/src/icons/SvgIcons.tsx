@@ -10,15 +10,6 @@ export function HamburgerIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
-export function AddIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" {...props}>
-      <line x1="8" y1="3.5" x2="8" y2="12.5" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="3.5" y1="8" x2="12.5" y2="8" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  )
-}
-
 export function CloseIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" {...props}>

@@ -1,40 +1,47 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import * as Comlink from 'comlink'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BottomBar } from './components/BottomBar'
 import { DictPopup } from './components/DictPopup'
+import type { EditTarget } from './components/editTarget'
+import { EntriesEditor, type EntriesSource } from './components/EntriesEditor'
 import { Header } from './components/Header'
 import { NamesetChooser } from './components/NamesetChooser'
+import { NamesetsManager } from './components/NamesetsManager'
+import { RulePopup } from './components/RulePopup'
 import { Workspace } from './components/Workspace'
 import { core } from './core/client'
 import { paginate } from './core/paginate'
-import type { NameSet, Paragraph, TabData, Token } from './core/types'
+import type { DocumentState, NameSet, Rule, Token } from './core/types'
+import { download } from './download'
 
 type CoreStatus =
   | { state: 'loading' }
   | { state: 'ready'; ms: number }
   | { state: 'error'; message: string }
 
-function createInitialTab(): TabData {
-  return {
-    id: 'tab-' + Date.now(),
-    title: 'Untitled',
-    rawText: '',
-    pages: [],
-    currentPage: 0,
-    pageLength: 5000,
-    nameSetId: -1,
-    document: null,
-    isEditing: true,
-  }
+type Dialog =
+  | { kind: 'dict'; text: string }
+  | { kind: 'rule'; rule: Rule }
+  | { kind: 'entries'; source: EntriesSource }
+  | { kind: 'namesets' }
+
+const INITIAL_DOCUMENT: DocumentState = {
+  title: '',
+  rawText: '',
+  pages: [],
+  currentPage: 0,
+  pageLength: 5000,
+  nameSetId: -1,
+  document: null,
 }
 
 export default function App() {
   const [coreStatus, setCoreStatus] = useState<CoreStatus>({ state: 'loading' })
   const [nameSets, setNameSets] = useState<NameSet[]>([])
-  const [tabs, setTabs] = useState<TabData[]>([createInitialTab()])
-  const [activeTabId, setActiveTabId] = useState<string>(tabs[0].id)
+  const [doc, setDoc] = useState<DocumentState>(INITIAL_DOCUMENT)
 
-  const [hoveredTokenId, setHoveredTokenId] = useState<number | null>(null)
-  const [inspectedToken, setInspectedToken] = useState<Token | null>(null)
+  const [activeTokenId, setActiveTokenId] = useState<number | null>(null)
+  const [dialog, setDialog] = useState<Dialog | null>(null)
 
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isNamesetChooserOpen, setIsNamesetChooserOpen] = useState(false)
@@ -43,8 +50,12 @@ export default function App() {
   const [statusMessage, setStatusMessage] = useState('Loading dictionaries into memory…')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Only the latest conversion request may update the document.
+  const conversionId = useRef(0)
 
-  const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
+  useEffect(() => {
+    document.title = doc.title ? `${doc.title} – Hanvi` : 'Hanvi'
+  }, [doc.title])
 
   // Initialize Core and WASM
   useEffect(() => {
@@ -58,7 +69,11 @@ export default function App() {
         const ms = performance.now() - started
         setCoreStatus({ state: 'ready', ms })
         setProgressPercent(100)
-        setStatusMessage(`Dictionaries ready in ${(ms / 1000).toFixed(1)}s`)
+        setStatusMessage(
+          (await core.hasStorage())
+            ? `Dictionaries ready in ${(ms / 1000).toFixed(1)}s`
+            : 'Dictionaries ready, but this browser cannot store them: edits last until the tab is closed.',
+        )
       })
       .catch((error: unknown) => {
         const msg = String(error)
@@ -67,68 +82,57 @@ export default function App() {
       })
   }, [])
 
-  // Conversion runner for a page
-  const convertPageText = useCallback(
-    async (textToConvert: string, tabId: string, pageIdx: number) => {
-      if (!textToConvert.trim()) return
+  // Converts one page and shows it, unless a newer request has started meanwhile.
+  const convertPage = useCallback(async (pages: string[], pageIdx: number) => {
+    const id = ++conversionId.current
+    const text = pages[pageIdx] ?? ''
+    if (!text.trim()) {
+      setDoc((d) => ({ ...d, currentPage: 0, document: null }))
+      return
+    }
 
-      setIsBusy(true)
-      setProgressPercent(40)
-      setStatusMessage(`Converting page ${pageIdx + 1}…`)
+    setIsBusy(true)
+    setProgressPercent(40)
+    setStatusMessage(`Converting page ${pageIdx + 1}…`)
 
-      try {
-        const doc: Paragraph[] = await core.convert(textToConvert)
+    try {
+      const converted = await core.convert(text)
+      if (id !== conversionId.current) return
+      setDoc((d) => ({ ...d, currentPage: pageIdx, document: converted }))
+      setProgressPercent(100)
+      setStatusMessage('Conversion completed.')
+    } catch (err) {
+      setStatusMessage(`Conversion error: ${err}`)
+    } finally {
+      if (id === conversionId.current) setIsBusy(false)
+    }
+  }, [])
 
-        setTabs((prevTabs) =>
-          prevTabs.map((t) => {
-            if (t.id === tabId) {
-              return {
-                ...t,
-                currentPage: pageIdx,
-                document: doc,
-                isEditing: false,
-              }
-            }
-            return t
-          }),
-        )
-
-        setProgressPercent(100)
-        setStatusMessage('Conversion completed.')
-      } catch (err) {
-        setStatusMessage(`Conversion error: ${err}`)
-      } finally {
-        setIsBusy(false)
-      }
+  // Replaces the whole text (file, clipboard) and shows its first page. The Chinese pane is not
+  // editable, as on the desktop: text only comes in whole, which keeps all panes token-aligned.
+  const loadText = useCallback(
+    async (text: string, title: string) => {
+      const pages = paginate(text, doc.pageLength)
+      setActiveTokenId(null)
+      setDoc((d) => ({ ...d, title, rawText: text, pages, currentPage: 0, document: null }))
+      await convertPage(pages, 0)
     },
-    [],
+    [doc.pageLength, convertPage],
   )
 
-  // Load new full text into a tab
-  const loadTextIntoTab = useCallback(
-    async (text: string, title?: string, fileName?: string) => {
-      const pageLen = activeTab.pageLength || 5000
-      const pages = paginate(text, pageLen)
-
-      const updatedTab: TabData = {
-        ...activeTab,
-        title: title || activeTab.title,
-        fileName: fileName || activeTab.fileName,
-        rawText: text,
-        pages,
-        currentPage: 0,
-        document: null,
-        isEditing: false,
-      }
-
-      setTabs((prev) => prev.map((t) => (t.id === activeTab.id ? updatedTab : t)))
-
-      if (pages.length > 0) {
-        await convertPageText(pages[0], activeTab.id, 0)
-      }
-    },
-    [activeTab, convertPageText],
-  )
+  // Ctrl+V anywhere but a text field reads the pasted text, like the desktop's Paste shortcut.
+  useEffect(() => {
+    function handlePaste(e: ClipboardEvent) {
+      const target = e.target as HTMLElement | null
+      if (target?.closest('input, textarea, .modal-backdrop')) return
+      const text = e.clipboardData?.getData('text/plain') ?? ''
+      if (!text.trim()) return
+      e.preventDefault()
+      void loadText(text, '')
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [loadText])
 
   // File picker handler
   const handleOpenFile = useCallback(() => {
@@ -142,31 +146,7 @@ export default function App() {
     const reader = new FileReader()
     reader.onload = async (evt) => {
       const content = evt.target?.result as string
-      if (content) {
-        if (!activeTab.rawText) {
-          await loadTextIntoTab(content, file.name, file.name)
-        } else {
-          const newTabId = 'tab-' + Date.now()
-          const pages = paginate(content, activeTab.pageLength || 5000)
-          const newTab: TabData = {
-            id: newTabId,
-            title: file.name,
-            fileName: file.name,
-            rawText: content,
-            pages,
-            currentPage: 0,
-            pageLength: activeTab.pageLength || 5000,
-            nameSetId: activeTab.nameSetId,
-            document: null,
-            isEditing: false,
-          }
-          setTabs((prev) => [...prev, newTab])
-          setActiveTabId(newTabId)
-          if (pages.length > 0) {
-            await convertPageText(pages[0], newTabId, 0)
-          }
-        }
-      }
+      if (content) await loadText(content, file.name)
     }
     reader.readAsText(file)
     e.target.value = ''
@@ -180,15 +160,15 @@ export default function App() {
         setStatusMessage('Clipboard is empty.')
         return
       }
-      await loadTextIntoTab(text, 'Clipboard', '')
+      await loadText(text, '')
     } catch {
       setStatusMessage('Clipboard access denied or unsupported.')
     }
-  }, [loadTextIntoTab])
+  }, [loadText])
 
   // Save converted text to file
   const handleSaveToFile = useCallback(async () => {
-    if (!activeTab.rawText) {
+    if (!doc.rawText) {
       setStatusMessage('No text to save.')
       return
     }
@@ -198,15 +178,9 @@ export default function App() {
     setProgressPercent(50)
 
     try {
-      const plainVn = await core.convertPlain(activeTab.rawText)
-      const blob = new Blob([plainVn], { type: 'text/plain;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      const baseName = (activeTab.fileName || activeTab.title || 'hanvi').replace(/\.txt$/i, '')
-      a.href = url
-      a.download = `${baseName}_vietnamese.txt`
-      a.click()
-      URL.revokeObjectURL(url)
+      const plainVn = await core.convertPlain(doc.rawText)
+      const baseName = (doc.title || 'hanvi').replace(/\.txt$/i, '')
+      download(`${baseName}_vietnamese.txt`, plainVn)
 
       setProgressPercent(100)
       setStatusMessage('Saved to file.')
@@ -215,16 +189,16 @@ export default function App() {
     } finally {
       setIsBusy(false)
     }
-  }, [activeTab])
+  }, [doc.rawText, doc.title])
 
   // Copy Vietnamese text
   const handleCopyVietnamese = useCallback(() => {
-    if (!activeTab.document || activeTab.document.length === 0) {
+    if (!doc.document || doc.document.length === 0) {
       setStatusMessage('No converted text to copy.')
       return
     }
 
-    const lines = activeTab.document.map((para) => {
+    const lines = doc.document.map((para) => {
       let line = ''
       for (const tok of para) {
         if (tok.vnSpace) line += ' '
@@ -233,107 +207,100 @@ export default function App() {
       return line
     })
 
-    const fullText = lines.join('\n')
-    void navigator.clipboard.writeText(fullText)
+    void navigator.clipboard.writeText(lines.join('\n'))
     setStatusMessage('Vietnamese text copied to clipboard.')
-  }, [activeTab.document])
+  }, [doc.document])
 
   // Re-convert current page
   const handleReconvert = useCallback(async () => {
-    if (activeTab.pages.length > 0) {
-      await convertPageText(activeTab.pages[activeTab.currentPage], activeTab.id, activeTab.currentPage)
-    } else if (activeTab.rawText) {
-      await convertPageText(activeTab.rawText, activeTab.id, 0)
-    }
-  }, [activeTab, convertPageText])
+    await convertPage(doc.pages, doc.currentPage)
+  }, [doc.pages, doc.currentPage, convertPage])
+
+  // After the dictionary changed (here or in another tab): refresh namesets, follow the core if
+  // it dropped a deleted active nameset, and re-convert the page.
+  const handleDictionaryChanged = useCallback(async () => {
+    const [sets, active] = await Promise.all([core.nameSets(), core.activeNameSet()])
+    setNameSets(sets)
+    setDoc((d) => ({ ...d, nameSetId: active }))
+    await handleReconvert()
+  }, [handleReconvert])
 
   // Reload dictionaries
   const handleReloadDict = useCallback(async () => {
     setIsBusy(true)
     setStatusMessage('Reloading dictionary…')
     try {
-      await core.loadNameSet(activeTab.nameSetId)
-      await handleReconvert()
+      await core.reloadDict()
+      await handleDictionaryChanged()
       setStatusMessage('Dictionary reloaded.')
     } catch (err) {
       setStatusMessage(`Reload error: ${err}`)
     } finally {
       setIsBusy(false)
     }
-  }, [activeTab.nameSetId, handleReconvert])
+  }, [handleDictionaryChanged])
 
-  // Tab management
-  const handleNewTab = useCallback(() => {
-    const newTab = createInitialTab()
-    newTab.pageLength = activeTab.pageLength
-    newTab.nameSetId = activeTab.nameSetId
-    setTabs((prev) => [...prev, newTab])
-    setActiveTabId(newTab.id)
-  }, [activeTab.pageLength, activeTab.nameSetId])
+  const requestedPersistence = useRef(false)
+  function dialogClosed(changed: boolean) {
+    setDialog(null)
+    if (!changed) return
+    // Ask once that the browser keep the stored dictionary under storage pressure.
+    if (!requestedPersistence.current) {
+      requestedPersistence.current = true
+      void navigator.storage?.persist?.()
+    }
+    void handleDictionaryChanged()
+  }
 
-  const handleCloseTab = useCallback(
-    (idToClose: string) => {
-      if (tabs.length === 1) {
-        setTabs([createInitialTab()])
-        return
-      }
-      const idx = tabs.findIndex((t) => t.id === idToClose)
-      const newTabs = tabs.filter((t) => t.id !== idToClose)
-      setTabs(newTabs)
-      if (activeTabId === idToClose) {
-        const nextIdx = Math.max(0, idx - 1)
-        setActiveTabId(newTabs[nextIdx].id)
-      }
-    },
-    [tabs, activeTabId],
-  )
+  const handleEditRequest = useCallback((target: EditTarget) => {
+    setDialog(target.kind === 'rule' ? { kind: 'rule', rule: target.rule } : { kind: 'dict', text: target.text })
+  }, [])
+
+  const handleClickToken = useCallback((token: Token | null) => setActiveTokenId(token?.id ?? null), [])
 
   // Page navigation
   const handlePageChange = useCallback(
     async (newPage: number) => {
-      if (newPage < 0 || newPage >= activeTab.pages.length) return
-      await convertPageText(activeTab.pages[newPage], activeTab.id, newPage)
+      if (newPage < 0 || newPage >= doc.pages.length) return
+      setActiveTokenId(null) // token ids restart on every page
+      await convertPage(doc.pages, newPage)
     },
-    [activeTab.pages, activeTab.id, convertPageText],
+    [doc.pages, convertPage],
   )
 
   // Chars per page change
   async function handleCharPerPageChange(newChars: number) {
-    if (!activeTab.rawText) {
-      setTabs((prev) =>
-        prev.map((t) => (t.id === activeTab.id ? { ...t, pageLength: newChars } : t)),
-      )
-      return
-    }
-    const newPages = paginate(activeTab.rawText, newChars)
-    setTabs((prev) =>
-      prev.map((t) =>
-        t.id === activeTab.id
-          ? {
-              ...t,
-              pageLength: newChars,
-              pages: newPages,
-              currentPage: 0,
-            }
-          : t,
-      ),
-    )
-    if (newPages.length > 0) {
-      await convertPageText(newPages[0], activeTab.id, 0)
-    }
+    const pages = paginate(doc.rawText, newChars)
+    setActiveTokenId(null)
+    setDoc((d) => ({ ...d, pageLength: newChars, pages, currentPage: 0 }))
+    await convertPage(pages, 0)
   }
 
   // Nameset selection
   async function handleSelectNameset(id: number) {
     await core.loadNameSet(id)
-    setTabs((prev) =>
-      prev.map((t) => (t.id === activeTab.id ? { ...t, nameSetId: id } : t)),
-    )
+    setDoc((d) => ({ ...d, nameSetId: id }))
     await handleReconvert()
   }
 
-  const activeNameset = nameSets.find((s) => s.id === activeTab.nameSetId)
+  const activeNameset = nameSets.find((s) => s.id === doc.nameSetId) ?? null
   const activeNamesetTitle = activeNameset ? activeNameset.title : 'None'
+
+  function openActiveNamesetEntries() {
+    if (activeNameset) setDialog({ kind: 'entries', source: { kind: 'nameset', nameSet: activeNameset } })
+    else setStatusMessage('No nameset is active. Choose one first.')
+  }
+
+  // Tokens of the page by id, in reading order, for keyboard navigation. A grammar rule's start
+  // and end tokens share one id.
+  const tokensById = useMemo(() => {
+    const byId = new Map<number, Token>()
+    for (const paragraph of doc.document ?? []) {
+      for (const token of paragraph) if (!byId.has(token.id)) byId.set(token.id, token)
+    }
+    return byId
+  }, [doc.document])
+  const tokenIds = useMemo(() => [...tokensById.keys()], [tokensById])
 
   // Ref holding actions for global shortcut listener
   const actionsRef = useRef({
@@ -342,11 +309,13 @@ export default function App() {
     handleSaveToFile,
     handleCopyVietnamese,
     handleReconvert,
-    handleNewTab,
-    handleCloseTab,
     handlePageChange,
-    activeTab,
-    activeTabId,
+    handleDictionaryChanged,
+    handleEditRequest,
+    doc,
+    activeTokenId,
+    tokensById,
+    tokenIds,
   })
 
   useEffect(() => {
@@ -356,13 +325,28 @@ export default function App() {
       handleSaveToFile,
       handleCopyVietnamese,
       handleReconvert,
-      handleNewTab,
-      handleCloseTab,
       handlePageChange,
-      activeTab,
-      activeTabId,
+      handleDictionaryChanged,
+      handleEditRequest,
+      doc,
+      activeTokenId,
+      tokensById,
+      tokenIds,
     }
   })
+
+  // Another tab saved dictionary edits; the worker has loaded them.
+  useEffect(() => {
+    void core.onExternalChange(
+      Comlink.proxy(() => {
+        setStatusMessage('Dictionary updated from another tab.')
+        void actionsRef.current.handleDictionaryChanged()
+      }),
+    )
+    void core.onSaveError(
+      Comlink.proxy((message: string) => setStatusMessage(`Could not save the dictionary: ${message}`)),
+    )
+  }, [])
 
   // Global Keyboard Shortcuts
   useEffect(() => {
@@ -370,31 +354,26 @@ export default function App() {
       const activeEl = document.activeElement
       const isInput =
         activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement
+      // Dialogs handle their own keys.
+      if (document.querySelector('.modal-backdrop')) return
 
       const {
         handleOpenFile: openFile,
-        handleReadClipboard: readClip,
         handleSaveToFile: saveFile,
         handleCopyVietnamese: copyVn,
         handleReconvert: reconvert,
-        handleNewTab: newTab,
-        handleCloseTab: closeTab,
         handlePageChange: pageChange,
-        activeTab: curTab,
-        activeTabId: curTabId,
+        handleEditRequest: editRequest,
+        doc: curDoc,
+        activeTokenId: activeId,
+        tokensById: byId,
+        tokenIds: ids,
       } = actionsRef.current
 
       // Ctrl + O: Open File
       if (e.ctrlKey && e.key.toLowerCase() === 'o') {
         e.preventDefault()
         openFile()
-        return
-      }
-
-      // Ctrl + Q: Read Clipboard
-      if (e.ctrlKey && e.key.toLowerCase() === 'q') {
-        e.preventDefault()
-        void readClip()
         return
       }
 
@@ -412,6 +391,13 @@ export default function App() {
         return
       }
 
+      // Ctrl + D / Ctrl + Shift + D: phrase / global name lists
+      if (e.ctrlKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault()
+        setDialog({ kind: 'entries', source: { kind: e.shiftKey ? 'names' : 'phrases' } })
+        return
+      }
+
       // Ctrl + R: Re-convert
       if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'r') {
         e.preventDefault()
@@ -419,28 +405,39 @@ export default function App() {
         return
       }
 
-      // Ctrl + T: New Tab
-      if (e.ctrlKey && e.key.toLowerCase() === 't') {
-        e.preventDefault()
-        newTab()
-        return
-      }
+      if (isInput || e.ctrlKey || e.altKey || e.metaKey) return
 
-      // Ctrl + W: Close Tab
-      if (e.ctrlKey && e.key.toLowerCase() === 'w') {
-        e.preventDefault()
-        closeTab(curTabId)
-        return
+      // With a token highlighted, as on the desktop: Left/Right move to the previous/next token
+      // (the panes scroll to it), Enter/Space/E edit it, Escape clears the highlight.
+      if (activeId !== null && byId.has(activeId)) {
+        const index = ids.indexOf(activeId)
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault()
+          const next = ids[index + (e.key === 'ArrowLeft' ? -1 : 1)]
+          if (next !== undefined) setActiveTokenId(next)
+          return
+        }
+        if (e.key === 'Enter' || e.key === ' ' || e.key.toLowerCase() === 'e') {
+          e.preventDefault()
+          const token = byId.get(activeId)!
+          if (token.rule) editRequest({ kind: 'rule', rule: token.rule })
+          else if (token.cn) editRequest({ kind: 'text', text: token.cn })
+          return
+        }
+        if (e.key === 'Escape') {
+          setActiveTokenId(null)
+          return
+        }
       }
 
       // Arrow Left/Right: Page navigation
-      if (!isInput && curTab.pages.length > 1) {
-        if (e.key === 'ArrowLeft' && curTab.currentPage > 0) {
+      if (curDoc.pages.length > 1) {
+        if (e.key === 'ArrowLeft' && curDoc.currentPage > 0) {
           e.preventDefault()
-          void pageChange(curTab.currentPage - 1)
-        } else if (e.key === 'ArrowRight' && curTab.currentPage < curTab.pages.length - 1) {
+          void pageChange(curDoc.currentPage - 1)
+        } else if (e.key === 'ArrowRight' && curDoc.currentPage < curDoc.pages.length - 1) {
           e.preventDefault()
-          void pageChange(curTab.currentPage + 1)
+          void pageChange(curDoc.currentPage + 1)
         }
       }
     }
@@ -460,8 +457,6 @@ export default function App() {
       />
 
       <Header
-        tabs={tabs}
-        activeTabId={activeTabId}
         isMenuOpen={isMenuOpen}
         statusText={
           coreStatus.state === 'loading'
@@ -473,32 +468,25 @@ export default function App() {
         isBusy={isBusy}
         onToggleMenu={() => setIsMenuOpen((prev) => !prev)}
         onCloseMenu={() => setIsMenuOpen(false)}
-        onSelectTab={setActiveTabId}
-        onNewTab={handleNewTab}
-        onCloseTab={handleCloseTab}
         onOpenFile={handleOpenFile}
         onReadClipboard={handleReadClipboard}
         onSaveToFile={handleSaveToFile}
         onCopyVietnamese={handleCopyVietnamese}
         onOpenNamesetChooser={() => setIsNamesetChooserOpen(true)}
+        onOpenNamesetEntries={openActiveNamesetEntries}
+        onOpenNamesetsManager={() => setDialog({ kind: 'namesets' })}
+        onOpenPhrases={() => setDialog({ kind: 'entries', source: { kind: 'phrases' } })}
+        onOpenNames={() => setDialog({ kind: 'entries', source: { kind: 'names' } })}
         onReconvert={handleReconvert}
         onReloadDict={handleReloadDict}
       />
 
       <Workspace
-        tab={activeTab}
-        hoveredTokenId={hoveredTokenId}
-        activeTokenId={inspectedToken ? inspectedToken.id : null}
-        isBusy={isBusy}
-        onHoverToken={setHoveredTokenId}
-        onClickToken={setInspectedToken}
-        onConvertText={(text) => loadTextIntoTab(text)}
+        doc={doc}
+        activeTokenId={activeTokenId}
+        onClickToken={handleClickToken}
+        onEditRequest={handleEditRequest}
         onPageChange={handlePageChange}
-        onToggleEdit={() => {
-          setTabs((prev) =>
-            prev.map((t) => (t.id === activeTab.id ? { ...t, isEditing: !t.isEditing } : t)),
-          )
-        }}
         onCopyVietnamese={handleCopyVietnamese}
       />
 
@@ -506,17 +494,24 @@ export default function App() {
         progressPercent={progressPercent}
         statusMessage={statusMessage}
         activeNamesetTitle={activeNamesetTitle}
-        charPerPage={activeTab.pageLength}
+        charPerPage={doc.pageLength}
         onOpenNamesetChooser={() => setIsNamesetChooserOpen(true)}
         onCharPerPageChange={handleCharPerPageChange}
       />
 
-      <DictPopup token={inspectedToken} onClose={() => setInspectedToken(null)} />
+      {dialog?.kind === 'dict' && (
+        <DictPopup text={dialog.text} activeNameSet={activeNameset} onClose={dialogClosed} />
+      )}
+      {dialog?.kind === 'rule' && <RulePopup rule={dialog.rule} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'entries' && (
+        <EntriesEditor source={dialog.source} activeNameSet={activeNameset} onClose={dialogClosed} />
+      )}
+      {dialog?.kind === 'namesets' && <NamesetsManager activeNameSet={activeNameset} onClose={dialogClosed} />}
 
       <NamesetChooser
         isOpen={isNamesetChooserOpen}
         nameSets={nameSets}
-        activeSetId={activeTab.nameSetId}
+        activeSetId={doc.nameSetId}
         onSelect={handleSelectNameset}
         onClose={() => setIsNamesetChooserOpen(false)}
       />

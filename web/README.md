@@ -47,4 +47,6 @@ Rebuild the module (step 2) after changing the core or the bindings; Vite reload
 ## Notes
 
 - `dict.db` is about 40 MB (roughly 10 MB compressed); serve `public/data` with compression.
-- Edits are not persisted yet. The plan is to keep the database in OPFS/IndexedDB using the core's `save_db_copy()` / `db_change_count()`, with import and export of `dict.db`.
+- Dictionary edits are saved in the browser's origin private file system (OPFS). Until the first edit the bundled `dict.db` is used; after it, the stored copy is loaded instead, so a newer bundled `dict.db` does not replace it.
+- Each browser tab has its own in-memory copy. An edit takes a Web Lock, first loads any copy another tab saved since (by the file's `lastModified`), applies the change, and saves the whole file (about 65 ms for 41 MB); a `BroadcastChannel` message makes the other tabs reload it (about 0.5 s) and re-convert.
+- Importing and exporting the whole `dict.db` is not there yet.

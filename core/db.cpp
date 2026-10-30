@@ -47,6 +47,18 @@ void db_insert(std::u16string_view key, std::u16string_view value, const Priorit
     sqlite3* db = get_db_handle();
     if (!db) return;
 
+    // A name has a single translation, loaded whole: replace it. Phrases keep a list of
+    // meanings, with the new one first.
+    if (priority == NAME)
+    {
+        SqliteStmt upsert(db, "INSERT INTO names (original, translated) VALUES (?, ?) "
+                              "ON CONFLICT (original) DO UPDATE SET translated = excluded.translated");
+        upsert.bind_text16(1, key);
+        upsert.bind_text16(2, value);
+        upsert.exec();
+        return;
+    }
+
     const char* table = get_table_name(priority);
     std::string select_sql = std::string("SELECT translated FROM ") + table + " WHERE original = ?";
     SqliteStmt q(db, select_sql.c_str());

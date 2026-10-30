@@ -1,31 +1,33 @@
-import { Fragment } from 'react'
+import { Fragment, memo } from 'react'
 import type { Paragraph, Token } from '../core/types'
+import { editTarget, type EditTarget, type Role } from './editTarget'
 
 interface TokenViewProps {
   paragraphs: Paragraph[]
-  role: 'cn' | 'sv' | 'vn'
-  hoveredTokenId: number | null
-  activeTokenId: number | null
+  role: Role
   searchQuery?: string
   currentMatchIndex?: number
   onHoverToken: (id: number | null) => void
-  onClickToken: (token: Token) => void
+  // null when the click missed every token.
+  onClickToken: (token: Token | null) => void
+  onEditRequest: (target: EditTarget) => void
 }
 
-export function TokenView({
+// Hover and selection highlighting is done by Workspace with a stylesheet keyed on
+// data-tid, so moving the mouse never re-renders the tokens.
+export const TokenView = memo(function TokenView({
   paragraphs,
   role,
-  hoveredTokenId,
-  activeTokenId,
   searchQuery = '',
   currentMatchIndex = -1,
   onHoverToken,
   onClickToken,
+  onEditRequest,
 }: TokenViewProps) {
   if (paragraphs.length === 0) {
     return (
       <div className="token-empty-state">
-        <span>No text loaded</span>
+        <span>Paste Chinese text (Ctrl+V) or open a file (Ctrl+O)</span>
       </div>
     )
   }
@@ -33,47 +35,46 @@ export function TokenView({
   const query = searchQuery.trim().toLowerCase()
   let matchCounter = 0
 
+  function tokenAt(target: EventTarget): Token | null {
+    const el = (target as HTMLElement).closest<HTMLElement>('[data-tid]')
+    if (!el) return null
+    return paragraphs[Number(el.dataset.p)][Number(el.dataset.t)]
+  }
+
   return (
-    <div className={`token-canvas role-${role}`}>
+    <div
+      className={`token-canvas role-${role}`}
+      onMouseOver={(e) => onHoverToken(tokenAt(e.target)?.id ?? null)}
+      onMouseLeave={() => onHoverToken(null)}
+      onClick={(e) => onClickToken(tokenAt(e.target))}
+      onContextMenu={(e) => {
+        const clicked = tokenAt(e.target)
+        const target = editTarget(e.currentTarget, paragraphs, role, clicked)
+        if (!target) return
+        e.preventDefault()
+        if (clicked) onClickToken(clicked)
+        onEditRequest(target)
+      }}
+    >
       {paragraphs.map((para, pIdx) => (
         <p key={pIdx} className="token-paragraph">
-          {para.map((token) => {
-            const isHovered = hoveredTokenId !== null && token.id === hoveredTokenId
-            const isActive = activeTokenId !== null && token.id === activeTokenId
-
-            let text = ''
-            let hasSpaceBefore = false
-
-            if (role === 'cn') {
-              text = token.cn
-              hasSpaceBefore = token.cnSpace
-            } else if (role === 'sv') {
-              text = token.sv
-              hasSpaceBefore = token.svSpace
-            } else {
-              text = token.vn
-              hasSpaceBefore = token.vnSpace
-            }
-
+          {para.map((token, tIdx) => {
+            const text = token[role]
             if (!text) return null
+
+            const hasSpaceBefore = role === 'cn' ? token.cnSpace : role === 'sv' ? token.svSpace : token.vnSpace
 
             // Search matching for Vietnamese view
             let isMatch = false
             let isCurrentMatch = false
-
             if (role === 'vn' && query && text.toLowerCase().includes(query)) {
               isMatch = true
-              if (matchCounter === currentMatchIndex) {
-                isCurrentMatch = true
-              }
+              isCurrentMatch = matchCounter === currentMatchIndex
               matchCounter++
             }
 
             const classes = [
               'token',
-              token.isRule ? 'token-rule' : '',
-              isHovered ? 'hovered' : '',
-              isActive ? 'active' : '',
               isMatch ? 'search-match' : '',
               isCurrentMatch ? 'search-match-active' : '',
             ]
@@ -81,13 +82,13 @@ export function TokenView({
               .join(' ')
 
             return (
-              <Fragment key={token.id}>
-                {hasSpaceBefore && <span className="space"> </span>}
+              <Fragment key={tIdx}>
+                {hasSpaceBefore && ' '}
                 <span
                   className={classes}
-                  onMouseEnter={() => onHoverToken(token.id)}
-                  onMouseLeave={() => onHoverToken(null)}
-                  onClick={() => onClickToken(token)}
+                  data-tid={token.id}
+                  data-p={pIdx}
+                  data-t={tIdx}
                   title={`Chinese: ${token.cn}\nHán Việt: ${token.sv}\nVietnamese: ${token.vn}${
                     token.isRule ? '\n(Rule Matched)' : ''
                   }`}
@@ -101,5 +102,4 @@ export function TokenView({
       ))}
     </div>
   )
-}
-
+})
