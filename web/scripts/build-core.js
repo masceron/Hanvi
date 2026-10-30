@@ -246,23 +246,34 @@ function buildOpenccDictionaries(env) {
 
 // Compress dict.db into dict.db.gz to satisfy Cloudflare Pages' 25MB asset limit
 function compressDictionary() {
+  const rootDb = path.resolve(rootDir, 'dict.db')
   const publicDataDir = path.resolve(rootDir, 'web/public/data')
   const uncompressedDb = path.join(publicDataDir, 'dict.db')
   const compressedDb = path.join(publicDataDir, 'dict.db.gz')
 
+  fs.mkdirSync(publicDataDir, { recursive: true })
+
+  // Determine source database: prioritize CMake-copied file if present, otherwise root dict.db
+  const sourceDb = fs.existsSync(uncompressedDb) ? uncompressedDb : rootDb
+  if (fs.existsSync(sourceDb)) {
+    const sourceMtime = fs.statSync(sourceDb).mtimeMs
+    const targetMtime = fs.existsSync(compressedDb) ? fs.statSync(compressedDb).mtimeMs : 0
+
+    if (sourceMtime > targetMtime || !fs.existsSync(compressedDb)) {
+      console.log('[build-core] Compressing dict.db with gzip for Cloudflare Pages...')
+      const data = fs.readFileSync(sourceDb)
+      const gz = zlib.gzipSync(data, { level: 9 })
+      fs.writeFileSync(compressedDb, gz)
+
+      const rawMB = (data.length / (1024 * 1024)).toFixed(2)
+      const gzMB = (gz.length / (1024 * 1024)).toFixed(2)
+      console.log(`[build-core] Compressed dict.db: ${rawMB} MB -> ${gzMB} MB (saved to dict.db.gz)`)
+    }
+  }
+
+  // Ensure uncompressed copy in public/data is removed so it is not bundled into dist/
   if (fs.existsSync(uncompressedDb)) {
-    console.log('[build-core] Compressing dict.db with gzip for Cloudflare Pages...')
-    const data = fs.readFileSync(uncompressedDb)
-    const gz = zlib.gzipSync(data, { level: 9 })
-    fs.writeFileSync(compressedDb, gz)
-
-    const rawMB = (data.length / (1024 * 1024)).toFixed(2)
-    const gzMB = (gz.length / (1024 * 1024)).toFixed(2)
-    console.log(`[build-core] Compressed dict.db: ${rawMB} MB -> ${gzMB} MB (saved to dict.db.gz)`)
-
-    // Remove uncompressed file from public/data so it is not bundled into dist/
     fs.unlinkSync(uncompressedDb)
-    console.log('[build-core] Removed uncompressed dict.db to stay under Cloudflare Pages 25MB limit.')
   }
 
   // Also clean up dist/data/dict.db if a previous build left it behind
