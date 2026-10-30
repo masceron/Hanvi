@@ -88,6 +88,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          lfs: true
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -183,6 +185,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          lfs: true
 
       - name: Install Build Tools
         run: sudo apt-get update && sudo apt-get install -y ninja-build
