@@ -317,7 +317,7 @@ When porting to Android:
 
 The core is plain C++23 with no platform-specific code, so it builds for WebAssembly unchanged:
 
-- **Build only the core.** Configure with `emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release`; the desktop app and CLI are switched off automatically. Bindings and the browser UI live outside CMake, like the Android JNI layer.
+- **Build only the core.** Configure with `emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release`; the desktop app and CLI are switched off automatically. The embind bindings (`web/wasm/`) and the React UI live in `web/`, like the Android JNI layer; see [web/README.md](../web/README.md).
 - **No threads needed.** The build is single-threaded and meant to run inside a Web Worker, so the page needs no cross-origin isolation headers. Where threads cannot be created, the dictionary loader runs its parts one after another and `load_dict()` with a callback loads inline, then calls it.
 - **Exceptions are enabled** (`-fwasm-exceptions`, set in `CompilerOptions.cmake`), since the core and OpenCC catch errors and the thread fallbacks above rely on it.
 - **Persisting edits is the caller's job.** The database file lives in Emscripten's in-memory file system. `db_change_count()` tells whether anything changed; `save_db_copy(path)` writes a consistent copy (or read the file itself) to keep in IndexedDB/OPFS and to offer for download and upload, so it can be backed up and shared.
