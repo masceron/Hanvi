@@ -36,11 +36,19 @@ function CapitalizeRow({ value, onChange }: { value: string; onChange: (text: st
   return (
     <div className="capitalize-row">
       <span className="capitalize-label">Capitalize</span>
-      {CAPITALIZE_MODES.map(({ mode, label }) => (
-        <button key={mode} className="btn btn-cap" disabled={!value} onClick={() => onChange(capitalize(value, mode))}>
-          {label}
-        </button>
-      ))}
+      <div className="capitalize-segmented">
+        {CAPITALIZE_MODES.map(({ mode, label }) => (
+          <button
+            key={mode}
+            type="button"
+            className="cap-segment-btn"
+            disabled={!value}
+            onClick={() => onChange(capitalize(value, mode))}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -48,6 +56,10 @@ function CapitalizeRow({ value, onChange }: { value: string; onChange: (text: st
 export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
   const [entry, setEntry] = useState<Lookup | null>(null)
   const [changed, setChanged] = useState(false)
+  const changedRef = useRef(false)
+  useEffect(() => {
+    changedRef.current = changed
+  }, [changed])
 
   const [storedName, setStoredName] = useState<string | null>(null)
   const [name, setName] = useState('')
@@ -155,25 +167,28 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
 
   return (
     <Modal
-      title="Change name/phrase"
+      title="Change name / phrase"
       className="dict-popup"
-      onClose={() => onClose(changed)}
-      footer={
-        <button className="btn close-popup-btn" onClick={() => onClose(changed)}>
+      onClose={() => onClose(changedRef.current)}
+      footer={(close) => (
+        <button className="btn close-popup-btn" onClick={close}>
           Close
         </button>
-      }
+      )}
     >
       <div className="popup-body dict-editor">
-        <div className="dict-original">{text}</div>
+        <div className="dict-hero-card">
+          <div className="dict-original">{text}</div>
+          <div className="dict-sv-pill">
+            <span className="dict-sv-label">Sino-Vietnamese</span>
+            <span className="dict-sv-text">{entry?.svReading ?? '…'}</span>
+          </div>
+        </div>
 
-        <section className="dict-section">
-          <h3>Sino-Vietnamese reading</h3>
-          <div className="dict-sv">{entry?.svReading ?? '…'}</div>
-        </section>
-
-        <section className="dict-section">
-          <h3>Name</h3>
+        <section className="dict-card">
+          <div className="dict-card-header">
+            <span className="dict-card-title">Name</span>
+          </div>
           <input
             className="dict-input"
             value={name}
@@ -189,7 +204,7 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
               disabled={!activeNameSet}
               onChange={(e) => setUseNameSet(e.target.checked)}
             />
-            {activeNameSet ? `Use current nameset (${activeNameSet.title})` : 'Use current nameset'}
+            <span>{activeNameSet ? `Use current nameset (${activeNameSet.title})` : 'Use current nameset'}</span>
           </label>
           <CapitalizeRow value={name} onChange={setName} />
           <div className="dict-actions">
@@ -205,8 +220,10 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
           </div>
         </section>
 
-        <section className="dict-section">
-          <h3>Phrase</h3>
+        <section className="dict-card">
+          <div className="dict-card-header">
+            <span className="dict-card-title">Phrase</span>
+          </div>
           <div
             className="chip-list"
             onDragOver={(e) => dragging.current !== null && e.preventDefault()}
@@ -230,9 +247,17 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
                 onDragOver={() => dragOver(i)}
                 onDragEnd={finishDrag}
               >
-                {meaning}
-                <button className="chip-remove" title="Remove this meaning" onClick={() => removeMeaning(meaning)}>
-                  <CloseIcon width={12} height={12} />
+                <span>{meaning}</span>
+                <button
+                  type="button"
+                  className="chip-remove"
+                  title="Remove this meaning"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void removeMeaning(meaning)
+                  }}
+                >
+                  <CloseIcon width={10} height={10} />
                 </button>
               </span>
             ))}
@@ -240,7 +265,7 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
           <input
             className="dict-input"
             value={newMeaning}
-            placeholder="New meaning"
+            placeholder="New meaning…"
             disabled={!entry}
             onChange={(e) => setNewMeaning(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void addMeaning()}

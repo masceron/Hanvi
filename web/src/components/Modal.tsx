@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { CloseIcon } from '../icons/SvgIcons'
 
 // Open modals, topmost last: Escape closes only the topmost one.
@@ -16,14 +16,26 @@ interface ModalProps {
   title: string
   className: string
   onClose: () => void
-  footer?: ReactNode
+  footer?: ReactNode | ((close: () => void) => ReactNode)
   children: ReactNode
 }
 
 export function Modal({ title, className, onClose, footer, children }: ModalProps) {
-  const close = useRef(onClose)
+  const [isClosing, setIsClosing] = useState(false)
+  const isClosingRef = useRef(false)
+
+  const handleClose = () => {
+    if (isClosingRef.current) return
+    isClosingRef.current = true
+    setIsClosing(true)
+    setTimeout(() => {
+      onClose()
+    }, 180)
+  }
+
+  const close = useRef(handleClose)
   useEffect(() => {
-    close.current = onClose
+    close.current = handleClose
   })
 
   useEffect(() => {
@@ -35,16 +47,23 @@ export function Modal({ title, className, onClose, footer, children }: ModalProp
   }, [])
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`modal ${className}`} role="dialog" aria-label={title}>
+    <div
+      className={`modal-backdrop ${isClosing ? 'modal-backdrop-exit' : ''}`}
+      onMouseDown={(e) => e.target === e.currentTarget && handleClose()}
+    >
+      <div className={`modal ${className} ${isClosing ? 'modal-exit' : ''}`} role="dialog" aria-label={title}>
         <div className="popup-header">
           <span className="popup-title">{title}</span>
-          <button className="icon-btn close-btn" onClick={onClose} title="Close (Esc)">
+          <button className="icon-btn close-btn" onClick={handleClose} title="Close (Esc)">
             <CloseIcon />
           </button>
         </div>
         {children}
-        {footer && <div className="popup-footer">{footer}</div>}
+        {footer && (
+          <div className="popup-footer">
+            {typeof footer === 'function' ? footer(handleClose) : footer}
+          </div>
+        )}
       </div>
     </div>
   )

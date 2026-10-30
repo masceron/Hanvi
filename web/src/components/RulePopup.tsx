@@ -13,11 +13,11 @@ export function RulePopup({ rule, onClose }: RulePopupProps) {
       title="Grammar rule"
       className="rule-popup"
       onClose={onClose}
-      footer={
-        <button className="btn close-popup-btn" onClick={onClose}>
+      footer={(close) => (
+        <button className="btn close-popup-btn" onClick={close}>
           Close
         </button>
-      }
+      )}
     >
       <div className="popup-body">
         <table className="rule-table">
