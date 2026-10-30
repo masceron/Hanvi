@@ -18,3 +18,16 @@ export interface NameSet {
   id: number
   title: string
 }
+
+export interface TabData {
+  id: string
+  title: string
+  fileName?: string
+  rawText: string
+  pages: string[]
+  currentPage: number
+  pageLength: number
+  nameSetId: number
+  document: Paragraph[] | null
+  isEditing: boolean
+}
