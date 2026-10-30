@@ -9,10 +9,6 @@
 #include <filesystem>
 #include <SimpleConverter.hpp>
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 namespace hanvi {
 
 namespace
@@ -1124,7 +1120,6 @@ std::u16string convert_plain(const std::u16string_view input, const std::functio
     Progress progress(progress_callback);
     auto [text, _] = convert_recursive_plain(input, cap_next, progress, in_quote, in_single_quote);
 
-    // trim whitespace
     size_t start = 0;
     while (start < text.size() && (text[start] == u' ' || text[start] == u'\t' || text[start] == u'\r' || text[start] == u'\n'))
     {
@@ -1138,38 +1133,14 @@ std::u16string convert_plain(const std::u16string_view input, const std::functio
     return text.substr(start, end - start);
 }
 
+// Fallback when init_opencc() was not called: look relative to the working directory.
 static std::string get_opencc_config_path()
 {
-    if (std::filesystem::exists("opencc/t2s.json"))
+    for (const char* candidate : {"opencc/t2s.json", "t2s.json"})
     {
-        return std::filesystem::absolute("opencc/t2s.json").string();
-    }
-    if (std::filesystem::exists("t2s.json"))
-    {
-        return std::filesystem::absolute("t2s.json").string();
-    }
-    std::filesystem::path p;
-#ifdef _WIN32
-    wchar_t exe_path[MAX_PATH];
-    if (GetModuleFileNameW(nullptr, exe_path, MAX_PATH) > 0)
-    {
-        p = exe_path;
-    }
-#elif defined(__linux__)
-    std::error_code ec;
-    p = std::filesystem::read_symlink("/proc/self/exe", ec);
-#endif
-    if (!p.empty())
-    {
-        auto candidate = p.parent_path() / "opencc" / "t2s.json";
         if (std::filesystem::exists(candidate))
         {
-            return candidate.string();
-        }
-        candidate = p.parent_path() / "t2s.json";
-        if (std::filesystem::exists(candidate))
-        {
-            return candidate.string();
+            return std::filesystem::absolute(candidate).string();
         }
     }
     return {};
@@ -1220,7 +1191,7 @@ std::u16string to_simplified_chinese(const std::u16string_view input)
         }
         else
         {
-            std::cerr << "OpenCC t2s.json not found in application directory or search paths." << std::endl;
+            std::cerr << "OpenCC t2s.json not found; pass its path to init_opencc()." << std::endl;
         }
     }
 

@@ -891,8 +891,6 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
 }
 
 #ifndef Q_OS_WIN
-// Frameless windows get no resize borders from the window manager, so emulate
-// them here; on Windows this is done by WM_NCHITTEST in nativeEvent.
 Qt::Edges MainWindow::resize_edges_at(const QPointF &pos) const {
     if (isMaximized() || isFullScreen()) return {};
 

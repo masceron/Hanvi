@@ -91,7 +91,10 @@ int main(int argc, char* argv[])
     std::print("Loading dictionaries...");
     std::fflush(stdout);
 
-    // Synchronous dictionary load on main thread
+    if (const QString opencc = QCoreApplication::applicationDirPath() + "/opencc/t2s.json"; QFile::exists(opencc))
+    {
+        init_opencc(opencc.toLocal8Bit().toStdString());
+    }
     load_dict();
 
     std::println(" {}s.", static_cast<double>(timer_dict.elapsed()) / 1000);

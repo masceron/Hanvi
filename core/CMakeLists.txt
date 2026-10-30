@@ -46,11 +46,18 @@ if (COMPILER_RUNTIMES AND TARGET Dictionaries)
     add_dependencies(Dictionaries copy_compiler_runtimes_to_opencc)
 endif ()
 
-# Expose OpenCC data paths to parent scope for packaging/deployment
+# Expose OpenCC data paths to parent scope for packaging/deployment.
+# Cross-compiled builds take the .ocd2 dictionaries from a native build's <build>/opencc folder.
+set(HANVI_OPENCC_DATA_DIR "" CACHE PATH "Prebuilt OpenCC .ocd2 dictionaries, for cross-compiled builds")
+if (HANVI_BUILD_OPENCC_DICTIONARIES)
+    set(_ocd2_dir "${opencc_BINARY_DIR}/data")
+else ()
+    set(_ocd2_dir "${HANVI_OPENCC_DATA_DIR}")
+endif ()
 set(OPENCC_CONFIG_FILE "${opencc_SOURCE_DIR}/data/config/t2s.json" CACHE INTERNAL "OpenCC config path")
 set(OPENCC_DATA_FILES "${opencc_SOURCE_DIR}/data/config/t2s.json")
 foreach (_dict TSPhrases TSCharacters TSCharactersExt CJK_Compatibility_Ideographs)
-    list(APPEND OPENCC_DATA_FILES "${opencc_BINARY_DIR}/data/${_dict}.ocd2")
+    list(APPEND OPENCC_DATA_FILES "${_ocd2_dir}/${_dict}.ocd2")
 endforeach ()
 set(OPENCC_DATA_FILES "${OPENCC_DATA_FILES}" PARENT_SCOPE)
 

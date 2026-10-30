@@ -135,7 +135,6 @@ void DocumentSession::trigger_context_menu(const uint32_t clicked_token_id)
 {
     if (!doc_) return;
 
-    // Check if the current selection contains any rule tokens
     if (has_selection())
     {
         const auto [start, end] = selection_.normalized();

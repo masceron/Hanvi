@@ -13,8 +13,6 @@ void db_reorder(std::u16string_view key, const std::vector<std::u16string>& new_
 void db_remove(std::u16string_view key, Priority priority);
 void db_remove_meaning(std::u16string_view key, std::u16string_view value);
 
-// set_id == -1 selects the global table for priority (PHRASE or NAME); otherwise the entries of that nameset.
-// filter matches either column as a substring; limit == -1 returns all remaining entries.
 std::vector<Entry> db_list_entries(int set_id, Priority priority, std::u16string_view filter, int offset, int limit);
 int db_count_entries(int set_id, Priority priority);
 std::optional<std::u16string> db_get_translation(std::u16string_view key, Priority priority);

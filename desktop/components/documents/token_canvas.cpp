@@ -748,7 +748,6 @@ void TokenCanvas::contextMenuEvent(QContextMenuEvent* event)
             return;
         }
 
-        // Sino-Vietnamese: 1-to-1 word correspondence mapping to Chinese characters
         if (role_ == LanguageRole::SinoVietnamese)
         {
             QString chinese_text;

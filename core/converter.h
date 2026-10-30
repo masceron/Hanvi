@@ -27,6 +27,7 @@ std::string normalize_text_utf8(std::string_view input);
 
 } // namespace hanvi
 
+using hanvi::init_opencc;
 using hanvi::convert;
 using hanvi::convert_plain;
 using hanvi::to_simplified_chinese;

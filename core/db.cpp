@@ -149,7 +149,6 @@ void db_remove_meaning(const std::u16string_view key, const std::u16string_view 
     }
 }
 
-// Returns "<table> WHERE <condition>"; for namesets, ?1 must be bound to the set id.
 static std::string entries_source(const int set_id, const Priority priority)
 {
     if (set_id != -1) return "name_set_entries WHERE set_id = ?1";

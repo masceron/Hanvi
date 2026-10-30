@@ -7,7 +7,7 @@
 ## 1. Key Characteristics
 
 - **Zero Framework Dependencies**: No dependencies on Qt or OS-specific GUI toolkits. Standard C++23 only.
-- **Embedded Storage**: Uses an embedded SQLite 3 database (`dict.db`) via SQLite's native C API with WAL mode.
+- **Embedded Storage**: Uses an embedded SQLite 3 database (`dict.db`) via SQLite's native C API with a rollback journal.
 - **Traditional-to-Simplified Support**: Bundles OpenCC for accurate conversion from Traditional to Simplified Chinese before processing.
 - **Synchronized Multi-Role Alignment**: Provides token-level alignment between Chinese source text, Sino-Vietnamese readings (Hán Việt), and Vietnamese translations.
 - **High Performance**: In-memory prefix Trie with custom TextArena block allocator; processes millions of characters in hundreds of milliseconds.
@@ -39,7 +39,7 @@ target_link_libraries(YourTarget PRIVATE CoreLogic)
 Any application running `CoreLogic` must provide access to two asset groups:
 
 1. **`dict.db`**:
-   The SQLite database operates with `PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL;` and contains 7 core tables:
+   The SQLite database operates with `PRAGMA foreign_keys = ON; PRAGMA journal_mode = DELETE;` (WAL needs shared memory that not every target, such as browsers, provides; opening a WAL-mode file converts it) and contains 7 core tables:
    - `phrases`: `(original TEXT PRIMARY KEY, translated TEXT) WITHOUT ROWID` — Multi-word dictionary definitions (`\x1F` / ASCII Unit Separator `0x1F` separated for multiple ordered meanings, where the first meaning is the default).
    - `names`: `(original TEXT PRIMARY KEY, translated TEXT) WITHOUT ROWID` — Proper noun dictionary definitions.
    - `sv_readings`: `(original CHAR(1) PRIMARY KEY, translated TEXT) WITHOUT ROWID` — Character-by-character Sino-Vietnamese readings (Hán Việt). Loaded in memory by `char32_t` code points (supporting BMP and surrogate pairs).
@@ -57,10 +57,8 @@ Any application running `CoreLogic` must provide access to two asset groups:
    - `CJK_Compatibility_Ideographs.ocd2`
 
    *Lookup strategy*:
-   - Can be explicitly specified at runtime via `hanvi::init_opencc("path/to/t2s.json")`. This is **required** on Android, where neither fallback below finds anything.
-   - If unconfigured, automatically searches:
-     1. Relative paths: `./opencc/t2s.json` or `./t2s.json` (relative to current working directory).
-     2. Executable directory: `<exe_dir>/opencc/t2s.json` or `<exe_dir>/t2s.json` (Windows and Linux).
+   - Frontends pass the location with `hanvi::init_opencc("path/to/t2s.json")`; the core has no platform-specific way to find its own install folder (the desktop app and CLI pass `<exe dir>/opencc/t2s.json`).
+   - If unconfigured, it falls back to `./opencc/t2s.json` or `./t2s.json` relative to the current working directory.
 
 ---
 
@@ -96,7 +94,8 @@ hanvi::init_opencc("path/to/opencc/t2s.json");
 
 // Or asynchronous with a callback:
 hanvi::load_dict("path/to/dict.db", []() {
-    // Called on a detached worker thread once the Trie & maps are loaded.
+    // Called on a detached worker thread once the Trie & maps are loaded
+    // (or inline, after loading, on targets without threads).
     // Do not convert text before this fires.
 });
 
@@ -310,3 +309,15 @@ When porting to Android:
    - `core/CMakeLists.txt` automatically sets `HANVI_BUILD_OPENCC_DICTIONARIES=OFF` when cross-compiling (`ANDROID` or `CMAKE_CROSSCOMPILING`). This avoids attempting to run target-compiled binary dictionary tools on the host machine.
    - The `.ocd2` files must therefore come from a host (desktop) build. A desktop or CLI build collects them, together with `t2s.json`, in `<build>/opencc/`. Copy that folder to the app's `assets/opencc/`.
 
+   - For a build that packages the data itself (such as the WebAssembly build), point `-DHANVI_OPENCC_DATA_DIR=<build>/opencc` at that folder instead.
+
+---
+
+## 7. WebAssembly (Emscripten) Notes
+
+The core is plain C++23 with no platform-specific code, so it builds for WebAssembly unchanged:
+
+- **Build only the core.** Configure with `emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release`; the desktop app and CLI are switched off automatically. Bindings and the browser UI live outside CMake, like the Android JNI layer.
+- **No threads needed.** The build is single-threaded and meant to run inside a Web Worker, so the page needs no cross-origin isolation headers. Where threads cannot be created, the dictionary loader runs its parts one after another and `load_dict()` with a callback loads inline, then calls it.
+- **Exceptions are enabled** (`-fwasm-exceptions`, set in `CompilerOptions.cmake`), since the core and OpenCC catch errors and the thread fallbacks above rely on it.
+- **Persisting edits is the caller's job.** The database file lives in Emscripten's in-memory file system. `db_change_count()` tells whether anything changed; `save_db_copy(path)` writes a consistent copy (or read the file itself) to keep in IndexedDB/OPFS and to offer for download and upload, so it can be backed up and shared.

@@ -1,9 +1,17 @@
 cmake_path(GET CMAKE_CXX_COMPILER PARENT_PATH _compiler_dir)
 
+# ---- WebAssembly exceptions -------------------------------------------------
+# Emscripten turns C++ exception catching off by default, but the core and
+# OpenCC rely on it (e.g. std::async falling back when threads are missing).
+if (EMSCRIPTEN)
+    add_compile_options(-fwasm-exceptions)
+    add_link_options(-fwasm-exceptions)
+endif ()
+
 # ---- Linker ------------------------------------------------------------------
 # Clang on Linux defaults to GNU ld, which supports neither Clang LTO (without
 # the gold plugin) nor --icf; llvm-mingw already defaults to lld.
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND UNIX AND NOT APPLE)
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND UNIX AND NOT APPLE AND NOT EMSCRIPTEN)
     find_program(LLD_EXECUTABLE ld.lld HINTS "${_compiler_dir}" REQUIRED)
     set(CMAKE_LINKER_TYPE LLD)
 endif ()
@@ -33,6 +41,12 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # Qt requires -fPIC; without it at the LTO link step GCC emits PIE code
     # with copy relocations against Qt data and the app crashes on startup.
     set(_release_link -s -Wl,--gc-sections -flto-partition=one -fPIC)
+elseif (EMSCRIPTEN)
+    # emcc already strips and garbage-collects sections in optimized builds;
+    # its `-s` means a setting, not strip.
+    set(_warn         -Wall -Wextra -Werror -pedantic-errors)
+    set(_release      "")
+    set(_release_link "")
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set(_warn         -Wall -Wextra -Werror -pedantic-errors)
     set(_release      -fomit-frame-pointer -ffunction-sections -fdata-sections)

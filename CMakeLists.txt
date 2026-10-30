@@ -11,6 +11,11 @@ set(CMAKE_AUTOUIC ON)
 option(HANVI_IPO "Compile with IPO" ON)
 option(HANVI_BUILD_DESKTOP "Build Desktop Qt application" ON)
 option(HANVI_BUILD_CLI "Build CLI conversion tool" ON)
+# WebAssembly builds only the core; the browser UI lives outside CMake.
+if (EMSCRIPTEN)
+    set(HANVI_BUILD_DESKTOP OFF)
+    set(HANVI_BUILD_CLI OFF)
+endif ()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CompilerOptions)

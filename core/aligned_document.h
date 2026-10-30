@@ -114,7 +114,7 @@ namespace Typography
             {
                 return false;
             }
-            // Handle decimal point or comma between digits (e.g. 3.14 or 15,000)
+            // Handle decimal point or comma between digits
             if ((prev_tok->cn == u"." || prev_tok->cn == u",") &&
                 prev_prev_tok != nullptr && !prev_prev_tok->cn.empty() &&
                 is_digit(prev_prev_tok->cn.back()) && is_digit(cur_tok->cn.front()))
