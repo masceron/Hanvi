@@ -39,6 +39,20 @@ async function download(name: string): Promise<Uint8Array> {
   return new Uint8Array(await response.arrayBuffer())
 }
 
+async function downloadDb(): Promise<Uint8Array> {
+  try {
+    const response = await fetch(DATA_URL + 'dict.db.gz')
+    if (response.ok && response.body) {
+      const ds = new DecompressionStream('gzip')
+      const decompressed = response.body.pipeThrough(ds)
+      return new Uint8Array(await new Response(decompressed).arrayBuffer())
+    }
+  } catch (err) {
+    console.warn('Could not load dict.db.gz, falling back to dict.db:', err)
+  }
+  return download('dict.db')
+}
+
 async function openStorage(): Promise<FileSystemDirectoryHandle | null> {
   try {
     return await navigator.storage.getDirectory()
@@ -52,7 +66,7 @@ async function storedFile(): Promise<File | null> {
   try {
     return await (await storage.getFileHandle(STORED_NAME)).getFile()
   } catch {
-    return null // not saved yet
+    return null
   }
 }
 
@@ -69,7 +83,7 @@ async function load() {
   const stored = await storedFile()
   const [module, db, ...opencc] = await Promise.all([
     createHanvi(),
-    stored ? stored.arrayBuffer().then((buffer) => new Uint8Array(buffer)) : download('dict.db'),
+    stored ? stored.arrayBuffer().then((buffer) => new Uint8Array(buffer)) : downloadDb(),
     ...OPENCC_FILES.map((name) => download(`opencc/${name}`)),
   ])
   module.FS.mkdirTree('/data/opencc', 0o777)

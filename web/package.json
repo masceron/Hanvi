@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build:core": "node scripts/build-core.js",
+    "build": "npm run build:core && tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },

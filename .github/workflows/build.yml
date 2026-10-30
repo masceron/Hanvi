@@ -3,6 +3,27 @@ name: Build Hanvi
 on:
   push:
     branches: [ "master", "main" ]
+    paths:
+      - 'core/**'
+      - 'desktop/**'
+      - 'cli/**'
+      - 'cmake/**'
+      - '3rdparty/**'
+      - 'CMakeLists.txt'
+      - 'dict.db'
+      - 'web/**'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target to build'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - desktop
+          - web
 
 permissions:
   contents: write
@@ -12,7 +33,43 @@ env:
   AQT_SOURCE: 'git+https://github.com/miurahr/aqtinstall.git'
 
 jobs:
-  build:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      desktop: ${{ steps.filter.outputs.desktop }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+
+      - name: Filter Changed Paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            desktop:
+              - 'core/**'
+              - 'desktop/**'
+              - 'cli/**'
+              - 'cmake/**'
+              - '3rdparty/**'
+              - 'CMakeLists.txt'
+              - 'dict.db'
+              - '.github/workflows/build.yml'
+            web:
+              - 'core/**'
+              - 'web/**'
+              - 'CMakeLists.txt'
+              - 'dict.db'
+              - '.github/workflows/build.yml'
+
+  build-desktop:
+    name: Build Desktop (${{ matrix.artifact }})
+    needs: changes
+    if: ${{ needs.changes.outputs.desktop == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.target == 'all' || inputs.target == 'desktop')) }}
     strategy:
       fail-fast: false
       matrix:
@@ -29,85 +86,143 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v6
 
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v4
-      with:
-        version: ${{ env.QT_VERSION }}
-        host: ${{ matrix.qt_host }}
-        target: 'desktop'
-        arch: ${{ matrix.qt_arch }}
-        aqtsource: ${{ env.AQT_SOURCE }}
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: ${{ matrix.qt_host }}
+          target: 'desktop'
+          arch: ${{ matrix.qt_arch }}
+          aqtsource: ${{ env.AQT_SOURCE }}
 
-    - name: Install LLVM-MinGW
-      if: runner.os == 'Windows'
-      run: |
-        curl -L -o llvm-mingw.zip https://github.com/mstorsjo/llvm-mingw/releases/download/nightly/llvm-mingw-nightly-ucrt-x86_64.zip
-        7z x llvm-mingw.zip -o"C:\" -y
-        echo "C:\llvm-mingw-nightly-ucrt-x86_64\bin" >> $env:GITHUB_PATH
+      - name: Install LLVM-MinGW
+        if: runner.os == 'Windows'
+        run: |
+          curl -L -o llvm-mingw.zip https://github.com/mstorsjo/llvm-mingw/releases/download/nightly/llvm-mingw-nightly-ucrt-x86_64.zip
+          7z x llvm-mingw.zip -o"C:\" -y
+          echo "C:\llvm-mingw-nightly-ucrt-x86_64\bin" >> $env:GITHUB_PATH
 
-    # Clang builds against the runner's libstdc++, so the archive runs on
-    # distributions at least as new as ubuntu-latest.
-    - name: Install LLVM
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ninja-build 7zip libgl-dev libegl-dev libxkbcommon-dev
-        curl -sSfL -o llvm.sh https://apt.llvm.org/llvm.sh
-        sudo bash llvm.sh
-        ls -d /usr/lib/llvm-*/bin | sort -V | tail -n 1 >> "$GITHUB_PATH"
+      - name: Install LLVM
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build 7zip libgl-dev libegl-dev libxkbcommon-dev
+          curl -sSfL -o llvm.sh https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh
+          ls -d /usr/lib/llvm-*/bin | sort -V | tail -n 1 >> "$GITHUB_PATH"
 
-    - name: Configure CMake
-      run: cmake -B build -S . -G "Ninja" -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Release
+      - name: Configure CMake
+        run: cmake -B build -S . -G "Ninja" -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Release
 
-    - name: Build
-      run: cmake --build build --config Release -j 16
+      - name: Build
+        run: cmake --build build --config Release -j 16
 
-    - name: Create Portable Archive
-      run: cmake --build build --target MakePortableZip --config Release -j 16
+      - name: Create Portable Archive
+        run: cmake --build build --target MakePortableZip --config Release -j 16
 
-    - name: Upload Archive
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ matrix.artifact }}
-        path: build/Hanvi.7z
+      - name: Upload Archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: build/Hanvi.7z
 
-  release:
-    needs: build
+  release-desktop:
+    name: Release Desktop
+    needs: [changes, build-desktop]
+    if: ${{ needs.changes.outputs.desktop == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.target == 'all' || inputs.target == 'desktop')) }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
+      - name: Checkout code
+        uses: actions/checkout@v6
 
-    - name: Download Archives
-      uses: actions/download-artifact@v4
-      with:
-        path: dist
+      - name: Download Archives
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
 
-    - name: Name Archives
-      run: |
-        mv dist/windows/Hanvi.7z dist/Hanvi-windows-x64.7z
-        mv dist/linux/Hanvi.7z dist/Hanvi-linux-x64.7z
+      - name: Name Archives
+        run: |
+          mv dist/windows/Hanvi.7z dist/Hanvi-windows-x64.7z
+          mv dist/linux/Hanvi.7z dist/Hanvi-linux-x64.7z
 
-    - name: Update Nightly Tag
-      run: |
-        git config user.name "GitHub Actions"
-        git config user.email "actions@github.com"
-        # Force create/update the tag locally
-        git tag -fa nightly -m "Hanvi"
-        git push -f origin nightly
+      - name: Update Nightly Tag
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          # Force create/update the tag locally
+          git tag -fa nightly -m "Hanvi"
+          git push -f origin nightly
 
-    - name: Update Nightly Release
-      uses: softprops/action-gh-release@v3
-      with:
-        tag_name: nightly
-        name: Hanvi
-        body: "Latest automatic build of Hanvi."
-        files: |
-          dist/Hanvi-windows-x64.7z
-          dist/Hanvi-linux-x64.7z
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update Nightly Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: nightly
+          name: Hanvi
+          body: "Latest automatic build of Hanvi."
+          files: |
+            dist/Hanvi-windows-x64.7z
+            dist/Hanvi-linux-x64.7z
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-web:
+    name: Deploy Web to Cloudflare Pages
+    needs: changes
+    if: ${{ needs.changes.outputs.web == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.target == 'all' || inputs.target == 'web')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install Build Tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: 'web/package-lock.json'
+
+      - name: Setup Emscripten
+        uses: emscripten-core/setup-emsdk@v15
+        with:
+          version: 'latest'
+
+      - name: Install Emscripten TypeScript compiler
+        run: |
+          cd "$EMSDK/upstream/emscripten"
+          npm ci
+
+      - name: Install Web Dependencies
+        run: |
+          cd web
+          npm ci
+
+      - name: Build Web (Core WASM & Vite)
+        run: |
+          cd web
+          npm run build
+
+      - name: Ensure Cloudflare Pages Project Exists
+        run: npx wrangler pages project create ${{ vars.CLOUDFLARE_PROJECT_NAME || 'hanvi' }} --production-branch=${{ github.ref_name }} || true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy web/dist --project-name=${{ vars.CLOUDFLARE_PROJECT_NAME || 'hanvi' }} --branch=${{ github.ref_name }}
