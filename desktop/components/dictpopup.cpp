@@ -327,20 +327,20 @@ void DictPopup::load_data(const QString& selected_chinese_text) const
         {
             set_name_found = true;
             ui->use_current_nameset->setCheckState(Qt::CheckState::Checked);
-            ui->current_name->setText(to_qstring(res_set.name));
+            ui->current_name->setText(to_qstring(res_set.name.str()));
         }
     }
 
     const auto res = dictionary.find_exact(q_to_u16(selected_chinese_text));
     if (!set_name_found && !res.name.isNull())
     {
-        ui->current_name->setText(to_qstring(res.name));
+        ui->current_name->setText(to_qstring(res.name.str()));
         ui->use_current_nameset->setChecked(false);
     }
 
     if (!res.full_phrase.isNull())
     {
-        const auto phrases = res.full_phrase.split(u'\x1F');
+        const auto phrases = res.full_phrase.split('\x1F');
         for (const auto& phrase : phrases)
         {
             auto* item = new QListWidgetItem(to_qstring(phrase));

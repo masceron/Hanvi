@@ -401,7 +401,7 @@ static void convert_recursive_aligned(const std::u16string_view& input, int star
                 tok.id = ++token_counter;
                 tok.cn = std::u16string(input.substr(i, match.length));
                 tok.sv = std::move(sv);
-                tok.vn = std::u16string(match.translation);
+                tok.vn = match.translation.str();
 
                 i += match.length;
                 progress.update(match.length);
@@ -426,7 +426,7 @@ static void convert_recursive_aligned(const std::u16string_view& input, int star
             tok.id = ++token_counter;
             tok.cn = std::u16string(input.substr(i, length));
             tok.sv = std::move(sv);
-            tok.vn = std::u16string(translation);
+            tok.vn = translation.str();
 
             i += length;
             progress.update(length);
@@ -520,7 +520,7 @@ static void convert_recursive_aligned(const std::u16string_view& input, int star
                         translation = res.name;
                         break;
                     }
-                    if (const auto phrase = res.phrase(); !phrase.isNull())
+                    if (const auto phrase = res.phrase; !phrase.isNull())
                     {
                         length = try_len;
                         translation = phrase;
@@ -535,7 +535,7 @@ static void convert_recursive_aligned(const std::u16string_view& input, int star
             }
 
             std::u16string sv = get_sv(input.substr(i, length));
-            std::u16string trans(translation);
+            std::u16string trans = translation.str();
 
             if (cap_next)
             {
@@ -775,7 +775,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
         {
             if (Match match = name_set_dictionary.find(input, static_cast<int>(i)); match.length > 0 && match.priority == NAME)
             {
-                std::u16string trans(match.translation);
+                std::u16string trans = match.translation.str();
                 if (cap_next)
                 {
                     if (!trans.empty() && is_lower_char16(trans[0])) trans[0] = to_upper_char16(trans[0]);
@@ -801,7 +801,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
 
         if (length > 0 && priority == NAME)
         {
-            std::u16string trans(translation);
+            std::u16string trans = translation.str();
             if (cap_next)
             {
                 if (!trans.empty() && is_lower_char16(trans[0])) trans[0] = to_upper_char16(trans[0]);
@@ -903,7 +903,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
                         translation = res.name;
                         break;
                     }
-                    if (const auto phrase = res.phrase(); !phrase.isNull())
+                    if (const auto phrase = res.phrase; !phrase.isNull())
                     {
                         length = try_len;
                         translation = phrase;
@@ -917,7 +917,7 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
                 goto process_single_char;
             }
 
-            std::u16string trans(translation);
+            std::u16string trans = translation.str();
             if (cap_next)
             {
                 if (!trans.empty() && is_lower_char16(trans[0])) trans[0] = to_upper_char16(trans[0]);

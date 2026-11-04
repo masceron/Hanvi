@@ -1,4 +1,5 @@
 #include "structures.h"
+#include "unicode_utils.h"
 #include <algorithm>
 #include <cstring>
 #include <ranges>
@@ -14,10 +15,27 @@ static constexpr uintptr_t TAG_COMPLEX = 0x3;
 namespace {
     struct ComplexNodeData
     {
-        const char16_t* name = nullptr;
-        const char16_t* phrase = nullptr;
+        const char* name = nullptr;
+        const char* phrase = nullptr;
         std::vector<Rule> rules;
     };
+
+    // TextArena::allocate puts the text's byte length, then its first meaning's, before it.
+    constexpr size_t TEXT_HEADER = 2 * sizeof(uint16_t);
+
+    ArenaText whole_text(const char* text)
+    {
+        uint16_t len;
+        std::memcpy(&len, text - TEXT_HEADER, sizeof(len));
+        return {text, len};
+    }
+
+    ArenaText first_meaning(const char* text)
+    {
+        uint16_t len;
+        std::memcpy(&len, text - sizeof(uint16_t), sizeof(len));
+        return {text, len};
+    }
 
     struct ChildHeader
     {
@@ -55,24 +73,6 @@ namespace {
             return aligned_offset + cap * sizeof(TrieNode*);
         }
     };
-
-    std::vector<std::u16string_view> split_u16(std::u16string_view str, const char16_t sep)
-    {
-        std::vector<std::u16string_view> result;
-        size_t start = 0;
-        while (start < str.size())
-        {
-            const size_t pos = str.find(sep, start);
-            if (pos == std::u16string_view::npos)
-            {
-                result.push_back(str.substr(start));
-                break;
-            }
-            result.push_back(str.substr(start, pos - start));
-            start = pos + 1;
-        }
-        return result;
-    }
 
     std::u16string join_u16(const std::vector<std::u16string>& parts, const char16_t sep)
     {
@@ -114,42 +114,85 @@ NodePool::~NodePool()
     clear();
 }
 
-const char16_t* TextArena::allocate(const std::u16string_view str)
+const char* TextArena::allocate(const std::u16string_view str)
 {
-    const size_t len = str.length();
-    int sep = -1;
-    for (size_t i = 0; i < len; ++i)
-    {
-        if (str[i] == u'\x1F')
-        {
-            sep = static_cast<int>(i);
-            break;
-        }
-    }
-    const uint16_t first_len = sep >= 0 ? static_cast<uint16_t>(sep) : static_cast<uint16_t>(len);
-    const auto total_len = static_cast<uint16_t>(len);
+    char* header = reserve(max_utf8_size(str.length()));
+    char* text = header + TEXT_HEADER;
+    const size_t sep = std::min(str.find(u'\x1F'), str.length());
+    char* first_end = encode_utf8(str.substr(0, sep), text);
+    return commit(header, first_end, encode_utf8(str.substr(sep), first_end));
+}
 
-    size_t offset = (current_block_offset + 2 + 3) & ~static_cast<size_t>(3);
+const char* TextArena::allocate(const std::string_view utf8)
+{
+    char* header = reserve(utf8.size());
+    char* text = header + TEXT_HEADER;
+    if (!utf8.empty()) std::memcpy(text, utf8.data(), utf8.size());
+    const size_t sep = std::min(utf8.find('\x1F'), utf8.size());
+    return commit(header, text + sep, text + utf8.size());
+}
 
-    if (current_block_ptr == nullptr || offset + total_len + 1 > BLOCK_SIZE)
+// Room for a header and max_len bytes of text after it; returns where the header goes.
+char* TextArena::reserve(const size_t max_len)
+{
+    // Texts start 4-byte aligned: trie nodes keep a tag in the pointer's low two bits.
+    size_t offset = (current_block_offset + TEXT_HEADER + 3) & ~static_cast<size_t>(3);
+
+    if (current_block_ptr == nullptr || offset + max_len > BLOCK_SIZE)
     {
-        const size_t alloc_size = std::max(BLOCK_SIZE, static_cast<size_t>(8 + total_len + 1));
-        auto new_block = std::make_unique<char16_t[]>(alloc_size);
+        const size_t alloc_size = std::max(BLOCK_SIZE, TEXT_HEADER + max_len);
+        // Every byte is written before it is read, so the block is not zeroed and its unused
+        // tail never takes up memory.
+        auto new_block = std::make_unique_for_overwrite<char[]>(alloc_size);
         current_block_ptr = new_block.get();
         blocks.push_back(std::move(new_block));
-        offset = 4;
+        offset = TEXT_HEADER;
     }
+    return current_block_ptr + offset - TEXT_HEADER;
+}
 
-    current_block_ptr[offset - 2] = static_cast<char16_t>(total_len);
-    current_block_ptr[offset - 1] = static_cast<char16_t>(first_len);
-    if (total_len > 0)
+// Fills in the header reserve() made room for, once the text after it is written up to end.
+const char* TextArena::commit(char* header, const char* first_end, const char* end)
+{
+    const char* text = header + TEXT_HEADER;
+    const auto total_len = static_cast<uint16_t>(end - text);
+    const auto first_len = static_cast<uint16_t>(first_end - text);
+    std::memcpy(header, &total_len, sizeof(total_len));
+    std::memcpy(header + sizeof(uint16_t), &first_len, sizeof(first_len));
+
+    current_block_offset = static_cast<size_t>(end - current_block_ptr);
+    return text;
+}
+
+namespace {
+    std::u16string decode(const std::string_view text)
     {
-        std::memcpy(current_block_ptr + offset, str.data(), total_len * sizeof(char16_t));
+        // UTF-8 never takes fewer bytes than UTF-16 takes units.
+        std::u16string out;
+        out.resize_and_overwrite(text.size(), [text](char16_t* buffer, size_t)
+        {
+            return static_cast<size_t>(decode_utf8(text, buffer) - buffer);
+        });
+        return out;
     }
-    current_block_ptr[offset + total_len] = u'\0';
+}
 
-    current_block_offset = offset + total_len + 1;
-    return current_block_ptr + offset;
+std::u16string ArenaText::str() const
+{
+    return decode(text);
+}
+
+std::vector<std::u16string> ArenaText::split(const char sep) const
+{
+    std::vector<std::u16string> parts;
+    size_t start = 0;
+    while (start < text.size())
+    {
+        const size_t pos = std::min(text.find(sep, start), text.size());
+        parts.push_back(decode(text.substr(start, pos - start)));
+        start = pos + 1;
+    }
+    return parts;
 }
 
 void TextArena::clear()
@@ -306,62 +349,53 @@ void TrieNode::add_child(const char16_t ch, TrieNode* node)
     child_count = n + 1;
 }
 
-StringView TrieNode::get_name() const
+ArenaText TrieNode::get_name() const
 {
     const uintptr_t tag = data & TAG_MASK;
     if (tag == TAG_NAME)
     {
-        const auto* ptr = reinterpret_cast<const char16_t*>(data & ~TAG_MASK);
-        const uint16_t len = ptr[-2];
-        return {ptr, len};
+        return whole_text(reinterpret_cast<const char*>(data & ~TAG_MASK));
     }
     if (tag == TAG_COMPLEX)
     {
         const auto* comp = reinterpret_cast<const ComplexNodeData*>(data & ~TAG_MASK);
         if (comp->name)
         {
-            const uint16_t len = comp->name[-2];
-            return {comp->name, len};
+            return whole_text(comp->name);
         }
     }
     return {};
 }
 
-StringView TrieNode::get_first_phrase() const
+ArenaText TrieNode::get_first_phrase() const
 {
     const uintptr_t tag = data & TAG_MASK;
     if (tag == TAG_PHRASE) {
-        const auto* ptr = reinterpret_cast<const char16_t*>(data & ~TAG_MASK);
-        const uint16_t first_len = ptr[-1];
-        return {ptr, first_len};
+        return first_meaning(reinterpret_cast<const char*>(data & ~TAG_MASK));
     }
     if (tag == TAG_COMPLEX)
     {
         const auto* comp = reinterpret_cast<const ComplexNodeData*>(data & ~TAG_MASK);
         if (comp->phrase)
         {
-            const uint16_t first_len = comp->phrase[-1];
-            return {comp->phrase, first_len};
+            return first_meaning(comp->phrase);
         }
     }
     return {};
 }
 
-StringView TrieNode::get_full_phrase() const
+ArenaText TrieNode::get_full_phrase() const
 {
     const uintptr_t tag = data & TAG_MASK;
     if (tag == TAG_PHRASE)
     {
-        const auto* ptr = reinterpret_cast<const char16_t*>(data & ~TAG_MASK);
-        const uint16_t total_len = ptr[-2];
-        return {ptr, total_len};
+        return whole_text(reinterpret_cast<const char*>(data & ~TAG_MASK));
     }
     if (tag == TAG_COMPLEX)
     {
         if (const auto* comp = reinterpret_cast<const ComplexNodeData*>(data & ~TAG_MASK); comp->phrase)
         {
-            const uint16_t total_len = comp->phrase[-2];
-            return {comp->phrase, total_len};
+            return whole_text(comp->phrase);
         }
     }
     return {};
@@ -386,16 +420,16 @@ void TrieNode::ensure_complex()
     auto* comp = new ComplexNodeData();
     if (tag == TAG_NAME)
     {
-        comp->name = reinterpret_cast<const char16_t*>(data & ~TAG_MASK);
+        comp->name = reinterpret_cast<const char*>(data & ~TAG_MASK);
     }
     else if (tag == TAG_PHRASE)
     {
-        comp->phrase = reinterpret_cast<const char16_t*>(data & ~TAG_MASK);
+        comp->phrase = reinterpret_cast<const char*>(data & ~TAG_MASK);
     }
     data = reinterpret_cast<uintptr_t>(comp) | TAG_COMPLEX;
 }
 
-void TrieNode::set_name_ptr(const char16_t* ptr)
+void TrieNode::set_name_ptr(const char* ptr)
 {
     if (const uintptr_t tag = data & TAG_MASK; tag == TAG_NULL)
     {
@@ -412,7 +446,7 @@ void TrieNode::set_name_ptr(const char16_t* ptr)
     }
 }
 
-void TrieNode::set_phrase_ptr(const char16_t* ptr)
+void TrieNode::set_phrase_ptr(const char* ptr)
 {
     if (const uintptr_t tag = data & TAG_MASK; tag == TAG_NULL)
     {
@@ -555,13 +589,13 @@ void Dictionary::insert(const std::u16string_view key, std::u16string_view value
     else
     {
         const auto existing_full = node->get_full_phrase();
-        if (existing_full.empty())
+        if (existing_full.isEmpty())
         {
             node->set_phrase_ptr(text_arena.allocate(value));
         }
         else
         {
-            const auto list = split_u16(existing_full, u'\x1F');
+            const auto list = existing_full.split('\x1F');
             std::vector<std::u16string> str_list;
             str_list.reserve(list.size() + 1);
             str_list.emplace_back(value);
@@ -578,7 +612,7 @@ void Dictionary::insert(const std::u16string_view key, std::u16string_view value
     }
 }
 
-void Dictionary::insert_bulk(const std::u16string_view key, const Priority priority, const std::u16string_view value)
+void Dictionary::insert_bulk(const std::u16string_view key, const Priority priority, const std::string_view value)
 {
     TrieNode* node = root;
     for (const char16_t ch : key)
@@ -592,7 +626,7 @@ void Dictionary::insert_bulk(const std::u16string_view key, const Priority prior
         node = next;
     }
 
-    const char16_t* ptr = text_arena.allocate(value);
+    const char* ptr = text_arena.allocate(value);
     if (priority == NAME)
     {
         node->set_name_ptr(ptr);
@@ -611,6 +645,7 @@ ExactResult Dictionary::find_exact(const std::u16string_view key) const
     ExactResult result;
     result.name = node->get_name();
     result.full_phrase = node->get_full_phrase();
+    result.phrase = node->get_first_phrase();
     return result;
 }
 
@@ -635,9 +670,9 @@ void Dictionary::remove_meaning(const std::u16string_view key, const std::u16str
     if (!node) return;
 
     const auto existing_full = node->get_full_phrase();
-    if (existing_full.empty()) return;
+    if (existing_full.isEmpty()) return;
 
-    const auto list = split_u16(existing_full, u'\x1F');
+    const auto list = existing_full.split('\x1F');
     std::vector<std::u16string> remaining;
     remaining.reserve(list.size());
     for (const auto& item : list)
@@ -663,7 +698,7 @@ Match Dictionary::find(const std::u16string_view text, const int startPos) const
 {
     const TrieNode* node = root;
     int best_len_found = 0;
-    StringView translated;
+    ArenaText translated;
     Priority priority = NONE;
 
     std::vector<Rule>* rules = nullptr;

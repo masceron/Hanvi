@@ -146,9 +146,9 @@ void reload_dictionaries()
     reload_dict();
 }
 
-val optional_string(const StringView text)
+val optional_string(const ArenaText text)
 {
-    return text.isNull() ? val::null() : val(std::u16string(text));
+    return text.isNull() ? val::null() : val(text.str());
 }
 
 // Hán Việt reading of arbitrary text, one syllable per character, falling back to a character's
@@ -195,11 +195,11 @@ val lookup(const std::u16string& key)
     result.set("svReading", sv_reading_of(key));
 
     const ExactResult global = dictionary.find_exact(key);
-    StringView name = global.name;
+    ArenaText name = global.name;
     bool from_name_set = false;
     if (current_name_set_id != -1)
     {
-        if (const StringView set_name = name_set_dictionary.find_exact(key).name; !set_name.isNull())
+        if (const ArenaText set_name = name_set_dictionary.find_exact(key).name; !set_name.isNull())
         {
             name = set_name;
             from_name_set = true;
@@ -211,9 +211,9 @@ val lookup(const std::u16string& key)
     val phrases = val::array();
     if (!global.full_phrase.isNull())
     {
-        for (const auto& meaning : global.full_phrase.split(u'\x1F'))
+        for (const auto& meaning : global.full_phrase.split('\x1F'))
         {
-            phrases.call<void>("push", std::u16string(meaning));
+            phrases.call<void>("push", meaning);
         }
     }
     result.set("phrases", phrases);

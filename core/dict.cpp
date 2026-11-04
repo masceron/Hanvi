@@ -162,14 +162,14 @@ static void load_trie(sqlite3* db)
         SqliteStmt stmt(db, "SELECT original, translated FROM names");
         while (stmt.step())
         {
-            dictionary.insert_bulk(stmt.column_text16(0), Priority::NAME, stmt.column_text16(1));
+            dictionary.insert_bulk(stmt.column_text16(0), Priority::NAME, stmt.column_text(1));
         }
     }
     {
         SqliteStmt stmt(db, "SELECT original, translated FROM phrases");
         while (stmt.step())
         {
-            dictionary.insert_bulk(stmt.column_text16(0), Priority::PHRASE, stmt.column_text16(1));
+            dictionary.insert_bulk(stmt.column_text16(0), Priority::PHRASE, stmt.column_text(1));
         }
     }
     {
@@ -281,7 +281,7 @@ void load_name_set(const int id)
 
     while (stmt.step())
     {
-        name_set_dictionary.insert_bulk(stmt.column_text16(0), Priority::NAME, stmt.column_text16(1));
+        name_set_dictionary.insert_bulk(stmt.column_text16(0), Priority::NAME, stmt.column_text(1));
     }
 }
 

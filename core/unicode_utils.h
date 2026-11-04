@@ -83,9 +83,14 @@ inline bool is_lower_char16(const char16_t c) noexcept {
     return to_upper_char16(c) != c;
 }
 
-inline std::string to_utf8(const std::u16string_view u16) {
-    std::string out;
-    out.reserve(u16.size() * 3 / 2);
+// Most bytes UTF-8 needs for a UTF-16 string: three per unit (a surrogate pair takes four for two).
+constexpr size_t max_utf8_size(const size_t u16_size) noexcept {
+    return u16_size * 3;
+}
+
+// Writes u16 as UTF-8 to out, which has room for max_utf8_size(u16.size()) bytes, and returns
+// the end. Unpaired surrogates are kept as three-byte sequences, so decoding gives them back.
+inline char* encode_utf8(const std::u16string_view u16, char* out) noexcept {
     for (size_t i = 0; i < u16.size(); ++i) {
         char32_t cp = u16[i];
         if (is_high_surrogate(static_cast<char16_t>(cp)) && i + 1 < u16.size() && is_low_surrogate(u16[i + 1])) {
@@ -93,21 +98,56 @@ inline std::string to_utf8(const std::u16string_view u16) {
             ++i;
         }
         if (cp <= 0x7F) {
-            out.push_back(static_cast<char>(cp));
+            *out++ = static_cast<char>(cp);
         } else if (cp <= 0x7FF) {
-            out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
-            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+            *out++ = static_cast<char>(0xC0 | (cp >> 6));
+            *out++ = static_cast<char>(0x80 | (cp & 0x3F));
         } else if (cp <= 0xFFFF) {
-            out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
-            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+            *out++ = static_cast<char>(0xE0 | (cp >> 12));
+            *out++ = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            *out++ = static_cast<char>(0x80 | (cp & 0x3F));
         } else {
-            out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
-            out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
-            out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-            out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+            *out++ = static_cast<char>(0xF0 | (cp >> 18));
+            *out++ = static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+            *out++ = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            *out++ = static_cast<char>(0x80 | (cp & 0x3F));
         }
     }
+    return out;
+}
+
+// Writes what encode_utf8 wrote back as UTF-16 to out, which has room for u8.size() units, and
+// returns the end. A sequence cut short at the end is dropped.
+inline char16_t* decode_utf8(const std::string_view u8, char16_t* out) noexcept {
+    const auto* p = reinterpret_cast<const unsigned char*>(u8.data());
+    const auto* const end = p + u8.size();
+    while (p < end) {
+        const char32_t c = *p;
+        if (c < 0x80) {
+            *out++ = static_cast<char16_t>(c);
+            ++p;
+        } else if (c < 0xE0) {
+            if (end - p < 2) break;
+            *out++ = static_cast<char16_t>((c & 0x1F) << 6 | (p[1] & 0x3F));
+            p += 2;
+        } else if (c < 0xF0) {
+            if (end - p < 3) break;
+            *out++ = static_cast<char16_t>((c & 0x0F) << 12 | (p[1] & 0x3F) << 6 | (p[2] & 0x3F));
+            p += 3;
+        } else {
+            if (end - p < 4) break;
+            const char32_t cp = ((c & 0x07) << 18 | (p[1] & 0x3F) << 12 | (p[2] & 0x3F) << 6 | (p[3] & 0x3F)) - 0x10000;
+            *out++ = static_cast<char16_t>(0xD800 + (cp >> 10));
+            *out++ = static_cast<char16_t>(0xDC00 + (cp & 0x3FF));
+            p += 4;
+        }
+    }
+    return out;
+}
+
+inline std::string to_utf8(const std::u16string_view u16) {
+    std::string out(max_utf8_size(u16.size()), '\0');
+    out.resize(encode_utf8(u16, out.data()) - out.data());
     return out;
 }
 

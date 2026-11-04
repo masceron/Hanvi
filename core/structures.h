@@ -18,29 +18,23 @@ struct Rule
     std::u16string translation_end;
 };
 
-struct StringView : public std::u16string_view
+// Translations are kept as UTF-8 in the dictionary's TextArena, a third smaller than UTF-16
+// (most Vietnamese letters are ASCII). The text is only ever read back as UTF-16.
+class ArenaText
 {
-    constexpr StringView() noexcept = default;
-    constexpr StringView(const char16_t* str, const size_t len) noexcept : std::u16string_view(str, len) {}
-    constexpr StringView(const std::u16string_view sv) noexcept : std::u16string_view(sv) {}
+public:
+    constexpr ArenaText() noexcept = default;
+    constexpr ArenaText(const char* str, const size_t len) noexcept : text(str, len) {}
 
-    [[nodiscard]] bool isNull() const noexcept { return data() == nullptr; }
-    [[nodiscard]] bool isEmpty() const noexcept { return empty(); }
+    [[nodiscard]] bool isNull() const noexcept { return text.data() == nullptr; }
+    [[nodiscard]] bool isEmpty() const noexcept { return text.empty(); }
 
-    [[nodiscard]] std::vector<StringView> split(const char16_t sep) const {
-        std::vector<StringView> parts;
-        size_t start = 0;
-        while (start < size()) {
-            const size_t pos = find(sep, start);
-            if (pos == npos) {
-                parts.emplace_back(substr(start));
-                break;
-            }
-            parts.emplace_back(substr(start, pos - start));
-            start = pos + 1;
-        }
-        return parts;
-    }
+    [[nodiscard]] std::u16string str() const;
+    // sep must be ASCII.
+    [[nodiscard]] std::vector<std::u16string> split(char sep) const;
+
+private:
+    std::string_view text;
 };
 
 struct TrieNode;
@@ -117,14 +111,21 @@ public:
     TextArena(const TextArena&) = delete;
     TextArena& operator=(const TextArena&) = delete;
 
-    const char16_t* allocate(std::u16string_view str);
+    // Stores str as UTF-8 after two uint16_t byte lengths: the whole text, and up to the first
+    // \x1F (the first of a phrase's meanings).
+    const char* allocate(std::u16string_view str);
+    // The same for text that is UTF-8 already, as SQLite stores it.
+    const char* allocate(std::string_view utf8);
     void clear();
 
 private:
-    static constexpr size_t BLOCK_SIZE = 2 * 1024 * 1024;
-    std::vector<std::unique_ptr<char16_t[]>> blocks;
+    char* reserve(size_t max_len);
+    const char* commit(char* header, const char* first_end, const char* end);
+
+    static constexpr size_t BLOCK_SIZE = 4 * 1024 * 1024;
+    std::vector<std::unique_ptr<char[]>> blocks;
     size_t current_block_offset = BLOCK_SIZE;
-    char16_t* current_block_ptr = nullptr;
+    char* current_block_ptr = nullptr;
 };
 
 struct TrieNode
@@ -145,13 +146,13 @@ struct TrieNode
     [[nodiscard]] TrieNode* find_child(char16_t ch) const;
     void add_child(char16_t ch, TrieNode* node);
 
-    [[nodiscard]] StringView get_name() const;
-    [[nodiscard]] StringView get_first_phrase() const;
-    [[nodiscard]] StringView get_full_phrase() const;
+    [[nodiscard]] ArenaText get_name() const;
+    [[nodiscard]] ArenaText get_first_phrase() const;
+    [[nodiscard]] ArenaText get_full_phrase() const;
     [[nodiscard]] std::vector<Rule>* get_rules() const;
 
-    void set_name_ptr(const char16_t* ptr);
-    void set_phrase_ptr(const char16_t* ptr);
+    void set_name_ptr(const char* ptr);
+    void set_phrase_ptr(const char* ptr);
     void add_rule(const Rule& rule);
 
     void remove_name();
@@ -164,16 +165,10 @@ private:
 
 struct ExactResult
 {
-    StringView name;
-    StringView full_phrase;
-
-    [[nodiscard]] StringView phrase() const noexcept
-    {
-        if (full_phrase.isNull()) return {};
-        const auto* raw = full_phrase.data();
-        const uint16_t first_len = raw[-1];
-        return StringView(raw, first_len);
-    }
+    ArenaText name;
+    // All meanings, separated by \x1F, and the first of them.
+    ArenaText full_phrase;
+    ArenaText phrase;
 
     [[nodiscard]] bool isNull() const noexcept { return name.isNull() && full_phrase.isNull(); }
 };
@@ -183,7 +178,7 @@ struct Match
     int length = 0;
     Priority priority = Priority::NONE;
     std::vector<Rule>* rules = nullptr;
-    StringView translation;
+    ArenaText translation;
 };
 
 class Dictionary
@@ -201,7 +196,8 @@ public:
     [[nodiscard]] ExactResult find_exact(std::u16string_view key) const;
 
     void insert(std::u16string_view key, std::u16string_view value, Priority priority);
-    void insert_bulk(std::u16string_view key, Priority priority, std::u16string_view value);
+    // For loading: value is UTF-8, straight from SQLite.
+    void insert_bulk(std::u16string_view key, Priority priority, std::string_view value);
 
     void remove(std::u16string_view key, Priority priority) const;
     void remove_meaning(std::u16string_view key, std::u16string_view value) const;
@@ -240,7 +236,7 @@ struct Entry
 
 using hanvi::Priority;
 using hanvi::Rule;
-using hanvi::StringView;
+using hanvi::ArenaText;
 using hanvi::NodePool;
 using hanvi::TextArena;
 using hanvi::TrieNode;
