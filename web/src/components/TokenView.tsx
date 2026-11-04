@@ -1,4 +1,4 @@
-import { Fragment, memo } from 'react'
+import { Fragment, memo, useRef, type ReactNode } from 'react'
 import type { Paragraph, Token } from '../core/types'
 import { editTarget, type EditTarget, type Role } from './editTarget'
 
@@ -8,9 +8,11 @@ interface TokenViewProps {
   searchQuery?: string
   currentMatchIndex?: number
   onHoverToken: (id: number | null) => void
-  // null when the click missed every token.
-  onClickToken: (token: Token | null) => void
+  // token is null when the click missed every token.
+  onClickToken: (token: Token | null, viaTouch: boolean) => void
   onEditRequest: (target: EditTarget) => void
+  // Shown instead of the text while there is none.
+  empty?: ReactNode
 }
 
 // Hover and selection highlighting is done by Workspace with a stylesheet keyed on
@@ -23,13 +25,13 @@ export const TokenView = memo(function TokenView({
   onHoverToken,
   onClickToken,
   onEditRequest,
+  empty,
 }: TokenViewProps) {
+  // Pointer type of the last press, as click events do not tell touch from mouse everywhere.
+  const pointerType = useRef('')
+
   if (paragraphs.length === 0) {
-    return (
-      <div className="token-empty-state">
-        <span>Paste Chinese text (Ctrl+V) or open a file (Ctrl+O)</span>
-      </div>
-    )
+    return <div className="token-empty-state">{empty}</div>
   }
 
   const query = searchQuery.trim().toLowerCase()
@@ -46,13 +48,14 @@ export const TokenView = memo(function TokenView({
       className={`token-canvas role-${role}`}
       onMouseOver={(e) => onHoverToken(tokenAt(e.target)?.id ?? null)}
       onMouseLeave={() => onHoverToken(null)}
-      onClick={(e) => onClickToken(tokenAt(e.target))}
+      onPointerDown={(e) => (pointerType.current = e.pointerType)}
+      onClick={(e) => onClickToken(tokenAt(e.target), pointerType.current === 'touch')}
       onContextMenu={(e) => {
         const clicked = tokenAt(e.target)
         const target = editTarget(e.currentTarget, paragraphs, role, clicked)
         if (!target) return
         e.preventDefault()
-        if (clicked) onClickToken(clicked)
+        if (clicked) onClickToken(clicked, false)
         onEditRequest(target)
       }}
     >

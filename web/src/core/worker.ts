@@ -33,24 +33,38 @@ let savedChanges = 0
 let onExternalChange: (() => void) | undefined
 let onSaveError: ((message: string) => void) | undefined
 
-async function download(name: string): Promise<Uint8Array> {
+async function download(name: string): Promise<Uint8Array<ArrayBuffer>> {
   const response = await fetch(DATA_URL + name)
   if (!response.ok) throw new Error(`Failed to fetch ${name}: ${response.status}`)
   return new Uint8Array(await response.arrayBuffer())
 }
 
+async function gunzip(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+  const unpacked = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))
+  return new Uint8Array(await new Response(unpacked).arrayBuffer())
+}
+
+function isSqlite(bytes: Uint8Array): boolean {
+  return new TextDecoder().decode(bytes.subarray(0, 16)) === 'SQLite format 3\0'
+}
+
+// The database ships gzipped (Cloudflare Pages limits assets to 25 MB). Some servers (vite
+// preview, nginx's gzip_static) also send a .gz with Content-Encoding: gzip, and the browser has
+// then unpacked it already, so the bytes decide, not the file name. Anything that is not SQLite
+// (a single-page-app fallback answering a missing file with index.html, a Git LFS pointer) is
+// rejected rather than loaded as an empty dictionary.
 async function downloadDb(): Promise<Uint8Array> {
-  try {
-    const response = await fetch(DATA_URL + 'dict.db.gz')
-    if (response.ok && response.body) {
-      const ds = new DecompressionStream('gzip')
-      const decompressed = response.body.pipeThrough(ds)
-      return new Uint8Array(await new Response(decompressed).arrayBuffer())
+  for (const name of ['dict.db.gz', 'dict.db']) {
+    try {
+      let bytes = await download(name)
+      if (bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = await gunzip(bytes)
+      if (isSqlite(bytes)) return bytes
+      console.warn(`${name} is not a SQLite database`)
+    } catch (err) {
+      console.warn(`Could not load ${name}:`, err)
     }
-  } catch (err) {
-    console.warn('Could not load dict.db.gz, falling back to dict.db:', err)
   }
-  return download('dict.db')
+  throw new Error('Could not download the dictionary database (data/dict.db.gz)')
 }
 
 async function openStorage(): Promise<FileSystemDirectoryHandle | null> {
@@ -128,10 +142,16 @@ async function persist() {
 // Applies an edit and resolves as soon as it is in memory. Saving the whole file takes a while,
 // so it finishes in the background; it keeps the lock meanwhile, so the next edit here or in
 // another tab starts from the saved copy.
+// Web Locks, like OPFS, exist only in secure contexts (HTTPS or localhost). Over plain HTTP, e.g.
+// trying the app on a phone across the LAN, nothing is stored, so there is nothing to guard.
+function withLock<T>(task: () => Promise<T>): Promise<T> {
+  return navigator.locks ? navigator.locks.request(LOCK_NAME, task) : task()
+}
+
 async function edit<T>(change: () => T): Promise<T> {
   await api.init()
   return new Promise<T>((resolve, reject) => {
-    void navigator.locks.request(LOCK_NAME, async () => {
+    void withLock(async () => {
       try {
         await refresh()
         resolve(change())
@@ -155,7 +175,7 @@ async function read<T>(query: () => T): Promise<T> {
 }
 
 channel.onmessage = () => {
-  if (hanvi) void navigator.locks.request(LOCK_NAME, refresh)
+  if (hanvi) void withLock(refresh)
 }
 
 const api = {

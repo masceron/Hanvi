@@ -7,11 +7,13 @@ import { EntriesEditor, type EntriesSource } from './components/EntriesEditor'
 import { Header } from './components/Header'
 import { NamesetChooser } from './components/NamesetChooser'
 import { NamesetsManager } from './components/NamesetsManager'
+import { PasteDialog } from './components/PasteDialog'
 import { RulePopup } from './components/RulePopup'
 import { Workspace } from './components/Workspace'
 import { core } from './core/client'
 import { paginate } from './core/paginate'
 import type { DocumentState, NameSet, Rule, Token } from './core/types'
+import { readClipboard, writeClipboard } from './clipboard'
 import { download } from './download'
 
 type CoreStatus =
@@ -42,6 +44,7 @@ export default function App() {
 
   const [activeTokenId, setActiveTokenId] = useState<number | null>(null)
   const [dialog, setDialog] = useState<Dialog | null>(null)
+  const [isPasteDialogOpen, setIsPasteDialogOpen] = useState(false)
 
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isNamesetChooserOpen, setIsNamesetChooserOpen] = useState(false)
@@ -152,18 +155,19 @@ export default function App() {
     e.target.value = ''
   }
 
-  // Clipboard handler
+  // Reads the clipboard, or opens a paste box where the page may not (phones need a way to
+  // paste that does not rely on Ctrl+V).
   const handleReadClipboard = useCallback(async () => {
-    try {
-      const text = await navigator.clipboard.readText()
-      if (!text.trim()) {
-        setStatusMessage('Clipboard is empty.')
-        return
-      }
-      await loadText(text, '')
-    } catch {
-      setStatusMessage('Clipboard access denied or unsupported.')
+    const text = await readClipboard()
+    if (text === null) {
+      setIsPasteDialogOpen(true)
+      return
     }
+    if (!text.trim()) {
+      setStatusMessage('Clipboard is empty.')
+      return
+    }
+    await loadText(text, '')
   }, [loadText])
 
   // Save converted text to file
@@ -207,8 +211,9 @@ export default function App() {
       return line
     })
 
-    void navigator.clipboard.writeText(lines.join('\n'))
-    setStatusMessage('Vietnamese text copied to clipboard.')
+    void writeClipboard(lines.join('\n')).then((copied) =>
+      setStatusMessage(copied ? 'Vietnamese text copied to clipboard.' : 'Could not copy to the clipboard.'),
+    )
   }, [doc.document])
 
   // Re-convert current page
@@ -256,7 +261,26 @@ export default function App() {
     setDialog(target.kind === 'rule' ? { kind: 'rule', rule: target.rule } : { kind: 'dict', text: target.text })
   }, [])
 
-  const handleClickToken = useCallback((token: Token | null) => setActiveTokenId(token?.id ?? null), [])
+  // Touch screens have no right-click (iOS fires no contextmenu at all), so tapping the
+  // highlighted token again edits it. A ref keeps this callback, and so the panes, from
+  // changing on every click.
+  const activeTokenRef = useRef<number | null>(null)
+  useEffect(() => {
+    activeTokenRef.current = activeTokenId
+  }, [activeTokenId])
+
+  const handleClickToken = useCallback(
+    (token: Token | null, viaTouch: boolean) => {
+      if (viaTouch && token && token.id === activeTokenRef.current) {
+        if (token.rule) handleEditRequest({ kind: 'rule', rule: token.rule })
+        else if (token.cn) handleEditRequest({ kind: 'text', text: token.cn })
+        return
+      }
+      setActiveTokenId(token?.id ?? null)
+      if (viaTouch && token) setStatusMessage('Tap the highlighted word again to edit it.')
+    },
+    [handleEditRequest],
+  )
 
   // Page navigation
   const handlePageChange = useCallback(
@@ -488,6 +512,8 @@ export default function App() {
         onEditRequest={handleEditRequest}
         onPageChange={handlePageChange}
         onCopyVietnamese={handleCopyVietnamese}
+        onPaste={handleReadClipboard}
+        onOpenFile={handleOpenFile}
       />
 
       <BottomBar
@@ -507,6 +533,10 @@ export default function App() {
         <EntriesEditor source={dialog.source} activeNameSet={activeNameset} onClose={dialogClosed} />
       )}
       {dialog?.kind === 'namesets' && <NamesetsManager activeNameSet={activeNameset} onClose={dialogClosed} />}
+
+      {isPasteDialogOpen && (
+        <PasteDialog onText={(text) => void loadText(text, '')} onClose={() => setIsPasteDialogOpen(false)} />
+      )}
 
       <NamesetChooser
         isOpen={isNamesetChooserOpen}

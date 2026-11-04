@@ -34,6 +34,7 @@ body {
   margin: 0;
   padding: 0;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   overflow: hidden;
   background: var(--bg-app);
@@ -45,6 +46,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   background: var(--bg-app);
 }
@@ -358,6 +360,57 @@ body {
   height: 100%;
   color: var(--text-muted);
   font-size: 14px;
+}
+
+.empty-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.empty-actions p {
+  margin: 0;
+}
+
+.empty-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.empty-shortcuts {
+  font-size: 12px;
+}
+
+/* ---- Paste dialog ---- */
+.paste-dialog {
+  width: 520px;
+  max-width: 94vw;
+}
+
+.paste-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.paste-area {
+  height: 180px;
+  resize: vertical;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 16px;
+  padding: 10px 12px;
+  outline: none;
+  user-select: text;
+}
+
+.paste-area:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
 }
 
 /* ---- Find Bar ---- */
@@ -686,6 +739,7 @@ body {
   inset: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: rgba(6, 6, 10, 0.7);
   display: flex;
   align-items: center;
@@ -1462,4 +1516,127 @@ body.resizing-rows,
 body.resizing-rows * {
   cursor: row-resize !important;
   user-select: none !important;
+}
+
+/* ---- Small and touch screens ---- */
+/* A phone held upright has room for one pane: only the Vietnamese one shows. Turned sideways,
+   or in a wider window, all three do. */
+@media (max-width: 599px) {
+  .column-left,
+  .workspace-splitter-v {
+    display: none;
+  }
+
+  .pane-content {
+    padding: 12px 14px;
+  }
+
+  .bottom-bar {
+    gap: 8px;
+    padding: 0 8px;
+  }
+
+  .bottom-left,
+  .bottom-right {
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .progress-bar-container {
+    flex: none;
+    width: 48px;
+  }
+
+  .char-label {
+    display: none;
+  }
+
+  .current-nameset-btn {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .page-nav-btn {
+    min-width: 0;
+  }
+
+  .findbar input {
+    width: 110px;
+  }
+
+  /* Dialogs: let rows of controls wrap instead of running off the screen. */
+  .modal,
+  .nameset-dialog {
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+
+  .popup-footer,
+  .namesets-create,
+  .entries-add {
+    flex-wrap: wrap;
+  }
+
+  .namesets-create input,
+  .entries-add input,
+  .entries-add input.cn-text {
+    flex: 1 1 100%;
+  }
+
+  .nameset-actions {
+    white-space: normal;
+  }
+
+  .nameset-actions .btn {
+    margin: 2px 0 2px 6px;
+  }
+}
+
+/* A short screen (a phone on its side): slimmer bars, so the panes keep most of the height. */
+@media (max-height: 500px) {
+  .app-header {
+    height: 34px;
+  }
+
+  .dropdown-menu {
+    top: 36px;
+    max-height: calc(100dvh - 44px);
+    overflow-y: auto;
+  }
+
+  .pane-header {
+    padding: 3px 12px;
+  }
+
+  .pane-content {
+    padding: 8px 14px;
+  }
+
+  .page-control-bar {
+    padding: 3px 16px;
+  }
+
+  .bottom-bar {
+    height: 28px;
+  }
+
+  .bottom-bar .btn {
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+
+  .modal,
+  .nameset-dialog {
+    max-height: calc(100dvh - 16px);
+  }
+}
+
+/* On a touch screen, keyboard shortcuts mean nothing. */
+@media (hover: none) and (pointer: coarse) {
+  .menu-item .shortcut,
+  .empty-shortcuts {
+    display: none;
+  }
 }

@@ -17,7 +17,7 @@ interface ModalProps {
   className: string
   onClose: () => void
   footer?: ReactNode | ((close: () => void) => ReactNode)
-  children: ReactNode
+  children: ReactNode | ((close: () => void) => ReactNode)
 }
 
 export function Modal({ title, className, onClose, footer, children }: ModalProps) {
@@ -58,7 +58,7 @@ export function Modal({ title, className, onClose, footer, children }: ModalProp
             <CloseIcon />
           </button>
         </div>
-        {children}
+        {typeof children === 'function' ? children(handleClose) : children}
         {footer && (
           <div className="popup-footer">
             {typeof footer === 'function' ? footer(handleClose) : footer}

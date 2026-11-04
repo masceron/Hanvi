@@ -42,10 +42,12 @@ function saveLayout(layout: Layout) {
 interface WorkspaceProps {
   doc: DocumentState
   activeTokenId: number | null
-  onClickToken: (token: Token | null) => void
+  onClickToken: (token: Token | null, viaTouch: boolean) => void
   onEditRequest: (target: EditTarget) => void
   onPageChange: (page: number) => void
   onCopyVietnamese: () => void
+  onPaste: () => void
+  onOpenFile: () => void
 }
 
 export function Workspace({
@@ -55,6 +57,8 @@ export function Workspace({
   onEditRequest,
   onPageChange,
   onCopyVietnamese,
+  onPaste,
+  onOpenFile,
 }: WorkspaceProps) {
   const [isFindBarOpen, setIsFindBarOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -108,9 +112,10 @@ export function Workspace({
   // pane: a pane where it is not comfortably visible scrolls to centre it.
   useEffect(() => {
     if (activeTokenId === null) return
-    workspaceRef.current?.querySelectorAll('.pane-content').forEach((pane) => {
+    workspaceRef.current?.querySelectorAll<HTMLElement>('.pane-content').forEach((pane) => {
       const token = pane.querySelector(`.token[data-tid="${activeTokenId}"]`)
-      if (!token) return
+      // Hidden panes (on narrow screens only the Vietnamese one shows) have nothing to scroll.
+      if (!token || pane.offsetParent === null) return
       const view = pane.getBoundingClientRect()
       const box = token.getBoundingClientRect()
       const margin = box.height
@@ -213,6 +218,20 @@ export function Workspace({
             <TokenView
               paragraphs={paragraphs}
               role="vn"
+              empty={
+                <div className="empty-actions">
+                  <p>Paste Chinese text or open a text file to start.</p>
+                  <div className="empty-buttons">
+                    <button className="btn btn-primary" onClick={onPaste}>
+                      Paste text
+                    </button>
+                    <button className="btn" onClick={onOpenFile}>
+                      Open file
+                    </button>
+                  </div>
+                  <p className="empty-shortcuts">or press Ctrl+V / Ctrl+O</p>
+                </div>
+              }
               searchQuery={searchQuery}
               currentMatchIndex={currentMatchIndex}
               onHoverToken={setHoveredTokenId}
