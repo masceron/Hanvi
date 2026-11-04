@@ -4,7 +4,7 @@ A Chinese-Vietnamese conversion tool inspired by QuickTranslator, designed to fu
 ## Components
 * **Hanvi**: The desktop application (Qt 6). The UI mimics QuickTranslator with integrated tools for editing phrases and names.
 * **HanviCLI**: A command-line tool optimized for parallel batch conversions.
-* **Hanvi Web**: In-browser client running the C++ core via WebAssembly in a Web Worker, paired with a React UI.
+* **Hanvi Web**: In-browser client running the C++ core via WebAssembly in a Web Worker, paired with a React UI. See https://hanvi-app.pages.dev/
 
 ## Compiling
 
