@@ -15,6 +15,7 @@ const OPENCC_FILES = [
 
 const DB_PATH = '/data/dict.db'
 const SNAPSHOT_PATH = '/data/snapshot.db'
+const IMPORT_PATH = '/data/import.db'
 
 // The user's dictionary is kept in the origin private file system (OPFS) once it has been
 // edited; until then the bundled copy is used. Every browser tab runs its own worker with its
@@ -111,32 +112,47 @@ async function load() {
   savedChanges = hanvi.dbChangeCount()
 }
 
-// Loads the stored dictionary if another tab saved a newer one. Call with the lock held.
-async function refresh() {
-  const stored = await storedFile()
-  if (!stored || stored.lastModified === loadedVersion) return
-  const started = performance.now()
-  const bytes = new Uint8Array(await stored.arrayBuffer())
+// Swaps the open dictionary for another copy.
+function replaceDb(bytes: Uint8Array) {
   hanvi.closeDb()
   hanvi.FS.writeFile(DB_PATH, bytes)
   hanvi.reopenDict(DB_PATH)
-  loadedVersion = stored.lastModified
   savedChanges = hanvi.dbChangeCount()
+}
+
+// Loads the stored dictionary if another tab saved a newer one, or the bundled one if another
+// tab reset it (the stored copy is gone). Call with the lock held.
+async function refresh() {
+  const stored = await storedFile()
+  if (stored ? stored.lastModified === loadedVersion : loadedVersion === 0) return
+  const started = performance.now()
+  replaceDb(stored ? new Uint8Array(await stored.arrayBuffer()) : await downloadDb())
+  loadedVersion = stored?.lastModified ?? 0
   console.debug(`Loaded the dictionary another tab saved in ${Math.round(performance.now() - started)} ms`)
   onExternalChange?.()
+}
+
+// A consistent copy of the open dictionary.
+function snapshot(): Uint8Array<ArrayBuffer> {
+  hanvi.saveDbCopy(SNAPSHOT_PATH)
+  const bytes: Uint8Array<ArrayBuffer> = hanvi.FS.readFile(SNAPSHOT_PATH)
+  hanvi.FS.unlink(SNAPSHOT_PATH)
+  return bytes
+}
+
+// Makes bytes the stored dictionary and tells the other tabs. Call with the lock held.
+async function store(bytes: Uint8Array<ArrayBuffer>) {
+  const started = performance.now()
+  loadedVersion = await writeStored(bytes)
+  console.debug(`Saved dictionary (${(bytes.length / 1e6).toFixed(1)} MB) in ${Math.round(performance.now() - started)} ms`)
+  channel.postMessage('saved')
 }
 
 // Saves the dictionary if it changed. Call with the lock held.
 async function persist() {
   if (!storage || hanvi.dbChangeCount() === savedChanges) return
-  hanvi.saveDbCopy(SNAPSHOT_PATH)
-  const bytes: Uint8Array<ArrayBuffer> = hanvi.FS.readFile(SNAPSHOT_PATH)
-  hanvi.FS.unlink(SNAPSHOT_PATH)
-  const started = performance.now()
-  loadedVersion = await writeStored(bytes)
+  await store(snapshot())
   savedChanges = hanvi.dbChangeCount()
-  console.debug(`Saved dictionary (${(bytes.length / 1e6).toFixed(1)} MB) in ${Math.round(performance.now() - started)} ms`)
-  channel.postMessage('saved')
 }
 
 // Applies an edit and resolves as soon as it is in memory. Saving the whole file takes a while,
@@ -191,6 +207,55 @@ const api = {
   },
   onSaveError: (callback: (message: string) => void) => {
     onSaveError = callback
+  },
+  // Whether edits are saved across reloads, and whether the dictionary differs from the bundled one.
+  storageInfo: async () => {
+    await api.init()
+    return { available: storage !== null, customized: (await storedFile()) !== null }
+  },
+
+  // The whole dictionary as a SQLite file, the same format as the desktop's dict.db. Taken after
+  // picking up other tabs' edits.
+  exportDb: async () => {
+    await api.init()
+    const bytes = await withLock(async () => {
+      await refresh()
+      return snapshot()
+    })
+    return Comlink.transfer(bytes, [bytes.buffer])
+  },
+  // Replaces the dictionary with a dict.db file, once core has checked it is one.
+  importDb: async (bytes: Uint8Array<ArrayBuffer>) => {
+    await api.init()
+    if (!isSqlite(bytes)) throw new Error('Not imported: the file is not a SQLite database.')
+    await withLock(async () => {
+      hanvi.FS.writeFile(IMPORT_PATH, bytes)
+      const valid = hanvi.isDictionaryDb(IMPORT_PATH)
+      hanvi.FS.unlink(IMPORT_PATH)
+      if (!valid) throw new Error('Not imported: the file is not a Hanvi dictionary, or it is damaged.')
+      replaceDb(bytes)
+      if (!storage) return
+      try {
+        await store(bytes)
+      } catch (error) {
+        throw new Error(`Imported for this tab only: the browser could not store it (${error}).`)
+      }
+    })
+  },
+  // Goes back to the bundled dictionary, dropping the stored one with all edits.
+  resetDb: async () => {
+    await api.init()
+    await withLock(async () => {
+      replaceDb(await downloadDb())
+      if (!storage) return
+      try {
+        await storage.removeEntry(STORED_NAME)
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'NotFoundError')) throw error
+      }
+      loadedVersion = 0
+      channel.postMessage('saved')
+    })
   },
 
   convert: (text: string) => read((): Paragraph[] => hanvi.convert(hanvi.normalize(text))),

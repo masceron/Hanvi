@@ -67,6 +67,34 @@ bool save_db_copy(const std::string& path)
     return ok;
 }
 
+bool is_dictionary_db(const std::string& path)
+{
+    // Opening succeeds for any file; preparing a statement is what reads the schema. Every
+    // table loading reads must exist with its columns (variants is created on open if missing).
+    constexpr std::array queries = {
+        "SELECT original, translated FROM sv_readings",
+        "SELECT original, normalized FROM punctuations",
+        "SELECT original, translated FROM names",
+        "SELECT original, translated FROM phrases",
+        "SELECT original_start, original_end, translated_start, translated_end FROM grammar_rules",
+        "SELECT id, title FROM name_sets",
+        "SELECT original, translated, set_id FROM name_set_entries",
+    };
+    sqlite3* db = nullptr;
+    bool ok = sqlite3_open_v2(path.c_str(), &db, SQLITE_OPEN_READONLY, nullptr) == SQLITE_OK;
+    for (const char* sql : queries)
+    {
+        ok = ok && SqliteStmt(db, sql).is_valid();
+    }
+    if (ok)
+    {
+        SqliteStmt check(db, "PRAGMA quick_check(1)");
+        ok = check.step() && check.column_text(0) == "ok";
+    }
+    sqlite3_close(db);
+    return ok;
+}
+
 int db_change_count()
 {
     sqlite3* db = get_db_handle();

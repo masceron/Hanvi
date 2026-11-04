@@ -22,6 +22,8 @@ void close_db();
 sqlite3* get_db_handle();
 bool save_db_copy(const std::string& path);
 int db_change_count();
+// Whether the file is an intact SQLite database with the tables a dictionary needs.
+bool is_dictionary_db(const std::string& path);
 
 void load_dict(const std::function<void()>& on_finished = nullptr);
 void load_dict(const std::string& db_path, const std::function<void()>& on_finished = nullptr);
@@ -41,6 +43,7 @@ using hanvi::init_db;
 using hanvi::close_db;
 using hanvi::save_db_copy;
 using hanvi::db_change_count;
+using hanvi::is_dictionary_db;
 using hanvi::load_dict;
 using hanvi::load_name_set;
 using hanvi::reload_dict;

@@ -1,6 +1,7 @@
 import * as Comlink from 'comlink'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BottomBar } from './components/BottomBar'
+import { ConfirmDialog } from './components/ConfirmDialog'
 import { DictPopup } from './components/DictPopup'
 import type { EditTarget } from './components/editTarget'
 import { EntriesEditor, type EntriesSource } from './components/EntriesEditor'
@@ -15,6 +16,7 @@ import { paginate } from './core/paginate'
 import type { DocumentState, NameSet, Rule, Token } from './core/types'
 import { readClipboard, writeClipboard } from './clipboard'
 import { download } from './download'
+import { describeStorage, requestPersistence } from './storage'
 
 type CoreStatus =
   | { state: 'loading' }
@@ -26,6 +28,8 @@ type Dialog =
   | { kind: 'rule'; rule: Rule }
   | { kind: 'entries'; source: EntriesSource }
   | { kind: 'namesets' }
+  | { kind: 'import'; file: File }
+  | { kind: 'reset' }
 
 const INITIAL_DOCUMENT: DocumentState = {
   title: '',
@@ -52,7 +56,10 @@ export default function App() {
   const [progressPercent, setProgressPercent] = useState(30)
   const [statusMessage, setStatusMessage] = useState('Loading dictionaries into memory…')
 
+  const [storageNote, setStorageNote] = useState('')
+
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dbInputRef = useRef<HTMLInputElement>(null)
   // Only the latest conversion request may update the document.
   const conversionId = useRef(0)
 
@@ -245,16 +252,66 @@ export default function App() {
     }
   }, [handleDictionaryChanged])
 
-  const requestedPersistence = useRef(false)
   function dialogClosed(changed: boolean) {
     setDialog(null)
     if (!changed) return
-    // Ask once that the browser keep the stored dictionary under storage pressure.
-    if (!requestedPersistence.current) {
-      requestedPersistence.current = true
-      void navigator.storage?.persist?.()
-    }
+    void requestPersistence()
     void handleDictionaryChanged()
+  }
+
+  // The menu says where the dictionary is kept; it may have changed since it last opened.
+  useEffect(() => {
+    if (isMenuOpen && coreStatus.state === 'ready') void describeStorage().then(setStorageNote)
+  }, [isMenuOpen, coreStatus.state])
+
+  // Downloads the whole dictionary as a dict.db the desktop app can open.
+  const handleExportDict = useCallback(async () => {
+    setIsBusy(true)
+    setStatusMessage('Exporting the dictionary…')
+    try {
+      download('dict.db', await core.exportDb())
+      setStatusMessage('Dictionary exported as dict.db.')
+    } catch (err) {
+      setStatusMessage(`Export failed: ${err}`)
+    } finally {
+      setIsBusy(false)
+    }
+  }, [])
+
+  function handleDbFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (file) setDialog({ kind: 'import', file })
+  }
+
+  // The page is re-converted even after a failure, which may come after the swap (when storing
+  // it); the outcome is shown last, as re-converting reports its own status.
+  async function replaceDictionary(working: string, done: string, replace: () => Promise<void>) {
+    setIsBusy(true)
+    setStatusMessage(working)
+    let outcome = done
+    try {
+      await replace()
+    } catch (err) {
+      outcome = err instanceof Error ? err.message : String(err)
+    }
+    await handleDictionaryChanged()
+    setIsBusy(false)
+    setStatusMessage(outcome)
+  }
+
+  function handleImportDict(file: File) {
+    void replaceDictionary(`Importing ${file.name}…`, `Imported ${file.name}.`, async () => {
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      await core.importDb(Comlink.transfer(bytes, [bytes.buffer]))
+      void requestPersistence()
+    })
+  }
+
+  function handleResetDict() {
+    void replaceDictionary('Restoring the bundled dictionary…', 'Restored the bundled dictionary.', () =>
+      core.resetDb(),
+    )
   }
 
   const handleEditRequest = useCallback((target: EditTarget) => {
@@ -362,9 +419,9 @@ export default function App() {
   // Another tab saved dictionary edits; the worker has loaded them.
   useEffect(() => {
     void core.onExternalChange(
-      Comlink.proxy(() => {
+      Comlink.proxy(async () => {
+        await actionsRef.current.handleDictionaryChanged()
         setStatusMessage('Dictionary updated from another tab.')
-        void actionsRef.current.handleDictionaryChanged()
       }),
     )
     void core.onSaveError(
@@ -479,6 +536,9 @@ export default function App() {
         style={{ display: 'none' }}
         onChange={handleFileSelected}
       />
+      {/* No accept filter: iOS greys out files whose type it does not know, and .db is one.
+          The worker checks the file instead. */}
+      <input ref={dbInputRef} type="file" style={{ display: 'none' }} onChange={handleDbFileSelected} />
 
       <Header
         isMenuOpen={isMenuOpen}
@@ -503,6 +563,10 @@ export default function App() {
         onOpenNames={() => setDialog({ kind: 'entries', source: { kind: 'names' } })}
         onReconvert={handleReconvert}
         onReloadDict={handleReloadDict}
+        onExportDict={handleExportDict}
+        onImportDict={() => dbInputRef.current?.click()}
+        onResetDict={() => setDialog({ kind: 'reset' })}
+        storageNote={storageNote}
       />
 
       <Workspace
@@ -533,6 +597,34 @@ export default function App() {
         <EntriesEditor source={dialog.source} activeNameSet={activeNameset} onClose={dialogClosed} />
       )}
       {dialog?.kind === 'namesets' && <NamesetsManager activeNameSet={activeNameset} onClose={dialogClosed} />}
+      {dialog?.kind === 'import' && (
+        <ConfirmDialog
+          title="Import dictionary"
+          confirmLabel="Replace"
+          extraAction={{ label: 'Export current first', onClick: () => void handleExportDict() }}
+          onConfirm={() => handleImportDict(dialog.file)}
+          onClose={() => setDialog(null)}
+        >
+          <p>
+            Replace your dictionary with <strong>{dialog.file.name}</strong>? All of your current phrases, names
+            and namesets, edits included, are replaced; other open tabs switch too.
+          </p>
+        </ConfirmDialog>
+      )}
+      {dialog?.kind === 'reset' && (
+        <ConfirmDialog
+          title="Reset dictionary"
+          confirmLabel="Reset"
+          extraAction={{ label: 'Export current first', onClick: () => void handleExportDict() }}
+          onConfirm={handleResetDict}
+          onClose={() => setDialog(null)}
+        >
+          <p>
+            Go back to the dictionary that comes with Hanvi? Every edit and nameset you made, and any imported
+            dictionary, is discarded.
+          </p>
+        </ConfirmDialog>
+      )}
 
       {isPasteDialogOpen && (
         <PasteDialog onText={(text) => void loadText(text, '')} onClose={() => setIsPasteDialogOpen(false)} />

@@ -1,5 +1,6 @@
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
+#include <algorithm>
 #include <vector>
 
 #include "core/converter.h"
@@ -129,10 +130,15 @@ void load_dictionaries(const std::string& db_path)
 }
 
 // Opens a database file that replaced the previous one (closed with closeDb) and reloads everything from it.
+// An active nameset the new file lacks is dropped.
 void reopen_dictionaries(const std::string& db_path)
 {
     init_db(db_path);
     reload_dict();
+    if (current_name_set_id != -1 && !std::ranges::contains(name_sets, current_name_set_id, &NameSet::index))
+    {
+        hanvi::load_name_set(-1);
+    }
 }
 
 void reload_dictionaries()
@@ -307,6 +313,7 @@ EMSCRIPTEN_BINDINGS(hanvi)
     emscripten::function("closeDb", &hanvi::close_db);
     emscripten::function("saveDbCopy", &hanvi::save_db_copy);
     emscripten::function("dbChangeCount", &hanvi::db_change_count);
+    emscripten::function("isDictionaryDb", &hanvi::is_dictionary_db);
 
     emscripten::function("normalize", &normalize);
     emscripten::function("convert", &convert_document);

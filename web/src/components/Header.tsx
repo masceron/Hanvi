@@ -17,6 +17,10 @@ interface HeaderProps {
   onOpenNames: () => void
   onReconvert: () => void
   onReloadDict: () => void
+  onExportDict: () => void
+  onImportDict: () => void
+  onResetDict: () => void
+  storageNote: string
 }
 
 // Documents are not tabbed: the browser's own tabs do that, and the open document's
@@ -38,6 +42,10 @@ export function Header({
   onOpenNames,
   onReconvert,
   onReloadDict,
+  onExportDict,
+  onImportDict,
+  onResetDict,
+  storageNote,
 }: HeaderProps) {
   return (
     <header className="app-header">
@@ -56,6 +64,10 @@ export function Header({
         onOpenNames={onOpenNames}
         onReconvert={onReconvert}
         onReloadDict={onReloadDict}
+        onExportDict={onExportDict}
+        onImportDict={onImportDict}
+        onResetDict={onResetDict}
+        storageNote={storageNote}
       />
 
       <div className="header-status">

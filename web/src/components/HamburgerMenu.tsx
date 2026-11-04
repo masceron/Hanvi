@@ -16,6 +16,10 @@ interface HamburgerMenuProps {
   onOpenNames: () => void
   onReconvert: () => void
   onReloadDict: () => void
+  onExportDict: () => void
+  onImportDict: () => void
+  onResetDict: () => void
+  storageNote: string
 }
 
 export function HamburgerMenu({
@@ -33,6 +37,10 @@ export function HamburgerMenu({
   onOpenNames,
   onReconvert,
   onReloadDict,
+  onExportDict,
+  onImportDict,
+  onResetDict,
+  storageNote,
 }: HamburgerMenuProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -184,6 +192,40 @@ export function HamburgerMenu({
           >
             <span>Reload Dictionary</span>
           </button>
+
+          <div className="menu-separator" />
+
+          <button
+            className="menu-item"
+            onClick={() => {
+              onExportDict()
+              onClose()
+            }}
+          >
+            <span>Export Dictionary…</span>
+          </button>
+
+          <button
+            className="menu-item"
+            onClick={() => {
+              onImportDict()
+              onClose()
+            }}
+          >
+            <span>Import Dictionary…</span>
+          </button>
+
+          <button
+            className="menu-item"
+            onClick={() => {
+              onResetDict()
+              onClose()
+            }}
+          >
+            <span>Reset to Bundled Dictionary…</span>
+          </button>
+
+          {storageNote && <div className="menu-note">{storageNote}</div>}
         </div>
       )}
     </div>
