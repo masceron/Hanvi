@@ -7,10 +7,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(HANVI_IPO "Compile with IPO" ON)
 option(HANVI_BUILD_DESKTOP "Build Desktop Qt application" ON)
 option(HANVI_BUILD_CLI "Build CLI conversion tool" ON)
+option(HANVI_BUILD_BENCH "Build the conversion benchmark (bench/), which needs no Qt" OFF)
 # WebAssembly builds only the core and its bindings; the browser UI in web/ is a Vite app.
 if (EMSCRIPTEN)
     set(HANVI_BUILD_DESKTOP OFF)
     set(HANVI_BUILD_CLI OFF)
+    set(HANVI_BUILD_BENCH OFF)
 endif ()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -40,6 +42,10 @@ endif ()
 
 if (EMSCRIPTEN)
     add_subdirectory(web/wasm)
+endif ()
+
+if (HANVI_BUILD_BENCH)
+    add_subdirectory(bench)
 endif ()
 
 # ---- Deployment -------------------------------------------------------------

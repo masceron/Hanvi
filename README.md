@@ -27,3 +27,13 @@ npm run preview   # or: npm run dev
 ```
 
 See [web/README.md](web/README.md) for architecture and deployment details.
+
+### Benchmark
+`HanviBench` times loading, normalization and both conversions over your own UTF-8 texts, to compare compilers and compile options. It needs no Qt.
+
+```bash
+cmake -B build-bench -S . -DHANVI_BUILD_BENCH=ON -DHANVI_BUILD_DESKTOP=OFF -DHANVI_BUILD_CLI=OFF
+cmake --build build-bench --config Release
+build-bench/HanviBench --rounds 5 path/to/novels   # folders are searched for .txt files
+```
+
