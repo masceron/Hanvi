@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <string>
 #include <string_view>
 #include <cstdint>
@@ -24,6 +25,19 @@ inline char32_t utf16_code_point_at(const std::u16string_view str, const size_t 
         return to_code_point(c, str[idx + 1]);
     }
     return c;
+}
+
+// Compares UTF-16 strings in code point order, which is how SQLite sorts TEXT (by its UTF-8
+// bytes): surrogates, which code points above U+FFFF use, sort after U+E000-U+FFFF.
+inline int compare_code_points(const std::u16string_view a, const std::u16string_view b) noexcept {
+    const auto weight = [](const char16_t c) -> uint32_t {
+        return c < 0xD800 ? c : c < 0xE000 ? c + 0x2000u : c - 0x800u;
+    };
+    const size_t n = std::min(a.size(), b.size());
+    for (size_t i = 0; i < n; ++i) {
+        if (a[i] != b[i]) return weight(a[i]) < weight(b[i]) ? -1 : 1;
+    }
+    return a.size() < b.size() ? -1 : a.size() > b.size() ? 1 : 0;
 }
 
 inline bool is_closer_char(const char16_t c) noexcept {

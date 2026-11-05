@@ -159,17 +159,19 @@ static void load_punctuations(sqlite3* db)
 static void load_trie(sqlite3* db)
 {
     {
-        SqliteStmt stmt(db, "SELECT original, translated FROM names");
-        while (stmt.step())
+        // Both tables are keyed by original, so they come sorted without a sort. Merged by their
+        // UTF-8 bytes, which is how SQLite orders them, the dictionary gets every key in order.
+        SqliteStmt names(db, "SELECT original, translated FROM names ORDER BY original");
+        SqliteStmt phrases(db, "SELECT original, translated FROM phrases ORDER BY original");
+        DictionaryLoader loader(dictionary);
+        bool more_names = names.step();
+        bool more_phrases = phrases.step();
+        while (more_names || more_phrases)
         {
-            dictionary.insert_bulk(stmt.column_text16(0), Priority::NAME, stmt.column_text(1));
-        }
-    }
-    {
-        SqliteStmt stmt(db, "SELECT original, translated FROM phrases");
-        while (stmt.step())
-        {
-            dictionary.insert_bulk(stmt.column_text16(0), Priority::PHRASE, stmt.column_text(1));
+            const bool name = more_names && (!more_phrases || names.column_text(0) <= phrases.column_text(0));
+            SqliteStmt& stmt = name ? names : phrases;
+            loader.add(stmt.column_text(0), name ? Priority::NAME : Priority::PHRASE, stmt.column_text(1));
+            (name ? more_names : more_phrases) = stmt.step();
         }
     }
     {
@@ -276,12 +278,13 @@ void load_name_set(const int id)
     sqlite3* db = get_db_handle();
     if (!db) return;
 
-    SqliteStmt stmt(db, "SELECT original, translated FROM name_set_entries WHERE set_id = ?");
+    SqliteStmt stmt(db, "SELECT original, translated FROM name_set_entries WHERE set_id = ? ORDER BY original");
     stmt.bind_int(1, id);
 
+    DictionaryLoader loader(name_set_dictionary);
     while (stmt.step())
     {
-        name_set_dictionary.insert_bulk(stmt.column_text16(0), Priority::NAME, stmt.column_text(1));
+        loader.add(stmt.column_text(0), Priority::NAME, stmt.column_text(1));
     }
 }
 
