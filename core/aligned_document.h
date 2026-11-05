@@ -54,6 +54,20 @@ namespace Typography
                                            const Token* prev_tok = nullptr, const Token* cur_tok = nullptr,
                                            const Token* prev_prev_tok = nullptr) noexcept
     {
+        // Quotation marks flip their state even at the start of a paragraph or after a space;
+        // a quote that went uncounted would turn every later one in the paragraph around.
+        if (tok_str == u"\"")
+        {
+            in_quote = !in_quote;
+            return in_quote && !text.empty() && text.back() != u' ' && !is_opener_char(text.back());
+        }
+        if (tok_str == u"'")
+        {
+            in_single_quote = !in_single_quote;
+            return in_single_quote && !text.empty() && text.back() != u' ' && !is_opener_char(text.back()) &&
+                   text.back() != u'"';
+        }
+
         if (text.empty()) return false;
         if (text.back() == u' ') return false;
 
@@ -64,34 +78,6 @@ namespace Typography
         if (is_low_surrogate(prev_char) && is_high_surrogate(first_char))
         {
             return false;
-        }
-
-        // Quotation mark handling
-        if (tok_str == u"\"")
-        {
-            if (!in_quote)
-            {
-                in_quote = true;
-                return !is_opener_char(prev_char);
-            }
-            else
-            {
-                in_quote = false;
-                return false;
-            }
-        }
-        if (tok_str == u"'")
-        {
-            if (!in_single_quote)
-            {
-                in_single_quote = true;
-                return !is_opener_char(prev_char) && prev_char != u'"';
-            }
-            else
-            {
-                in_single_quote = false;
-                return false;
-            }
         }
 
         // If previous character is an opener or opening quote, no space

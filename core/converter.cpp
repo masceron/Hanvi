@@ -126,7 +126,7 @@ static bool should_append_space(const std::u16string_view& input, const size_t c
                                 const bool in_quote = false,
                                 const bool in_single_quote = false)
 {
-    static constexpr std::u16string_view openers(u"“‘([<{");
+    static constexpr std::u16string_view openers(u"([<{");
     if (current_char_source != 0)
     {
         if (openers.find(current_char_source) != std::u16string_view::npos)
@@ -143,7 +143,7 @@ static bool should_append_space(const std::u16string_view& input, const size_t c
         }
     }
 
-    static constexpr std::u16string_view closers(u".,;:!?)]}>”’…");
+    static constexpr std::u16string_view closers(u".,;:!?)]}>…");
 
     if (current_end_idx < input.length())
     {
@@ -358,7 +358,7 @@ static std::optional<RuleMatch> find_matching_rule(const std::u16string_view& te
 }
 
 static void convert_recursive_aligned(const std::u16string_view& input, int start_offset, uint32_t& token_counter,
-                                      bool& cap_next,
+                                      bool& cap_next, bool& in_quote,
                                       Progress& progress, AlignedDocument& doc)
 {
     size_t i = 0;
@@ -371,6 +371,7 @@ static void convert_recursive_aligned(const std::u16string_view& input, int star
         {
             doc.paragraphs.emplace_back();
             cap_next = true;
+            in_quote = false;
             i++;
             progress.update(1);
             continue;
@@ -473,7 +474,7 @@ static void convert_recursive_aligned(const std::u16string_view& input, int star
                     convert_recursive_aligned(input.substr(inner_start_idx, inner_len),
                                               start_offset + inner_start_idx,
                                               token_counter,
-                                              cap_next, progress, doc);
+                                              cap_next, in_quote, progress, doc);
 
                     progress.update(rule_end_len);
 
@@ -662,10 +663,18 @@ static void convert_recursive_aligned(const std::u16string_view& input, int star
                 }
                 sv_text = translated_text;
 
-                static constexpr std::u16string_view punctuators(u".!?…:;\"");
+                static constexpr std::u16string_view punctuators(u".!?…:;");
                 static constexpr std::u16string_view comma(u",");
 
-                if (punctuators.find(translated_text) != std::u16string_view::npos)
+                // An opening quote starts a sentence; a closing one leaves that to the
+                // punctuation inside it ("Cho." Nguyên…, but "đồ uống," Nguyên cảnh…).
+                if (translated_text == u"\"")
+                {
+                    if (!in_quote) cap_next = true;
+                    in_quote = !in_quote;
+                    is_punctuator = true;
+                }
+                else if (punctuators.find(translated_text) != std::u16string_view::npos)
                 {
                     cap_next = true;
                     is_punctuator = true;
@@ -717,10 +726,11 @@ std::shared_ptr<AlignedDocument> convert(const std::u16string_view input,
 
     uint32_t token_counter = 0;
     bool cap_next = true;
+    bool in_quote = false;
 
     Progress progress(progress_callback);
 
-    convert_recursive_aligned(input, 0, token_counter, cap_next, progress, *doc);
+    convert_recursive_aligned(input, 0, token_counter, cap_next, in_quote, progress, *doc);
 
     if (doc->paragraphs.size() > 1 && doc->paragraphs.back().empty())
     {
@@ -1030,9 +1040,16 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
                 {
                     translated_text = ch;
                 }
-                static constexpr std::u16string_view punctuators(u".!?…:;\"");
+                static constexpr std::u16string_view punctuators(u".!?…:;");
                 static constexpr std::u16string_view comma(u",");
-                if (punctuators.find(translated_text) != std::u16string_view::npos)
+                // As in convert_recursive_aligned: only an opening quote starts a sentence.
+                // in_quote is flipped further down, once the quote is written.
+                if (translated_text == u"\"")
+                {
+                    if (!in_quote) cap_next = true;
+                    is_punctuator = true;
+                }
+                else if (punctuators.find(translated_text) != std::u16string_view::npos)
                 {
                     cap_next = true;
                     is_punctuator = true;
@@ -1057,7 +1074,10 @@ static PlainResult convert_recursive_plain(const std::u16string_view& input, boo
                 }
             }
 
-            if ((translated_text == u"\"" && in_quote) || (translated_text == u"'" && in_single_quote))
+            // A space can be waiting before closing punctuation when the word between them
+            // translated to nothing (e.g. 的 in 调配的,).
+            if ((translated_text == u"\"" && in_quote) || (translated_text == u"'" && in_single_quote) ||
+                (translated_text.size() == 1 && is_closer_char(translated_text[0])))
             {
                 if (!out.text.empty() && out.text.back() == u' ')
                 {
