@@ -1,8 +1,5 @@
 include(FetchContent)
 
-# Option to toggle building binary dictionaries (.ocd2) via host tools.
-# When cross-compiling (e.g. for Android / iOS), this must be OFF because
-# the cross-compiled opencc_dict tool cannot execute on the host machine.
 option(HANVI_BUILD_OPENCC_DICTIONARIES "Generate OpenCC .ocd2 dictionary files with host tools" ON)
 if (ANDROID OR CMAKE_CROSSCOMPILING)
     set(HANVI_BUILD_OPENCC_DICTIONARIES OFF CACHE BOOL "" FORCE)
@@ -46,8 +43,6 @@ if (COMPILER_RUNTIMES AND TARGET Dictionaries)
     add_dependencies(Dictionaries copy_compiler_runtimes_to_opencc)
 endif ()
 
-# Expose OpenCC data paths to parent scope for packaging/deployment.
-# Cross-compiled builds take the .ocd2 dictionaries from a native build's <build>/opencc folder.
 set(HANVI_OPENCC_DATA_DIR "" CACHE PATH "Prebuilt OpenCC .ocd2 dictionaries, for cross-compiled builds")
 if (HANVI_BUILD_OPENCC_DICTIONARIES)
     set(_ocd2_dir "${opencc_BINARY_DIR}/data")

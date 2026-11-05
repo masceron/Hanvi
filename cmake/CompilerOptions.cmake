@@ -1,16 +1,12 @@
 cmake_path(GET CMAKE_CXX_COMPILER PARENT_PATH _compiler_dir)
 
 # ---- WebAssembly exceptions -------------------------------------------------
-# Emscripten turns C++ exception catching off by default, but the core and
-# OpenCC rely on it (e.g. std::async falling back when threads are missing).
 if (EMSCRIPTEN)
     add_compile_options(-fwasm-exceptions)
     add_link_options(-fwasm-exceptions)
 endif ()
 
 # ---- Linker ------------------------------------------------------------------
-# Clang on Linux defaults to GNU ld, which supports neither Clang LTO (without
-# the gold plugin) nor --icf; llvm-mingw already defaults to lld.
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND UNIX AND NOT APPLE AND NOT EMSCRIPTEN)
     find_program(LLD_EXECUTABLE ld.lld HINTS "${_compiler_dir}" REQUIRED)
     set(CMAKE_LINKER_TYPE LLD)
@@ -25,6 +21,33 @@ if (NOT ipo_supported)
 endif ()
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ${HANVI_IPO})
 
+# ---- Profile-guided optimization ---------------------------------------------
+if (HANVI_PGO_TRAINING OR HANVI_PGO_PROFILE)
+    if (NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR MSVC OR EMSCRIPTEN)
+        message(FATAL_ERROR "HANVI_PGO_TRAINING and HANVI_PGO_PROFILE need Clang (not clang-cl).")
+    endif ()
+    if (HANVI_PGO_TRAINING AND HANVI_PGO_PROFILE)
+        message(FATAL_ERROR "Set HANVI_PGO_TRAINING or HANVI_PGO_PROFILE, not both.")
+    endif ()
+endif ()
+if (HANVI_PGO_TRAINING)
+    find_program(LLVM_PROFDATA_EXECUTABLE llvm-profdata HINTS "${_compiler_dir}" REQUIRED)
+    set(_pgo_flags "-fprofile-generate=${CMAKE_BINARY_DIR}/pgo/unused")
+elseif (HANVI_PGO_PROFILE)
+    if (NOT EXISTS "${HANVI_PGO_PROFILE}")
+        message(FATAL_ERROR "HANVI_PGO_PROFILE: ${HANVI_PGO_PROFILE} does not exist.")
+    endif ()
+    file(SHA256 "${HANVI_PGO_PROFILE}" _profile_hash)
+    string(SUBSTRING "${_profile_hash}" 0 16 _profile_hash)
+    file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/pgo")
+    configure_file("${HANVI_PGO_PROFILE}" "${CMAKE_BINARY_DIR}/pgo/${_profile_hash}.profdata" COPYONLY)
+    set(_pgo_flags "-fprofile-use=${CMAKE_BINARY_DIR}/pgo/${_profile_hash}.profdata" -Wno-backend-plugin)
+endif ()
+if (_pgo_flags)
+    add_compile_options("$<$<CONFIG:Release>:${_pgo_flags}>")
+    add_link_options("$<$<CONFIG:Release>:${_pgo_flags}>")
+endif ()
+
 # ---- Project-only flags ------------------------------------------------------
 add_library(hanvi_flags INTERFACE)
 if (MSVC)
@@ -38,12 +61,8 @@ if (MSVC)
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set(_warn         -Wall -Wextra -Werror -pedantic-errors)
     set(_release      -fomit-frame-pointer -ffunction-sections -fdata-sections -fipa-pta)
-    # Qt requires -fPIC; without it at the LTO link step GCC emits PIE code
-    # with copy relocations against Qt data and the app crashes on startup.
     set(_release_link -s -Wl,--gc-sections -flto-partition=one -fPIC)
 elseif (EMSCRIPTEN)
-    # emcc already strips and garbage-collects sections in optimized builds;
-    # its `-s` means a setting, not strip.
     set(_warn         -Wall -Wextra -Werror -pedantic-errors)
     set(_release      "")
     set(_release_link "")
@@ -59,7 +78,6 @@ target_compile_options(hanvi_flags INTERFACE ${_warn} "$<$<CONFIG:Release>:${_re
 target_link_options(hanvi_flags INTERFACE "$<$<CONFIG:Release>:${_release_link}>")
 
 # ---- Compiler runtimes -------------------------------------------------------
-# llvm-mingw runtime DLLs that have to ship next to the executables.
 set(COMPILER_RUNTIMES "")
 if (MINGW AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     foreach (_dll libc++.dll libunwind.dll libwinpthread-1.dll)
