@@ -28,12 +28,7 @@ npm run preview   # or: npm run dev
 
 See [web/README.md](web/README.md) for architecture and deployment details.
 
-### Profile-guided optimization (optional, Clang only)
-Trains on your own texts, so it is not part of a default build. An instrumented build of the benchmark records a profile, and a release build optimizes with it:
+### Profile-guided optimization (Clang only)
+Put UTF-8 `.txt` files in `train/` (ignored by git, any folder depth) and Clang Release builds optimize for them. Configuring builds an instrumented benchmark in `<build>/pgo`, converts the texts once and compiles everything with the resulting profile; without texts in `train/` the build is the usual one.
 
-```bash
-cmake -B build-pgo -S . -DCMAKE_BUILD_TYPE=Release -DHANVI_PGO_TRAINING=path/to/novels
-cmake --build build-pgo --target PgoProfile    # writes build-pgo/hanvi.profdata
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=[YOUR_QT_PATH] -DHANVI_PGO_PROFILE=build-pgo/hanvi.profdata
-cmake --build build
-```
+Configuring trains again when the texts or `dict.db` change, which rebuilds everything. Code changes keep the old profile; delete `<build>/pgo` to retrain after changing the core. `-DHANVI_PGO=OFF` turns it off.
