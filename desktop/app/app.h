@@ -2,4 +2,5 @@
 #include <QApplication>
 
 QString dict_db_path();
-void init_style(QApplication& app);
+
+void init_style(QApplication &app);

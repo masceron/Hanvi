@@ -242,7 +242,8 @@ namespace hanvi {
         sqlite3 *db = get_db_handle();
         if (!db) return;
 
-        SqliteStmt stmt(db, "SELECT original, translated FROM name_set_entries WHERE set_id = ? ORDER BY original");
+        const SqliteStmt stmt(
+            db, "SELECT original, translated FROM name_set_entries WHERE set_id = ? ORDER BY original");
         stmt.bind_int(1, id);
 
         DictionaryLoader loader(name_set_dictionary);

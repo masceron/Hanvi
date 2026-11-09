@@ -4,28 +4,31 @@
 #include <QDialog>
 
 
-namespace hanvi { struct Rule; }
+namespace hanvi {
+    struct Rule;
+}
+
 using hanvi::Rule;
 QT_BEGIN_NAMESPACE
 
-namespace Ui
-{
+namespace Ui {
     class RulePopup;
 }
 
 QT_END_NAMESPACE
 
-class RulePopup : public QDialog
-{
+class RulePopup : public QDialog {
     Q_OBJECT
 
 public:
-    explicit RulePopup(QWidget* parent = nullptr);
+    explicit RulePopup(QWidget *parent = nullptr);
+
     ~RulePopup() override;
-    void load_data(const Rule* rule) const;
+
+    void load_data(const Rule *rule) const;
 
 private:
-    Ui::RulePopup* ui;
+    Ui::RulePopup *ui;
 };
 
 

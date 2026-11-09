@@ -12,8 +12,7 @@
 #include <windows.h>
 #endif
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char *argv[]) {
 #ifdef Q_OS_WIN
     SetConsoleOutputCP(65001);
 #endif
@@ -36,33 +35,29 @@ int main(int argc, char* argv[])
     parser.addOption(name_set_used);
 
     const QCommandLineOption output_option_folder(QStringList() << "o" << "output",
-                                                   "Write all files to <folder>.", "folder");
+                                                  "Write all files to <folder>.", "folder");
     parser.addOption(output_option_folder);
 
     const QCommandLineOption job_number(QStringList() << "j" << "jobs",
                                         "Number of conversion jobs, default 0 (all).", "jobs", "0");
     parser.addOption(job_number);
 
-    if (!parser.parse(QCoreApplication::arguments()))
-    {
+    if (!parser.parse(QCoreApplication::arguments())) {
         std::println(stderr, "Error: {}", parser.errorText().toStdString());
         return 1;
     }
 
-    if (parser.isSet("help"))
-    {
+    if (parser.isSet("help")) {
         std::println("{}", parser.helpText().toStdString());
         return 0;
     }
 
-    if (parser.isSet("version"))
-    {
+    if (parser.isSet("version")) {
         std::println("Hanvi-CLI 1.0");
         return 0;
     }
 
-    if (!parser.isSet(input_option_folder) || !parser.isSet(output_option_folder))
-    {
+    if (!parser.isSet(input_option_folder) || !parser.isSet(output_option_folder)) {
         std::println(stderr, "Error: Both -i and -o must be specified.");
         return 1;
     }
@@ -70,16 +65,13 @@ int main(int argc, char* argv[])
     QDir inDir(parser.value(input_option_folder));
     const QDir out_dir(parser.value(output_option_folder));
 
-    if (!inDir.exists())
-    {
+    if (!inDir.exists()) {
         std::println(stderr, "Error: Input folder does not exist: {}", inDir.absolutePath().toStdString());
         return 1;
     }
 
-    if (!out_dir.exists())
-    {
-        if (!out_dir.mkpath("."))
-        {
+    if (!out_dir.exists()) {
+        if (!out_dir.mkpath(".")) {
             std::println(stderr, "Error: Could not create output folder: {}", out_dir.absolutePath().toStdString());
             return 1;
         }
@@ -91,8 +83,7 @@ int main(int argc, char* argv[])
     std::print("Loading dictionaries...");
     std::fflush(stdout);
 
-    if (const QString opencc = QCoreApplication::applicationDirPath() + "/opencc/t2s.json"; QFile::exists(opencc))
-    {
+    if (const QString opencc = QCoreApplication::applicationDirPath() + "/opencc/t2s.json"; QFile::exists(opencc)) {
         init_opencc(opencc.toLocal8Bit().toStdString());
     }
     load_dict();
@@ -100,24 +91,19 @@ int main(int argc, char* argv[])
     std::println(" {}s.", static_cast<double>(timer_dict.elapsed()) / 1000);
     std::fflush(stdout);
 
-    if (const int jobs = parser.value(job_number).toInt(); jobs > 0)
-    {
+    if (const int jobs = parser.value(job_number).toInt(); jobs > 0) {
         QThreadPool::globalInstance()->setMaxThreadCount(jobs);
     }
 
-    if (const auto set_specified = parser.value(name_set_used); !set_specified.isEmpty())
-    {
-        const auto set_chosen = std::ranges::find_if(name_sets, [&](const NameSet& name_set)
-        {
-            return QString::fromUtf16(name_set.title.data(), static_cast<qsizetype>(name_set.title.size())).compare(set_specified, Qt::CaseInsensitive) == 0;
+    if (const auto set_specified = parser.value(name_set_used); !set_specified.isEmpty()) {
+        const auto set_chosen = std::ranges::find_if(name_sets, [&](const NameSet &name_set) {
+            return QString::fromUtf16(name_set.title.data(), static_cast<qsizetype>(name_set.title.size())).compare(
+                       set_specified, Qt::CaseInsensitive) == 0;
         });
-        if (set_chosen == name_sets.end())
-        {
+        if (set_chosen == name_sets.end()) {
             std::println(stderr, "Cannot find the specified nameset: {}. Ignoring...", set_specified.toStdString());
-        }
-        else
-        {
-            const auto& [index, title] = *set_chosen;
+        } else {
+            const auto &[index, title] = *set_chosen;
             load_name_set(index);
         }
     }
@@ -127,8 +113,7 @@ int main(int argc, char* argv[])
     inDir.setNameFilters(filters);
     const QFileInfoList files = inDir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
 
-    if (files.isEmpty())
-    {
+    if (files.isEmpty()) {
         std::println("Warning: No .txt files found in {}", inDir.absolutePath().toStdString());
         return 0;
     }
@@ -138,14 +123,12 @@ int main(int argc, char* argv[])
 
     QMutex console_mutex;
 
-    auto process_file = [&](const QFileInfo& file_info)
-    {
+    auto process_file = [&](const QFileInfo &file_info) {
         QElapsedTimer timer;
         timer.start();
 
         QFile in_file(file_info.absoluteFilePath());
-        if (!in_file.open(QIODevice::ReadOnly | QIODevice::Text))
-        {
+        if (!in_file.open(QIODevice::ReadOnly | QIODevice::Text)) {
             QMutexLocker locker(&console_mutex);
             std::println(stderr, "Skipping: Cannot open {}", file_info.fileName().toStdString());
             return;
@@ -161,8 +144,7 @@ int main(int argc, char* argv[])
         const QString out_path = out_dir.filePath(out_name);
 
         QFile out_file(out_path);
-        if (!out_file.open(QIODevice::WriteOnly | QIODevice::Text))
-        {
+        if (!out_file.open(QIODevice::WriteOnly | QIODevice::Text)) {
             QMutexLocker locker(&console_mutex);
             std::println(stderr, "Skipping: Cannot write to {}", out_name.toStdString());
             return;

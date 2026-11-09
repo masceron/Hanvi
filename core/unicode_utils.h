@@ -171,7 +171,7 @@ inline std::u16string to_utf16(const std::string_view u8) {
     size_t i = 0;
     while (i < u8.size()) {
         const auto c = static_cast<uint8_t>(u8[i++]);
-        char32_t cp = 0;
+        char32_t cp;
         int extra = 0;
         if (c <= 0x7F) {
             cp = c;

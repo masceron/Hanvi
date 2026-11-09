@@ -426,7 +426,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         connect(edit_action, &QAction::triggered, this, [this, set_id, cur] {
             if (set_id == -1) return;
             QString title;
-            for (const auto &[index, t] : name_sets) {
+            for (const auto &[index, t]: name_sets) {
                 if (index == set_id) {
                     title = QString::fromUtf16(t.data(), static_cast<qsizetype>(t.size()));
                     break;
@@ -502,7 +502,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     const auto *previous_key = new QShortcut(QKeySequence(Qt::Key_Left), this);
     connect(previous_key, &QShortcut::activated, this, [this]() {
         const QWidget *fw = QApplication::focusWidget();
-        if (fw && (qobject_cast<const QLineEdit*>(fw) || qobject_cast<const QSpinBox*>(fw))) return;
+        if (fw && (qobject_cast<const QLineEdit *>(fw) || qobject_cast<const QSpinBox *>(fw))) return;
 
         if (session && session->active_token_id() != 0) {
             const uint32_t cur_id = session->active_token_id();
@@ -521,7 +521,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     const auto *next_key = new QShortcut(QKeySequence(Qt::Key_Right), this);
     connect(next_key, &QShortcut::activated, this, [this]() {
         const QWidget *fw = QApplication::focusWidget();
-        if (fw && (qobject_cast<const QLineEdit*>(fw) || qobject_cast<const QSpinBox*>(fw))) return;
+        if (fw && (qobject_cast<const QLineEdit *>(fw) || qobject_cast<const QSpinBox *>(fw))) return;
 
         if (session && session->active_token_id() != 0) {
             const uint32_t cur_id = session->active_token_id();
@@ -594,7 +594,7 @@ void MainWindow::setup_hamburger_menu(QPushButton *btn) {
             return;
         }
         QString title;
-        for (const auto &[index, t] : name_sets) {
+        for (const auto &[index, t]: name_sets) {
             if (index == set_id) {
                 title = QString::fromUtf16(t.data(), static_cast<qsizetype>(t.size()));
                 break;
@@ -795,7 +795,8 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
                 if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab) {
                     if (tabs.size() > 1) {
                         if (ke->modifiers().testFlag(Qt::ShiftModifier) || ke->key() == Qt::Key_Backtab) {
-                            const int prev = (active_tab_index - 1 + static_cast<int>(tabs.size())) % static_cast<int>(tabs.
+                            const int prev = (active_tab_index - 1 + static_cast<int>(tabs.size())) % static_cast<int>(
+                                                 tabs.
                                                  size());
                             tab_bar->setCurrentIndex(prev);
                         } else {
@@ -836,7 +837,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
                 return true;
             } else if (session && session->active_token_id() != 0) {
                 const QWidget *fw = QApplication::focusWidget();
-                const bool is_input = fw && (qobject_cast<const QLineEdit*>(fw) || qobject_cast<const QSpinBox*>(fw));
+                const bool is_input = fw && (qobject_cast<const QLineEdit *>(fw) || qobject_cast<const QSpinBox *>(fw));
                 if (!is_input && (ke->modifiers() == Qt::NoModifier || ke->modifiers() == Qt::KeypadModifier)) {
                     if (ke->key() == Qt::Key_Escape) {
                         session->clear_active_token();
@@ -1408,4 +1409,3 @@ void MainWindow::show_findbar() const {
         ui->vn_output->search(find_bar->search_text());
     }
 }
-

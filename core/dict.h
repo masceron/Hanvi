@@ -8,28 +8,34 @@
 #include "structures.h"
 
 namespace hanvi {
+    inline std::unordered_map<char32_t, std::u16string> sv_readings;
+    inline std::unordered_map<char32_t, std::u16string> variants;
+    inline std::unordered_map<char16_t, char16_t> punctuations;
+    inline Dictionary dictionary;
+    inline Dictionary name_set_dictionary;
+    inline int current_name_set_id = -1;
+    inline std::vector<NameSet> name_sets;
 
-inline std::unordered_map<char32_t, std::u16string> sv_readings;
-inline std::unordered_map<char32_t, std::u16string> variants;
-inline std::unordered_map<char16_t, char16_t> punctuations;
-inline Dictionary dictionary;
-inline Dictionary name_set_dictionary;
-inline int current_name_set_id = -1;
-inline std::vector<NameSet> name_sets;
+    void init_db(const std::string &db_path = "dict.db");
 
-void init_db(const std::string& db_path = "dict.db");
-void close_db();
-sqlite3* get_db_handle();
-bool save_db_copy(const std::string& path);
-int db_change_count();
-// Whether the file is an intact SQLite database with the tables a dictionary needs.
-bool is_dictionary_db(const std::string& path);
+    void close_db();
 
-void load_dict(const std::function<void()>& on_finished = nullptr);
-void load_dict(const std::string& db_path, const std::function<void()>& on_finished = nullptr);
-void load_name_set(int id);
-void reload_dict(const std::function<void()>& on_finished = nullptr);
+    sqlite3 *get_db_handle();
 
+    bool save_db_copy(const std::string &path);
+
+    int db_change_count();
+
+    // Whether the file is an intact SQLite database with the tables a dictionary needs.
+    bool is_dictionary_db(const std::string &path);
+
+    void load_dict(const std::function<void()> &on_finished = nullptr);
+
+    void load_dict(const std::string &db_path, const std::function<void()> &on_finished = nullptr);
+
+    void load_name_set(int id);
+
+    void reload_dict(const std::function<void()> &on_finished = nullptr);
 } // namespace hanvi
 
 using hanvi::sv_readings;

@@ -158,11 +158,12 @@ entrieseditor::entrieseditor(QWidget *parent) : QDialog(parent), ui(new Ui::entr
 
     connect(model_, &EntriesModel::fetch_more_requested, this, &entrieseditor::fetch_down);
     connect(ui->entries_table->verticalScrollBar(), &QScrollBar::valueChanged, this, &entrieseditor::handle_scroll);
-    connect(ui->entries_table->verticalScrollBar(), &QScrollBar::rangeChanged, this, [this](int /*min*/, const int max) {
-        if (!is_updating_window_ && max == 0 && has_more_below_) {
-            fetch_down();
-        }
-    });
+    connect(ui->entries_table->verticalScrollBar(), &QScrollBar::rangeChanged, this,
+            [this](int /*min*/, const int max) {
+                if (!is_updating_window_ && max == 0 && has_more_below_) {
+                    fetch_down();
+                }
+            });
 
     search_timer_ = new QTimer(this);
     search_timer_->setSingleShot(true);
@@ -272,7 +273,7 @@ Priority entrieseditor::priority() const noexcept {
 
 std::vector<EntryItem> entrieseditor::query_items(const QString &filter, const int offset, const int limit) const {
     std::vector<EntryItem> items;
-    for (const auto &[original, translated] : db_list_entries(set_id_, priority(), q_to_u16(filter), offset, limit)) {
+    for (const auto &[original, translated]: db_list_entries(set_id_, priority(), q_to_u16(filter), offset, limit)) {
         items.push_back(EntryItem{
             .original = to_qstring(original),
             .translated = to_qstring(translated)

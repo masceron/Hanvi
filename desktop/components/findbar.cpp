@@ -8,7 +8,7 @@ findbar::findbar(QWidget *parent) : QWidget(parent), ui(new Ui::findbar) {
 
     ui->search_box->installEventFilter(this);
 
-    connect(ui->search_box, &QLineEdit::textChanged, this, [this](const QString& text) {
+    connect(ui->search_box, &QLineEdit::textChanged, this, [this](const QString &text) {
         emit search_requested(text);
     });
 
@@ -48,7 +48,7 @@ void findbar::focus_input() const {
     ui->search_box->selectAll();
 }
 
-void findbar::set_search_text(const QString& text) const {
+void findbar::set_search_text(const QString &text) const {
     ui->search_box->setText(text);
     ui->search_box->selectAll();
 }
@@ -59,7 +59,7 @@ QString findbar::search_text() const {
 
 bool findbar::eventFilter(QObject *watched, QEvent *event) {
     if (watched == ui->search_box && event->type() == QEvent::KeyPress) {
-        const auto *ke = dynamic_cast<QKeyEvent*>(event);
+        const auto *ke = dynamic_cast<QKeyEvent *>(event);
         if (ke->key() == Qt::Key_Escape) {
             hide();
             emit closed();

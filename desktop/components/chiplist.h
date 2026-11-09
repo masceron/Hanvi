@@ -3,8 +3,7 @@
 #include <QDropEvent>
 #include <QScrollBar>
 
-class ChipList : public QListWidget
-{
+class ChipList : public QListWidget {
     Q_OBJECT
 
 public:
@@ -14,23 +13,19 @@ signals:
     void order_changed();
 
 protected:
-    void wheelEvent(QWheelEvent* event) override
-    {
-        if (const int delta = event->angleDelta().y(); delta != 0)
-        {
-            QScrollBar* hBar = horizontalScrollBar();
+    void wheelEvent(QWheelEvent *event) override {
+        if (const int delta = event->angleDelta().y(); delta != 0) {
+            QScrollBar *hBar = horizontalScrollBar();
             hBar->setValue(hBar->value() - delta);
         }
 
         event->accept();
     }
 
-    void dropEvent(QDropEvent* event) override
-    {
+    void dropEvent(QDropEvent *event) override {
         QListWidget::dropEvent(event);
 
-        if (event->isAccepted())
-        {
+        if (event->isAccepted()) {
             emit order_changed();
         }
     }
