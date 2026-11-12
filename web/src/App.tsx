@@ -5,6 +5,7 @@ import { ConfirmDialog } from './components/ConfirmDialog'
 import { DictPopup } from './components/DictPopup'
 import type { EditTarget } from './components/editTarget'
 import { EntriesEditor, type EntriesSource } from './components/EntriesEditor'
+import { HistoryDialog } from './components/HistoryDialog'
 import { Header } from './components/Header'
 import { NamesetChooser } from './components/NamesetChooser'
 import { NamesetsManager } from './components/NamesetsManager'
@@ -28,6 +29,7 @@ type Dialog =
   | { kind: 'rule'; rule: Rule }
   | { kind: 'entries'; source: EntriesSource }
   | { kind: 'namesets' }
+  | { kind: 'history' }
   | { kind: 'import'; file: File }
   | { kind: 'reset' }
 
@@ -479,6 +481,13 @@ export default function App() {
         return
       }
 
+      // Ctrl + H: recent dictionary changes
+      if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'h') {
+        e.preventDefault()
+        setDialog({ kind: 'history' })
+        return
+      }
+
       // Ctrl + R: Re-convert
       if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'r') {
         e.preventDefault()
@@ -561,6 +570,7 @@ export default function App() {
         onOpenNamesetsManager={() => setDialog({ kind: 'namesets' })}
         onOpenPhrases={() => setDialog({ kind: 'entries', source: { kind: 'phrases' } })}
         onOpenNames={() => setDialog({ kind: 'entries', source: { kind: 'names' } })}
+        onOpenHistory={() => setDialog({ kind: 'history' })}
         onReconvert={handleReconvert}
         onReloadDict={handleReloadDict}
         onExportDict={handleExportDict}
@@ -597,6 +607,7 @@ export default function App() {
         <EntriesEditor source={dialog.source} activeNameSet={activeNameset} onClose={dialogClosed} />
       )}
       {dialog?.kind === 'namesets' && <NamesetsManager activeNameSet={activeNameset} onClose={dialogClosed} />}
+      {dialog?.kind === 'history' && <HistoryDialog nameSets={nameSets} onClose={dialogClosed} />}
       {dialog?.kind === 'import' && (
         <ConfirmDialog
           title="Import dictionary"

@@ -39,6 +39,25 @@ export interface Entry {
   translated: string
 }
 
+// An edit in core's history (core/history.h): one key's value before and after, null when absent.
+export interface HistoryAction {
+  id: number
+  time: number // Unix seconds
+  kind: 'name' | 'phrase' | 'variant'
+  setId: number
+  original: string
+  before: string | null
+  after: string | null
+  change: 'add' | 'delete' | 'edit' | 'reorder' | 'addMeaning' | 'removeMeaning'
+  // The meaning added or removed.
+  meaning: string
+  state: UndoState
+  // The latest action that changed the key again, for 'changedLater'.
+  changedBy: number
+}
+
+export type UndoState = 'undoable' | 'undone' | 'changedLater' | 'changedOutside' | 'nameSetDeleted'
+
 // What the dictionary popup shows for a key.
 export interface Lookup {
   svReading: string

@@ -574,4 +574,86 @@ entrieseditor QLabel#match_count {
     color: #9a9aa6;
     font-size: 9pt;
 }
+
+HistoryDialog {
+    background-color: #1e1e24;
+}
+
+HistoryDialog QTableWidget#history_table {
+    background-color: #1e1e24;
+    alternate-background-color: #25252e;
+    selection-background-color: #214283;
+    selection-color: #ffffff;
+    border: 1px solid #3b3b4a;
+    gridline-color: transparent;
+    outline: none;
+}
+
+HistoryDialog QTableWidget#history_table::item {
+    padding: 3px 6px;
+    border: none;
+}
+
+HistoryDialog QHeaderView::section {
+    background-color: #2b2b36;
+    color: #cfcfd8;
+    padding: 5px 8px;
+    border: 1px solid #3b3b4a;
+    font-weight: bold;
+}
+
+HistoryDialog QPushButton#undo_button {
+    background-color: #2b2b36;
+    border: 1px solid #6164f6;
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+HistoryDialog QPushButton#undo_button:hover {
+    background-color: #6164f6;
+}
+
+HistoryDialog QPushButton#undo_button:disabled {
+    background-color: #22222a;
+    border-color: #3b3b4a;
+    color: #666675;
+}
+
+HistoryDialog QPushButton#clear_history_button {
+    background-color: #2b2b36;
+    border: 1px solid #D22B2B;
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+HistoryDialog QPushButton#clear_history_button:hover {
+    background-color: #D22B2B;
+}
+
+HistoryDialog QPushButton#clear_history_button:disabled {
+    background-color: #22222a;
+    border-color: #3b3b4a;
+    color: #666675;
+}
+
+HistoryDialog QPushButton#close_button {
+    background-color: #2b2b36;
+    border: 1px solid #555555;
+    border-radius: 4px;
+    padding: 5px 12px;
+    color: #ffffff;
+}
+
+HistoryDialog QPushButton#close_button:hover {
+    background-color: #42414d;
+}
+
+HistoryDialog QLabel#history_status {
+    color: #9a9aa6;
+    font-size: 9pt;
+}
 )"

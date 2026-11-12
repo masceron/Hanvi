@@ -33,6 +33,7 @@
 #include "documents/token_canvas.h"
 #include "findbar.h"
 #include "entrieseditor.h"
+#include "historydialog.h"
 
 namespace {
     class HanviTabBar : public QTabBar {
@@ -653,6 +654,20 @@ void MainWindow::setup_hamburger_menu(QPushButton *btn) {
             convert_and_display(true);
         });
         editor->exec();
+    });
+
+    auto *history_action = menu->addAction("Recent Changes...");
+    history_action->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_H));
+    history_action->setShortcutContext(Qt::WindowShortcut);
+    this->addAction(history_action);
+    connect(history_action, &QAction::triggered, this, [this] {
+        auto *dialog = new HistoryDialog(this);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dialog, &HistoryDialog::entries_changed, this, [this] {
+            if (auto *cur = current_tab()) cur->current_doc = nullptr;
+            convert_and_display(true);
+        });
+        dialog->exec();
     });
 
     auto *reconvert_action = menu->addAction("Re-convert");

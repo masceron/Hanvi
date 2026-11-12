@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <string_view>
+#include "history.h"
 #include "structures.h"
 
 namespace hanvi {
@@ -20,6 +21,10 @@ namespace hanvi {
     void io_insert_variant(std::u16string_view original, std::u16string_view canonical);
 
     void io_remove_variant(std::u16string_view original);
+
+    // Gives the action's key back the value it had before, if the action can still be undone
+    // (see UndoState); returns Undoable when it was undone, otherwise why not.
+    UndoState io_undo(int id);
 
     // Nameset management; keeps name_sets in sync. create/import return the new set id, or nullopt
     // on failure (e.g. a duplicate title); import is all-or-nothing.
@@ -39,6 +44,7 @@ using hanvi::io_remove;
 using hanvi::io_remove_meaning;
 using hanvi::io_insert_variant;
 using hanvi::io_remove_variant;
+using hanvi::io_undo;
 using hanvi::io_create_name_set;
 using hanvi::io_import_name_set;
 using hanvi::io_rename_name_set;

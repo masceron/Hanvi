@@ -2,7 +2,7 @@
 // so it lives here rather than on the UI thread.
 import * as Comlink from 'comlink'
 import createHanvi, { type MainModule } from './generated/hanvi.js'
-import type { Entry, Lookup, NameSet, Paragraph, Priority } from './types'
+import type { Entry, HistoryAction, Lookup, NameSet, Paragraph, Priority, UndoState } from './types'
 
 const DATA_URL = `${import.meta.env.BASE_URL}data/`
 const OPENCC_FILES = [
@@ -16,6 +16,7 @@ const OPENCC_FILES = [
 const DB_PATH = '/data/dict.db'
 const SNAPSHOT_PATH = '/data/snapshot.db'
 const IMPORT_PATH = '/data/import.db'
+const EXPORT_PATH = '/data/export.db'
 
 // The user's dictionary is kept in the origin private file system (OPFS) once it has been
 // edited; until then the bundled copy is used. Every browser tab runs its own worker with its
@@ -214,13 +215,16 @@ const api = {
     return { available: storage !== null, customized: (await storedFile()) !== null }
   },
 
-  // The whole dictionary as a SQLite file, the same format as the desktop's dict.db. Taken after
-  // picking up other tabs' edits.
+  // The whole dictionary as a SQLite file, the same format as the desktop's dict.db, without the
+  // edit history. Taken after picking up other tabs' edits.
   exportDb: async () => {
     await api.init()
     const bytes = await withLock(async () => {
       await refresh()
-      return snapshot()
+      if (!hanvi.exportDb(EXPORT_PATH)) throw new Error('Could not copy the dictionary.')
+      const copy: Uint8Array<ArrayBuffer> = hanvi.FS.readFile(EXPORT_PATH)
+      hanvi.FS.unlink(EXPORT_PATH)
+      return copy
     })
     return Comlink.transfer(bytes, [bytes.buffer])
   },
@@ -273,6 +277,14 @@ const api = {
   countEntries: (setId: number, priority: Priority) => read(() => hanvi.countEntries(setId, priority)),
   getTranslation: (key: string, priority: Priority) =>
     read((): string | null => hanvi.getTranslation(key, priority)),
+  // Recent edits, newest first. Read after picking up other tabs' edits, which share the history.
+  history: async () => {
+    await api.init()
+    return withLock(async (): Promise<HistoryAction[]> => {
+      await refresh()
+      return hanvi.history()
+    })
+  },
 
   insertEntry: (setId: number, key: string, value: string, priority: Priority) =>
     edit(() => hanvi.insertEntry(setId, key, value, priority)),
@@ -280,6 +292,9 @@ const api = {
     edit(() => hanvi.removeEntry(setId, key, priority)),
   removeMeaning: (key: string, value: string) => edit(() => hanvi.removeMeaning(key, value)),
   reorderMeanings: (key: string, order: string[]) => edit(() => hanvi.reorderMeanings(key, order)),
+  // 'undoable' when the action was undone, otherwise why it could not be.
+  undo: (id: number) => edit((): UndoState => hanvi.undo(id) as UndoState),
+  clearHistory: () => edit(() => hanvi.clearHistory()),
 
   // Nameset ids, or null when the title is taken (or an import holds duplicate keys).
   createNameSet: (title: string) => edit(() => orNull(hanvi.createNameSet(title))),

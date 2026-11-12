@@ -66,6 +66,7 @@ add_library(CoreLogic STATIC
         converter.h          converter.cpp
         db.h                 db.cpp
         dict.h               dict.cpp
+        history.h            history.cpp
         io.h                 io.cpp
         structures.h         structures.cpp
         aligned_document.h   aligned_document.cpp

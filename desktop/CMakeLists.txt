@@ -33,6 +33,8 @@ add_executable(Hanvi WIN32
         components/entrieseditor.cpp
         components/entrieseditor.h
         components/entrieseditor.ui
+        components/historydialog.cpp
+        components/historydialog.h
 )
 
 target_include_directories(Hanvi PRIVATE

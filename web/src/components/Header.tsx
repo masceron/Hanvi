@@ -15,6 +15,7 @@ interface HeaderProps {
   onOpenNamesetsManager: () => void
   onOpenPhrases: () => void
   onOpenNames: () => void
+  onOpenHistory: () => void
   onReconvert: () => void
   onReloadDict: () => void
   onExportDict: () => void
@@ -40,6 +41,7 @@ export function Header({
   onOpenNamesetsManager,
   onOpenPhrases,
   onOpenNames,
+  onOpenHistory,
   onReconvert,
   onReloadDict,
   onExportDict,
@@ -62,6 +64,7 @@ export function Header({
         onOpenNamesetsManager={onOpenNamesetsManager}
         onOpenPhrases={onOpenPhrases}
         onOpenNames={onOpenNames}
+        onOpenHistory={onOpenHistory}
         onReconvert={onReconvert}
         onReloadDict={onReloadDict}
         onExportDict={onExportDict}

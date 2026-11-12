@@ -1477,6 +1477,29 @@ body {
   flex: 0.6;
 }
 
+.history-dialog {
+  width: 900px;
+  height: 640px;
+  max-width: 94vw;
+  max-height: 92vh;
+}
+
+.history-table td.nowrap {
+  white-space: nowrap;
+}
+
+.history-table td.history-change {
+  max-width: 0;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-table tr.inactive td {
+  color: var(--text-muted);
+}
+
 .entries-count {
   margin-right: auto;
   align-self: center;

@@ -1,7 +1,9 @@
 #include "dict.h"
+#include "history.h"
 #include "sqlite_helper.h"
 #include "unicode_utils.h"
 #include <array>
+#include <filesystem>
 #include <future>
 #include <system_error>
 #include <thread>
@@ -33,6 +35,7 @@ namespace hanvi {
             g_db,
             "CREATE TABLE IF NOT EXISTS variants (original TEXT PRIMARY KEY, canonical TEXT NOT NULL) WITHOUT ROWID;",
             nullptr, nullptr, nullptr);
+        create_history_table(g_db);
     }
 
     void close_db() {
@@ -61,6 +64,26 @@ namespace hanvi {
             ok = sqlite3_backup_finish(backup) == SQLITE_OK && ok;
         }
         sqlite3_close(dest);
+        return ok;
+    }
+
+    bool export_db(const std::string &path) {
+        sqlite3 *db = get_db_handle();
+        if (!db) return false;
+
+        // VACUUM INTO writes a compact copy, without the free pages that may still hold old rows;
+        // secure_delete then zeroes the history's pages rather than just freeing them.
+        std::error_code error;
+        std::filesystem::remove(path, error);
+        SqliteStmt vacuum(db, "VACUUM INTO ?");
+        vacuum.bind_text(1, path);
+        if (vacuum.exec() != SQLITE_DONE) return false;
+
+        sqlite3 *copy = nullptr;
+        bool ok = sqlite3_open_v2(path.c_str(), &copy, SQLITE_OPEN_READWRITE, nullptr) == SQLITE_OK &&
+                  sqlite3_exec(copy, "PRAGMA secure_delete = ON; DELETE FROM history;", nullptr, nullptr,
+                               nullptr) == SQLITE_OK;
+        sqlite3_close(copy);
         return ok;
     }
 

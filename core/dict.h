@@ -24,6 +24,9 @@ namespace hanvi {
 
     bool save_db_copy(const std::string &path);
 
+    // A copy for handing out: like save_db_copy, but without the edit history. Replaces the file.
+    bool export_db(const std::string &path);
+
     int db_change_count();
 
     // Whether the file is an intact SQLite database with the tables a dictionary needs.
@@ -48,6 +51,7 @@ using hanvi::name_sets;
 using hanvi::init_db;
 using hanvi::close_db;
 using hanvi::save_db_copy;
+using hanvi::export_db;
 using hanvi::db_change_count;
 using hanvi::is_dictionary_db;
 using hanvi::load_dict;

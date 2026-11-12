@@ -261,6 +261,66 @@ namespace {
     bool rename_name_set(const int id, const std::u16string &title) {
         return io_rename_name_set(id, title);
     }
+
+    const char *kind_name(const HistoryKind kind) {
+        switch (kind) {
+            case HistoryKind::Name: return "name";
+            case HistoryKind::Phrase: return "phrase";
+            case HistoryKind::Variant: return "variant";
+        }
+        return "";
+    }
+
+    const char *change_name(const HistoryChange change) {
+        switch (change) {
+            case HistoryChange::Add: return "add";
+            case HistoryChange::Delete: return "delete";
+            case HistoryChange::Edit: return "edit";
+            case HistoryChange::Reorder: return "reorder";
+            case HistoryChange::AddMeaning: return "addMeaning";
+            case HistoryChange::RemoveMeaning: return "removeMeaning";
+        }
+        return "";
+    }
+
+    const char *state_name(const UndoState state) {
+        switch (state) {
+            case UndoState::Undoable: return "undoable";
+            case UndoState::Undone: return "undone";
+            case UndoState::ChangedLater: return "changedLater";
+            case UndoState::ChangedOutside: return "changedOutside";
+            case UndoState::NameSetDeleted: return "nameSetDeleted";
+        }
+        return "";
+    }
+
+    val optional_string(const std::optional<std::u16string> &value) {
+        return value ? val(*value) : val::null();
+    }
+
+    val list_history() {
+        val actions = val::array();
+        for (const auto &action: history_list()) {
+            val js = val::object();
+            js.set("id", action.id);
+            js.set("time", static_cast<double>(action.time));
+            js.set("kind", kind_name(action.kind));
+            js.set("setId", action.set_id);
+            js.set("original", action.original);
+            js.set("before", optional_string(action.before));
+            js.set("after", optional_string(action.after));
+            js.set("change", change_name(action.change));
+            js.set("meaning", action.meaning);
+            js.set("state", state_name(action.state));
+            js.set("changedBy", action.changed_by);
+            actions.call<void>("push", js);
+        }
+        return actions;
+    }
+
+    std::string undo(const int id) {
+        return state_name(io_undo(id));
+    }
 } // namespace
 
 EMSCRIPTEN_BINDINGS (hanvi) {
@@ -270,6 +330,7 @@ EMSCRIPTEN_BINDINGS (hanvi) {
     emscripten::function("reloadDict", &reload_dictionaries);
     emscripten::function("closeDb", &hanvi::close_db);
     emscripten::function("saveDbCopy", &hanvi::save_db_copy);
+    emscripten::function("exportDb", &hanvi::export_db);
     emscripten::function("dbChangeCount", &hanvi::db_change_count);
     emscripten::function("isDictionaryDb", &hanvi::is_dictionary_db);
 
@@ -295,4 +356,7 @@ EMSCRIPTEN_BINDINGS (hanvi) {
     emscripten::function("listEntries", &list_entries);
     emscripten::function("countEntries", &count_entries);
     emscripten::function("getTranslation", &get_translation);
+    emscripten::function("history", &list_history);
+    emscripten::function("undo", &undo);
+    emscripten::function("clearHistory", &hanvi::history_clear);
 }

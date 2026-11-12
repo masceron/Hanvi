@@ -14,6 +14,7 @@ interface HamburgerMenuProps {
   onOpenNamesetsManager: () => void
   onOpenPhrases: () => void
   onOpenNames: () => void
+  onOpenHistory: () => void
   onReconvert: () => void
   onReloadDict: () => void
   onExportDict: () => void
@@ -35,6 +36,7 @@ export function HamburgerMenu({
   onOpenNamesetsManager,
   onOpenPhrases,
   onOpenNames,
+  onOpenHistory,
   onReconvert,
   onReloadDict,
   onExportDict,
@@ -168,6 +170,17 @@ export function HamburgerMenu({
           >
             <span>Dictionary: Global Names…</span>
             <span className="shortcut">Ctrl+Shift+D</span>
+          </button>
+
+          <button
+            className="menu-item"
+            onClick={() => {
+              onOpenHistory()
+              onClose()
+            }}
+          >
+            <span>Recent Changes…</span>
+            <span className="shortcut">Ctrl+H</span>
           </button>
 
           <div className="menu-separator" />
