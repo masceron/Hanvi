@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { core } from '../core/client'
 import { GLOBAL, Priority, type Entry, type NameSet } from '../core/types'
 import { CloseIcon, SearchIcon } from '../icons/SvgIcons'
@@ -18,6 +19,7 @@ interface EntriesEditorProps {
 
 const FIRST_CHUNK = 200
 const NEXT_CHUNK = 100
+const MAX_WINDOW = 400
 const SEARCH_DEBOUNCE_MS = 150
 
 function describe(source: EntriesSource) {
@@ -40,7 +42,10 @@ export function EntriesEditor({ source, activeNameSet, onClose }: EntriesEditorP
 
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('')
-  const [rows, setRows] = useState<Entry[]>([])
+  // Like the desktop editor, only a window of up to MAX_WINDOW entries, starting at `offset`, is
+  // loaded: scrolling fetches the next chunk and drops what is far out of view on the other side.
+  const [view, setView] = useState<{ offset: number; rows: Entry[] }>({ offset: 0, rows: [] })
+  const { offset, rows } = view
   const [hasMore, setHasMore] = useState(false)
   const [total, setTotal] = useState<number | null>(null)
   const [selected, setSelected] = useState(-1)
@@ -56,15 +61,60 @@ export function EntriesEditor({ source, activeNameSet, onClose }: EntriesEditorP
   const editCancelled = useRef(false)
 
   const requestId = useRef(0)
-  const loadingMore = useRef(false)
+  const loading = useRef(false)
+  // The view as last set, for async loads that finish after other changes.
+  const viewRef = useRef(view)
+  // The first visible row and its distance from the top of the list, kept in place while rows are
+  // added or dropped above it.
+  const scrollAnchor = useRef<{ key: string; top: number } | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  const sentinelRef = useRef<HTMLDivElement>(null)
+  const topSentinelRef = useRef<HTMLDivElement>(null)
+  const bottomSentinelRef = useRef<HTMLDivElement>(null)
   const originalInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const timer = window.setTimeout(() => setFilter(search.trim()), SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [search])
+
+  const updateView = useCallback((next: { offset: number; rows: Entry[] }) => {
+    viewRef.current = next
+    setView(next)
+  }, [])
+
+  // Rows moved by `by` places; the selection and the inline editor follow their row, or end
+  // when it was dropped.
+  const shiftRows = useCallback((by: number, size: number) => {
+    const shift = (row: number) => (row === -1 || row + by < 0 || row + by >= size ? -1 : row + by)
+    setSelected(shift)
+    setEditingRow((row) => {
+      if (row !== -1 && shift(row) === -1) editCancelled.current = true
+      return shift(row)
+    })
+  }, [])
+
+  // Called right before a flushSync update, so no scroll can come between measuring and adjusting.
+  const holdScrollPosition = useCallback(() => {
+    const list = listRef.current
+    if (!list) return
+    const listTop = list.getBoundingClientRect().top
+    for (const row of list.querySelectorAll<HTMLElement>('tbody tr')) {
+      const rect = row.getBoundingClientRect()
+      if (rect.bottom > listTop) {
+        scrollAnchor.current = { key: row.dataset.key!, top: rect.top - listTop }
+        return
+      }
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    const anchor = scrollAnchor.current
+    const list = listRef.current
+    scrollAnchor.current = null
+    if (!anchor || !list) return
+    const row = list.querySelector(`tr[data-key="${CSS.escape(anchor.key)}"]`)
+    if (row) list.scrollTop += row.getBoundingClientRect().top - list.getBoundingClientRect().top - anchor.top
+  }, [view])
 
   const reload = useCallback(async () => {
     const id = ++requestId.current
@@ -73,40 +123,82 @@ export function EntriesEditor({ source, activeNameSet, onClose }: EntriesEditorP
       filter ? Promise.resolve(null) : core.countEntries(setId, priority),
     ])
     if (id !== requestId.current) return
-    setRows(items)
+    scrollAnchor.current = null
+    updateView({ offset: 0, rows: items })
     setHasMore(items.length === FIRST_CHUNK)
     setTotal(count)
     setSelected(-1)
     setEditingRow(-1)
     listRef.current?.scrollTo(0, 0)
-  }, [setId, priority, filter])
+  }, [setId, priority, filter, updateView])
 
   useEffect(() => {
     void reload()
   }, [reload])
 
-  const loadMore = useCallback(async () => {
-    if (!hasMore || loadingMore.current) return
-    loadingMore.current = true
+  const loadDown = useCallback(async () => {
+    if (!hasMore || loading.current) return
+    loading.current = true
     const id = requestId.current
-    const items = await core.listEntries(setId, priority, filter, rows.length, NEXT_CHUNK)
-    loadingMore.current = false
-    if (id !== requestId.current) return
-    setRows((prev) => [...prev, ...items])
-    setHasMore(items.length === NEXT_CHUNK)
-  }, [hasMore, setId, priority, filter, rows.length])
+    const start = viewRef.current.offset + viewRef.current.rows.length
+    try {
+      const items = await core.listEntries(setId, priority, filter, start, NEXT_CHUNK)
+      if (id !== requestId.current) return
+      const { offset, rows } = viewRef.current
+      const joined = [...rows, ...items]
+      const dropped = Math.max(0, joined.length - MAX_WINDOW)
+      holdScrollPosition()
+      flushSync(() => {
+        updateView({ offset: offset + dropped, rows: joined.slice(dropped) })
+        shiftRows(-dropped, joined.length - dropped)
+        setHasMore(items.length === NEXT_CHUNK)
+      })
+    } finally {
+      loading.current = false
+    }
+  }, [hasMore, setId, priority, filter, holdScrollPosition, updateView, shiftRows])
 
-  // Fetch the next chunk when the end of the list scrolls into view.
+  const loadUp = useCallback(async () => {
+    const before = viewRef.current.offset
+    if (before === 0 || loading.current) return
+    loading.current = true
+    const id = requestId.current
+    const count = Math.min(NEXT_CHUNK, before)
+    try {
+      const items = await core.listEntries(setId, priority, filter, before - count, count)
+      if (id !== requestId.current) return
+      const { offset, rows } = viewRef.current
+      const joined = [...items, ...rows]
+      const kept = joined.slice(0, MAX_WINDOW)
+      holdScrollPosition()
+      flushSync(() => {
+        updateView({ offset: items.length === 0 ? 0 : offset - items.length, rows: kept })
+        shiftRows(items.length, kept.length)
+        if (kept.length < joined.length) setHasMore(true)
+      })
+    } finally {
+      loading.current = false
+    }
+  }, [setId, priority, filter, holdScrollPosition, updateView, shiftRows])
+
+  // Fetch a chunk when either end of the window scrolls into view. Observing again after every
+  // change keeps loading while an end stays in view.
   useEffect(() => {
-    const sentinel = sentinelRef.current
-    if (!sentinel) return
-    const observer = new IntersectionObserver((seen) => seen[0].isIntersecting && void loadMore(), {
-      root: listRef.current,
-      rootMargin: '200px',
-    })
-    observer.observe(sentinel)
+    const top = topSentinelRef.current
+    const bottom = bottomSentinelRef.current
+    if (!top || !bottom) return
+    const observer = new IntersectionObserver(
+      (seen) => {
+        for (const entry of seen) {
+          if (entry.isIntersecting) void (entry.target === top ? loadUp() : loadDown())
+        }
+      },
+      { root: listRef.current, rootMargin: '200px' },
+    )
+    observer.observe(top)
+    observer.observe(bottom)
     return () => observer.disconnect()
-  }, [loadMore])
+  }, [loadUp, loadDown, view])
 
   function markChanged() {
     setChanged(true)
@@ -133,10 +225,12 @@ export function EntriesEditor({ source, activeNameSet, onClose }: EntriesEditorP
     const entry = rows[row]
     if (!entry) return
     markChanged()
-    setRows((prev) => prev.filter((_, i) => i !== row))
+    const remaining = rows.filter((_, i) => i !== row)
+    updateView({ offset, rows: remaining })
     setTotal((t) => (t === null ? t : t - 1))
-    setSelected(Math.min(row, rows.length - 2))
+    setSelected(Math.min(row, remaining.length - 1))
     await core.removeEntry(setId, entry.original, priority)
+    if (remaining.length === 0 && (offset > 0 || hasMore)) await reload()
   }
 
   function editEntry(row: number) {
@@ -158,7 +252,8 @@ export function EntriesEditor({ source, activeNameSet, onClose }: EntriesEditorP
     setEditingRow(-1)
     if (editCancelled.current || !entry || !value || value === entry.translated) return
     markChanged()
-    setRows((prev) => prev.map((e, i) => (i === editingRow ? { ...e, translated: value } : e)))
+    const current = viewRef.current
+    updateView({ ...current, rows: current.rows.map((e) => (e.original === entry.original ? { ...e, translated: value } : e)) })
     await core.insertEntry(setId, entry.original, value, priority)
   }
 
@@ -169,11 +264,12 @@ export function EntriesEditor({ source, activeNameSet, onClose }: EntriesEditorP
     if (!popupChanged || key === null) return
     markChanged()
     const translated = await core.getTranslation(key, Priority.Phrase)
+    const current = viewRef.current
     if (translated === null) {
-      setRows((prev) => prev.filter((e) => e.original !== key))
+      updateView({ ...current, rows: current.rows.filter((e) => e.original !== key) })
       setTotal((t) => (t === null ? t : t - 1))
     } else {
-      setRows((prev) => prev.map((e) => (e.original === key ? { ...e, translated } : e)))
+      updateView({ ...current, rows: current.rows.map((e) => (e.original === key ? { ...e, translated } : e)) })
     }
   }
 
@@ -198,10 +294,12 @@ export function EntriesEditor({ source, activeNameSet, onClose }: EntriesEditorP
     listRef.current?.querySelector('tr.selected')?.scrollIntoView({ block: 'nearest' })
   }, [selected])
 
+  const range = `${offset + 1} – ${offset + rows.length}`
   let countLabel: string
   if (rows.length === 0) countLabel = filter ? 'No matches' : '0 entries'
-  else if (filter) countLabel = hasMore ? `${rows.length}+ matches (scroll for more)` : `${rows.length} matches`
-  else if (total !== null && total > rows.length) countLabel = `Showing ${rows.length} of ${total} entries`
+  else if (filter && hasMore) countLabel = `Matches ${range} (scroll for more)`
+  else if (filter) countLabel = offset > 0 ? `Matches ${range}` : `${rows.length} matches`
+  else if (total !== null && total > rows.length) countLabel = `Entries ${range} of ${total}`
   else countLabel = `${total ?? rows.length} entries`
 
   return (
@@ -248,6 +346,7 @@ export function EntriesEditor({ source, activeNameSet, onClose }: EntriesEditorP
         </div>
 
         <div className="entries-list" ref={listRef} tabIndex={0} onKeyDown={handleListKey}>
+          <div ref={topSentinelRef} className="entries-sentinel" />
           <table className="entries-table">
             <thead>
               <tr>
@@ -259,6 +358,7 @@ export function EntriesEditor({ source, activeNameSet, onClose }: EntriesEditorP
               {rows.map((entry, i) => (
                 <tr
                   key={entry.original}
+                  data-key={entry.original}
                   className={i === selected ? 'selected' : ''}
                   onClick={() => setSelected(i)}
                   onDoubleClick={() => editEntry(i)}
@@ -291,7 +391,7 @@ export function EntriesEditor({ source, activeNameSet, onClose }: EntriesEditorP
               ))}
             </tbody>
           </table>
-          <div ref={sentinelRef} className="entries-sentinel" />
+          <div ref={bottomSentinelRef} className="entries-sentinel" />
         </div>
 
         <div className="entries-add">

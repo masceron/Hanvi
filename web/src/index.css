@@ -1411,6 +1411,8 @@ body {
   min-height: 0;
   overflow-y: auto;
   outline: none;
+  /* EntriesEditor keeps the scroll position itself when rows load or unload above the view. */
+  overflow-anchor: none;
 }
 
 .entries-table {
