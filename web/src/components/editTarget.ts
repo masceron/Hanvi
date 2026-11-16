@@ -4,6 +4,11 @@ export type Role = 'cn' | 'sv' | 'vn'
 
 export type EditTarget = { kind: 'text'; text: string } | { kind: 'rule'; rule: Rule }
 
+// The token a TokenView span shows: the paragraph's index is on its <p>, the token's on the span.
+export function tokenOfSpan(span: HTMLElement, paragraphs: Paragraph[]): Token {
+  return paragraphs[Number(span.parentElement!.dataset.p)][Number(span.dataset.t)]
+}
+
 // What a right-click in a pane edits, as on the desktop: with text selected in that pane, a rule
 // among the selected tokens, else the Chinese the selection covers; otherwise the clicked token.
 export function editTarget(
@@ -45,7 +50,7 @@ function selectedPieces(canvas: HTMLElement, paragraphs: Paragraph[], range: Ran
     const start = range.startContainer === textNode ? range.startOffset : 0
     const end = range.endContainer === textNode ? range.endOffset : length
     if (end > start) {
-      pieces.push({ token: paragraphs[Number(span.dataset.p)][Number(span.dataset.t)], start, end })
+      pieces.push({ token: tokenOfSpan(span, paragraphs), start, end })
     }
   }
   return pieces

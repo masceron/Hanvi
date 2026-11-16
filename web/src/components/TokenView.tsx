@@ -1,6 +1,6 @@
 import { Fragment, memo, useRef, type ReactNode } from 'react'
 import type { Paragraph, Token } from '../core/types'
-import { editTarget, type EditTarget, type Role } from './editTarget'
+import { editTarget, tokenOfSpan, type EditTarget, type Role } from './editTarget'
 
 interface TokenViewProps {
   paragraphs: Paragraph[]
@@ -37,16 +37,33 @@ export const TokenView = memo(function TokenView({
   const query = searchQuery.trim().toLowerCase()
   let matchCounter = 0
 
+  function spanAt(target: EventTarget): HTMLElement | null {
+    return (target as HTMLElement).closest<HTMLElement>('[data-tid]')
+  }
+
   function tokenAt(target: EventTarget): Token | null {
-    const el = (target as HTMLElement).closest<HTMLElement>('[data-tid]')
-    if (!el) return null
-    return paragraphs[Number(el.dataset.p)][Number(el.dataset.t)]
+    const span = spanAt(target)
+    return span && tokenOfSpan(span, paragraphs)
+  }
+
+  // The tooltip is set as the pointer reaches a token, rather than rendered on every span of every
+  // pane; the browser reads it only when it shows the tooltip. Set every time, as React reuses the
+  // spans for the next conversion and does not know about it.
+  function hover(target: EventTarget) {
+    const span = spanAt(target)
+    const token = span && tokenOfSpan(span, paragraphs)
+    if (span && token) {
+      span.title = `Chinese: ${token.cn}\nHán Việt: ${token.sv}\nVietnamese: ${token.vn}${
+        token.isRule ? '\n(Rule Matched)' : ''
+      }`
+    }
+    onHoverToken(token?.id ?? null)
   }
 
   return (
     <div
       className={`token-canvas role-${role}`}
-      onMouseOver={(e) => onHoverToken(tokenAt(e.target)?.id ?? null)}
+      onMouseOver={(e) => hover(e.target)}
       onMouseLeave={() => onHoverToken(null)}
       onPointerDown={(e) => (pointerType.current = e.pointerType)}
       onClick={(e) => onClickToken(tokenAt(e.target), pointerType.current === 'touch')}
@@ -60,7 +77,7 @@ export const TokenView = memo(function TokenView({
       }}
     >
       {paragraphs.map((para, pIdx) => (
-        <p key={pIdx} className="token-paragraph">
+        <p key={pIdx} className="token-paragraph" data-p={pIdx}>
           {para.map((token, tIdx) => {
             const text = token[role]
             if (!text) return null
@@ -76,26 +93,16 @@ export const TokenView = memo(function TokenView({
               matchCounter++
             }
 
-            const classes = [
-              'token',
-              isMatch ? 'search-match' : '',
-              isCurrentMatch ? 'search-match-active' : '',
-            ]
-              .filter(Boolean)
-              .join(' ')
+            const classes = isCurrentMatch
+              ? 'token search-match search-match-active'
+              : isMatch
+                ? 'token search-match'
+                : 'token'
 
             return (
               <Fragment key={tIdx}>
                 {hasSpaceBefore && ' '}
-                <span
-                  className={classes}
-                  data-tid={token.id}
-                  data-p={pIdx}
-                  data-t={tIdx}
-                  title={`Chinese: ${token.cn}\nHán Việt: ${token.sv}\nVietnamese: ${token.vn}${
-                    token.isRule ? '\n(Rule Matched)' : ''
-                  }`}
-                >
+                <span className={classes} data-tid={token.id} data-t={tIdx}>
                   {text}
                 </span>
               </Fragment>
