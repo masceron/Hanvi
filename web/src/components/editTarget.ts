@@ -29,18 +29,12 @@ export function editTarget(
     }
   }
 
-  if (!clicked) return null
-  if (clicked.rule) return { kind: 'rule', rule: clicked.rule }
-  return clicked.cn ? { kind: 'text', text: clicked.cn } : null
+  return clicked ? editTargetOfTokens([clicked]) : null
 }
 
+// What whole tokens edit (a tapped selection, a clicked token): a rule among them, else their
+// Chinese.
 export function editTargetOfTokens(tokens: Token[]): EditTarget | null {
-  if (!tokens || tokens.length === 0) return null
-  if (tokens.length === 1) {
-    const token = tokens[0]
-    if (token.rule) return { kind: 'rule', rule: token.rule }
-    return token.cn ? { kind: 'text', text: token.cn } : null
-  }
   const rule = tokens.find((t) => t.rule)?.rule
   if (rule) return { kind: 'rule', rule }
   const text = tokens.map((t) => t.cn).join('')

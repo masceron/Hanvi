@@ -68,14 +68,11 @@ export default function App() {
     return result
   }, [doc.document])
 
-  const selectedTokens = useMemo<Token[]>(() => {
-    if (!selection) return []
-    return flatTokens.slice(selection.startIndex, selection.endIndex + 1).map((ft) => ft.token)
-  }, [selection, flatTokens])
-
   const selectedTokenIds = useMemo<number[]>(() => {
-    return [...new Set(selectedTokens.map((t) => t.id))]
-  }, [selectedTokens])
+    if (!selection) return []
+    const selected = flatTokens.slice(selection.startIndex, selection.endIndex + 1)
+    return [...new Set(selected.map((ft) => ft.token.id))]
+  }, [selection, flatTokens])
 
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isNamesetChooserOpen, setIsNamesetChooserOpen] = useState(false)
@@ -122,6 +119,8 @@ export default function App() {
   // Converts one page and shows it, unless a newer request has started meanwhile.
   const convertPage = useCallback(async (pages: string[], pageIdx: number) => {
     const id = ++conversionId.current
+    // The selection is a range of the page's tokens, which a conversion replaces.
+    setSelection(null)
     const text = pages[pageIdx] ?? ''
     if (!text.trim()) {
       setDoc((d) => ({ ...d, currentPage: 0, document: null }))
@@ -151,7 +150,6 @@ export default function App() {
     async (text: string, title: string) => {
       const pages = paginate(text, doc.pageLength)
       setActiveTokenId(null)
-      setSelection(null)
       setDoc((d) => ({ ...d, title, rawText: text, pages, currentPage: 0, document: null }))
       await convertPage(pages, 0)
     },
@@ -346,18 +344,23 @@ export default function App() {
     setDialog(target.kind === 'rule' ? { kind: 'rule', rule: target.rule } : { kind: 'dict', text: target.text })
   }, [])
 
-  // Touch screens have no right-click (iOS fires no contextmenu at all), so tapping the
-  // highlighted token again edits it. A ref keeps this callback, and so the panes, from
-  // changing on every click.
-  const activeTokenRef = useRef<number | null>(null)
-  useEffect(() => {
-    activeTokenRef.current = activeTokenId
-  }, [activeTokenId])
-
+  // Touch screens have no right-click (iOS fires no contextmenu at all), so tapping inside the
+  // selection edits it. A ref keeps the callbacks below, and so the panes, from changing on
+  // every click.
   const selectionRef = useRef<TokenSelection | null>(null)
   useEffect(() => {
     selectionRef.current = selection
   }, [selection])
+
+  // Edits the selected tokens; false when there is nothing to edit.
+  const editSelection = useCallback(() => {
+    const cur = selectionRef.current
+    if (!cur) return false
+    const tokens = flatTokens.slice(cur.startIndex, cur.endIndex + 1).map((ft) => ft.token)
+    const target = editTargetOfTokens(tokens)
+    if (target) handleEditRequest(target)
+    return target !== null
+  }, [flatTokens, handleEditRequest])
 
   const handleClickToken = useCallback(
     (
@@ -381,19 +384,8 @@ export default function App() {
       }
 
       const curSel = selectionRef.current
-
-      // Touch screens: tapping inside an existing selection edits it
-      if (
-        viaTouch &&
-        curSel &&
-        flatIndex >= curSel.startIndex &&
-        flatIndex <= curSel.endIndex
-      ) {
-        const curTokens = flatTokens
-          .slice(curSel.startIndex, curSel.endIndex + 1)
-          .map((ft) => ft.token)
-        const target = editTargetOfTokens(curTokens)
-        if (target) handleEditRequest(target)
+      if (viaTouch && curSel && flatIndex >= curSel.startIndex && flatIndex <= curSel.endIndex) {
+        editSelection()
         return
       }
 
@@ -405,32 +397,28 @@ export default function App() {
         activeRole: role,
       })
 
-      if (viaTouch || isMobile) {
-        setStatusMessage('Tap ◀ / ▶ to expand selection, or tap the word to edit.')
-      }
+      // Only phones get the toolbar; other touch screens (a touch laptop) edit with a second tap.
+      if (isMobile) setStatusMessage('Tap ◀ / ▶ to expand selection, or tap the word to edit.')
+      else if (viaTouch) setStatusMessage('Tap the highlighted word again to edit it.')
     },
-    [flatTokens, handleEditRequest, isMobile],
+    [flatTokens, editSelection, isMobile],
   )
 
-  const handleExpandLeft = useCallback(() => {
-    setSelection((cur) => {
-      if (!cur || cur.startIndex <= 0) return cur
-      const newStart = cur.startIndex - 1
-      const count = cur.endIndex - newStart + 1
-      setStatusMessage(`Selected ${count} words. Tap Edit to edit.`)
-      return { ...cur, startIndex: newStart }
-    })
-  }, [])
-
-  const handleExpandRight = useCallback(() => {
-    setSelection((cur) => {
-      if (!cur || cur.endIndex >= flatTokens.length - 1) return cur
-      const newEnd = cur.endIndex + 1
-      const count = newEnd - cur.startIndex + 1
-      setStatusMessage(`Selected ${count} words. Tap Edit to edit.`)
-      return { ...cur, endIndex: newEnd }
-    })
-  }, [flatTokens.length])
+  // Grows the selection by one token to the left (-1) or right (1).
+  const handleExpand = useCallback(
+    (step: -1 | 1) => {
+      const cur = selectionRef.current
+      if (!cur) return
+      const next =
+        step < 0 ? { ...cur, startIndex: cur.startIndex - 1 } : { ...cur, endIndex: cur.endIndex + 1 }
+      if (next.startIndex < 0 || next.endIndex >= flatTokens.length) return
+      // Set here too, so a second tap before the next render grows it again.
+      selectionRef.current = next
+      setSelection(next)
+      setStatusMessage(`Selected ${next.endIndex - next.startIndex + 1} words. Tap Edit to edit.`)
+    },
+    [flatTokens.length],
+  )
 
   const handleClearSelection = useCallback(() => {
     setSelection(null)
@@ -442,7 +430,6 @@ export default function App() {
     async (newPage: number) => {
       if (newPage < 0 || newPage >= doc.pages.length) return
       setActiveTokenId(null) // token ids restart on every page
-      setSelection(null)
       await convertPage(doc.pages, newPage)
     },
     [doc.pages, convertPage],
@@ -452,7 +439,6 @@ export default function App() {
   async function handleCharPerPageChange(newChars: number) {
     const pages = paginate(doc.rawText, newChars)
     setActiveTokenId(null)
-    setSelection(null)
     setDoc((d) => ({ ...d, pageLength: newChars, pages, currentPage: 0 }))
     await convertPage(pages, 0)
   }
@@ -498,7 +484,7 @@ export default function App() {
     tokensById,
     tokenIds,
     flatTokens,
-    setSelection,
+    editSelection,
   })
 
   useEffect(() => {
@@ -516,7 +502,7 @@ export default function App() {
       tokensById,
       tokenIds,
       flatTokens,
-      setSelection,
+      editSelection,
     }
   })
 
@@ -553,6 +539,8 @@ export default function App() {
         activeTokenId: activeId,
         tokensById: byId,
         tokenIds: ids,
+        flatTokens: flat,
+        editSelection: editSelected,
       } = actionsRef.current
 
       // Ctrl + O: Open File
@@ -608,39 +596,27 @@ export default function App() {
           const next = ids[index + (e.key === 'ArrowLeft' ? -1 : 1)]
           if (next !== undefined) {
             setActiveTokenId(next)
-            const nextIdx = actionsRef.current.flatTokens.findIndex((ft) => ft.token.id === next)
-            if (nextIdx !== -1) {
-              actionsRef.current.setSelection({
-                startIndex: nextIdx,
-                endIndex: nextIdx,
-                anchorIndex: nextIdx,
-                activeRole: 'vn',
-              })
-            }
+            const nextIdx = flat.findIndex((ft) => ft.token.id === next)
+            setSelection(
+              nextIdx === -1
+                ? null
+                : { startIndex: nextIdx, endIndex: nextIdx, anchorIndex: nextIdx, activeRole: 'vn' },
+            )
           }
           return
         }
         if (e.key === 'Enter' || e.key === ' ' || e.key.toLowerCase() === 'e') {
           e.preventDefault()
-          const curSel = selectionRef.current
-          if (curSel) {
-            const curTokens = actionsRef.current.flatTokens
-              .slice(curSel.startIndex, curSel.endIndex + 1)
-              .map((ft) => ft.token)
-            const target = editTargetOfTokens(curTokens)
-            if (target) {
-              editRequest(target)
-              return
-            }
+          // A re-convert clears the selection but keeps the highlighted token.
+          if (!editSelected()) {
+            const target = editTargetOfTokens([byId.get(activeId)!])
+            if (target) editRequest(target)
           }
-          const token = byId.get(activeId)!
-          if (token.rule) editRequest({ kind: 'rule', rule: token.rule })
-          else if (token.cn) editRequest({ kind: 'text', text: token.cn })
           return
         }
         if (e.key === 'Escape') {
           setActiveTokenId(null)
-          actionsRef.current.setSelection(null)
+          setSelection(null)
           return
         }
       }
@@ -711,8 +687,8 @@ export default function App() {
         selection={dialog ? null : selection}
         flatTokens={flatTokens}
         isMobile={isMobile}
-        onExpandLeft={handleExpandLeft}
-        onExpandRight={handleExpandRight}
+        onExpand={handleExpand}
+        onEditSelection={editSelection}
         onClearSelection={handleClearSelection}
         onClickToken={handleClickToken}
         onEditRequest={handleEditRequest}

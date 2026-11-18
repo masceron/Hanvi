@@ -6,7 +6,7 @@ import { MobileSelectionToolbar } from './MobileSelectionToolbar'
 import { PageControls } from './PageControls'
 import { Splitter } from './Splitter'
 import { TokenView } from './TokenView'
-import { editTargetOfTokens, type EditTarget, type Role } from './editTarget'
+import type { EditTarget, Role } from './editTarget'
 import type { FlatToken, TokenSelection } from '../mobile'
 
 const NO_PARAGRAPHS: Paragraph[] = []
@@ -44,13 +44,13 @@ function saveLayout(layout: Layout) {
 interface WorkspaceProps {
   doc: DocumentState
   activeTokenId: number | null
-  selectedTokenIds?: number[]
-  selection?: TokenSelection | null
-  flatTokens?: FlatToken[]
-  isMobile?: boolean
-  onExpandLeft?: () => void
-  onExpandRight?: () => void
-  onClearSelection?: () => void
+  selectedTokenIds: number[]
+  selection: TokenSelection | null
+  flatTokens: FlatToken[]
+  isMobile: boolean
+  onExpand: (step: -1 | 1) => void
+  onEditSelection: () => void
+  onClearSelection: () => void
   onClickToken: (
     token: Token | null,
     viaTouch: boolean,
@@ -72,8 +72,8 @@ export function Workspace({
   selection,
   flatTokens,
   isMobile,
-  onExpandLeft,
-  onExpandRight,
+  onExpand,
+  onEditSelection,
   onClearSelection,
   onClickToken,
   onEditRequest,
@@ -149,13 +149,10 @@ export function Workspace({
 
   const paragraphs = rawDocs ?? NO_PARAGRAPHS
 
-  // Highlights the hovered and selected token in every pane. Only this rule changes on hover:
+  // Highlights the hovered and selected tokens in every pane. Only this rule changes on hover:
   // the panes keep their DOM, and no font metrics change, so text never shifts.
-  const allSelectedIds = selectedTokenIds && selectedTokenIds.length > 0
-    ? selectedTokenIds
-    : activeTokenId !== null
-      ? [activeTokenId]
-      : []
+  const allSelectedIds =
+    selectedTokenIds.length > 0 ? selectedTokenIds : activeTokenId !== null ? [activeTokenId] : []
 
   const highlighted = [
     ...(hoveredTokenId !== null ? [hoveredTokenId] : []),
@@ -278,20 +275,13 @@ export function Workspace({
         </div>
       </section>
 
-      {isMobile && selection && flatTokens && onExpandLeft && onExpandRight && onClearSelection && (
+      {isMobile && selection && (
         <MobileSelectionToolbar
           selection={selection}
           flatTokens={flatTokens}
           workspaceRef={workspaceRef}
-          onExpandLeft={onExpandLeft}
-          onExpandRight={onExpandRight}
-          onEdit={() => {
-            const selected = flatTokens
-              .slice(selection.startIndex, selection.endIndex + 1)
-              .map((ft) => ft.token)
-            const target = editTargetOfTokens(selected)
-            if (target) onEditRequest(target)
-          }}
+          onExpand={onExpand}
+          onEdit={onEditSelection}
           onClose={onClearSelection}
         />
       )}

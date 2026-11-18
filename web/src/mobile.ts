@@ -20,7 +20,7 @@ export function isMobileBrowser(): boolean {
 
   // Query parameter override for debugging and manual testing on desktop:
   // e.g., http://localhost:5173/?mobile=1
-  if (window.location.search.includes('mobile=1')) return true
+  if (new URLSearchParams(window.location.search).get('mobile') === '1') return true
 
   // Modern Client Hints if supported by the browser
   // @ts-expect-error navigator.userAgentData is experimental

@@ -1704,9 +1704,7 @@ body.resizing-rows * {
   user-select: none;
   animation: mobileToolbarFadeIn 0.12s ease-out;
   touch-action: manipulation;
-  width: 205px;
-  min-width: 205px;
-  max-width: 205px;
+  /* Width: set inline by MobileSelectionToolbar, which positions it. */
   box-sizing: border-box;
 }
 

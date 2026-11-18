@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon, CloseIcon } from '../icons/SvgIcons'
 import type { FlatToken, TokenSelection } from '../mobile'
 
@@ -6,12 +6,12 @@ interface MobileSelectionToolbarProps {
   selection: TokenSelection | null
   flatTokens: FlatToken[]
   workspaceRef: RefObject<HTMLElement | null>
-  onExpandLeft: () => void
-  onExpandRight: () => void
+  onExpand: (step: -1 | 1) => void
   onEdit: () => void
   onClose: () => void
 }
 
+// The width is set here, not in the stylesheet: positioning needs it before the toolbar renders.
 const TOOLBAR_WIDTH = 205
 const TOOLBAR_HEIGHT = 38
 
@@ -19,13 +19,11 @@ export function MobileSelectionToolbar({
   selection,
   flatTokens,
   workspaceRef,
-  onExpandLeft,
-  onExpandRight,
+  onExpand,
   onEdit,
   onClose,
 }: MobileSelectionToolbarProps) {
   const [pos, setPos] = useState<{ top: number; left: number; visible: boolean } | null>(null)
-  const toolbarRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function update() {
@@ -101,12 +99,12 @@ export function MobileSelectionToolbar({
 
   return (
     <div
-      ref={toolbarRef}
       className="mobile-selection-toolbar"
       style={{
         position: 'fixed',
         top: `${pos.top}px`,
         left: `${pos.left}px`,
+        width: `${TOOLBAR_WIDTH}px`,
         zIndex: 1000,
       }}
       onPointerDown={(e) => e.stopPropagation()}
@@ -119,7 +117,7 @@ export function MobileSelectionToolbar({
         onClick={(e) => {
           e.preventDefault()
           e.stopPropagation()
-          onExpandLeft()
+          onExpand(-1)
         }}
         title="Expand selection left"
         aria-label="Expand selection left"
@@ -149,7 +147,7 @@ export function MobileSelectionToolbar({
         onClick={(e) => {
           e.preventDefault()
           e.stopPropagation()
-          onExpandRight()
+          onExpand(1)
         }}
         title="Expand selection right"
         aria-label="Expand selection right"
