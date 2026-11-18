@@ -9,7 +9,13 @@ interface TokenViewProps {
   currentMatchIndex?: number
   onHoverToken: (id: number | null) => void
   // token is null when the click missed every token.
-  onClickToken: (token: Token | null, viaTouch: boolean) => void
+  onClickToken: (
+    token: Token | null,
+    viaTouch: boolean,
+    pIdx?: number,
+    tIdx?: number,
+    role?: Role,
+  ) => void
   onEditRequest: (target: EditTarget) => void
   // Shown instead of the text while there is none.
   empty?: ReactNode
@@ -66,7 +72,13 @@ export const TokenView = memo(function TokenView({
       onMouseOver={(e) => hover(e.target)}
       onMouseLeave={() => onHoverToken(null)}
       onPointerDown={(e) => (pointerType.current = e.pointerType)}
-      onClick={(e) => onClickToken(tokenAt(e.target), pointerType.current === 'touch')}
+      onClick={(e) => {
+        const span = spanAt(e.target)
+        const pIdx = span && span.parentElement ? Number(span.parentElement.dataset.p) : undefined
+        const tIdx = span ? Number(span.dataset.t) : undefined
+        const token = span ? tokenOfSpan(span, paragraphs) : null
+        onClickToken(token, pointerType.current === 'touch', pIdx, tIdx, role)
+      }}
       onContextMenu={(e) => {
         const clicked = tokenAt(e.target)
         const target = editTarget(e.currentTarget, paragraphs, role, clicked)

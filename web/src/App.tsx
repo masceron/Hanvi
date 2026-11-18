@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BottomBar } from './components/BottomBar'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { DictPopup } from './components/DictPopup'
-import type { EditTarget } from './components/editTarget'
+import { editTargetOfTokens, type EditTarget, type Role } from './components/editTarget'
 import { EntriesEditor, type EntriesSource } from './components/EntriesEditor'
 import { HistoryDialog } from './components/HistoryDialog'
 import { Header } from './components/Header'
@@ -17,6 +17,7 @@ import { paginate } from './core/paginate'
 import type { DocumentState, NameSet, Rule, Token } from './core/types'
 import { readClipboard, writeClipboard } from './clipboard'
 import { download } from './download'
+import { useIsMobileBrowser, type FlatToken, type TokenSelection } from './mobile'
 import { describeStorage, requestPersistence } from './storage'
 
 type CoreStatus =
@@ -44,13 +45,37 @@ const INITIAL_DOCUMENT: DocumentState = {
 }
 
 export default function App() {
+  const isMobile = useIsMobileBrowser()
   const [coreStatus, setCoreStatus] = useState<CoreStatus>({ state: 'loading' })
   const [nameSets, setNameSets] = useState<NameSet[]>([])
   const [doc, setDoc] = useState<DocumentState>(INITIAL_DOCUMENT)
 
   const [activeTokenId, setActiveTokenId] = useState<number | null>(null)
+  const [selection, setSelection] = useState<TokenSelection | null>(null)
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const [isPasteDialogOpen, setIsPasteDialogOpen] = useState(false)
+
+  // Flattened tokens of the current page in reading order
+  const flatTokens = useMemo<FlatToken[]>(() => {
+    if (!doc.document) return []
+    const result: FlatToken[] = []
+    for (let p = 0; p < doc.document.length; p++) {
+      const para = doc.document[p]
+      for (let t = 0; t < para.length; t++) {
+        result.push({ pIdx: p, tIdx: t, token: para[t] })
+      }
+    }
+    return result
+  }, [doc.document])
+
+  const selectedTokens = useMemo<Token[]>(() => {
+    if (!selection) return []
+    return flatTokens.slice(selection.startIndex, selection.endIndex + 1).map((ft) => ft.token)
+  }, [selection, flatTokens])
+
+  const selectedTokenIds = useMemo<number[]>(() => {
+    return [...new Set(selectedTokens.map((t) => t.id))]
+  }, [selectedTokens])
 
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isNamesetChooserOpen, setIsNamesetChooserOpen] = useState(false)
@@ -126,6 +151,7 @@ export default function App() {
     async (text: string, title: string) => {
       const pages = paginate(text, doc.pageLength)
       setActiveTokenId(null)
+      setSelection(null)
       setDoc((d) => ({ ...d, title, rawText: text, pages, currentPage: 0, document: null }))
       await convertPage(pages, 0)
     },
@@ -328,24 +354,95 @@ export default function App() {
     activeTokenRef.current = activeTokenId
   }, [activeTokenId])
 
+  const selectionRef = useRef<TokenSelection | null>(null)
+  useEffect(() => {
+    selectionRef.current = selection
+  }, [selection])
+
   const handleClickToken = useCallback(
-    (token: Token | null, viaTouch: boolean) => {
-      if (viaTouch && token && token.id === activeTokenRef.current) {
-        if (token.rule) handleEditRequest({ kind: 'rule', rule: token.rule })
-        else if (token.cn) handleEditRequest({ kind: 'text', text: token.cn })
+    (
+      token: Token | null,
+      viaTouch: boolean,
+      pIdx?: number,
+      tIdx?: number,
+      role: Role = 'vn',
+    ) => {
+      if (!token || pIdx === undefined || tIdx === undefined) {
+        setActiveTokenId(null)
+        setSelection(null)
         return
       }
-      setActiveTokenId(token?.id ?? null)
-      if (viaTouch && token) setStatusMessage('Tap the highlighted word again to edit it.')
+
+      const flatIndex = flatTokens.findIndex((ft) => ft.pIdx === pIdx && ft.tIdx === tIdx)
+      if (flatIndex === -1) {
+        setActiveTokenId(token.id)
+        setSelection(null)
+        return
+      }
+
+      const curSel = selectionRef.current
+
+      // Touch screens: tapping inside an existing selection edits it
+      if (
+        viaTouch &&
+        curSel &&
+        flatIndex >= curSel.startIndex &&
+        flatIndex <= curSel.endIndex
+      ) {
+        const curTokens = flatTokens
+          .slice(curSel.startIndex, curSel.endIndex + 1)
+          .map((ft) => ft.token)
+        const target = editTargetOfTokens(curTokens)
+        if (target) handleEditRequest(target)
+        return
+      }
+
+      setActiveTokenId(token.id)
+      setSelection({
+        startIndex: flatIndex,
+        endIndex: flatIndex,
+        anchorIndex: flatIndex,
+        activeRole: role,
+      })
+
+      if (viaTouch || isMobile) {
+        setStatusMessage('Tap ◀ / ▶ to expand selection, or tap the word to edit.')
+      }
     },
-    [handleEditRequest],
+    [flatTokens, handleEditRequest, isMobile],
   )
+
+  const handleExpandLeft = useCallback(() => {
+    setSelection((cur) => {
+      if (!cur || cur.startIndex <= 0) return cur
+      const newStart = cur.startIndex - 1
+      const count = cur.endIndex - newStart + 1
+      setStatusMessage(`Selected ${count} words. Tap Edit to edit.`)
+      return { ...cur, startIndex: newStart }
+    })
+  }, [])
+
+  const handleExpandRight = useCallback(() => {
+    setSelection((cur) => {
+      if (!cur || cur.endIndex >= flatTokens.length - 1) return cur
+      const newEnd = cur.endIndex + 1
+      const count = newEnd - cur.startIndex + 1
+      setStatusMessage(`Selected ${count} words. Tap Edit to edit.`)
+      return { ...cur, endIndex: newEnd }
+    })
+  }, [flatTokens.length])
+
+  const handleClearSelection = useCallback(() => {
+    setSelection(null)
+    setActiveTokenId(null)
+  }, [])
 
   // Page navigation
   const handlePageChange = useCallback(
     async (newPage: number) => {
       if (newPage < 0 || newPage >= doc.pages.length) return
       setActiveTokenId(null) // token ids restart on every page
+      setSelection(null)
       await convertPage(doc.pages, newPage)
     },
     [doc.pages, convertPage],
@@ -355,6 +452,7 @@ export default function App() {
   async function handleCharPerPageChange(newChars: number) {
     const pages = paginate(doc.rawText, newChars)
     setActiveTokenId(null)
+    setSelection(null)
     setDoc((d) => ({ ...d, pageLength: newChars, pages, currentPage: 0 }))
     await convertPage(pages, 0)
   }
@@ -399,6 +497,8 @@ export default function App() {
     activeTokenId,
     tokensById,
     tokenIds,
+    flatTokens,
+    setSelection,
   })
 
   useEffect(() => {
@@ -415,6 +515,8 @@ export default function App() {
       activeTokenId,
       tokensById,
       tokenIds,
+      flatTokens,
+      setSelection,
     }
   })
 
@@ -504,11 +606,33 @@ export default function App() {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           e.preventDefault()
           const next = ids[index + (e.key === 'ArrowLeft' ? -1 : 1)]
-          if (next !== undefined) setActiveTokenId(next)
+          if (next !== undefined) {
+            setActiveTokenId(next)
+            const nextIdx = actionsRef.current.flatTokens.findIndex((ft) => ft.token.id === next)
+            if (nextIdx !== -1) {
+              actionsRef.current.setSelection({
+                startIndex: nextIdx,
+                endIndex: nextIdx,
+                anchorIndex: nextIdx,
+                activeRole: 'vn',
+              })
+            }
+          }
           return
         }
         if (e.key === 'Enter' || e.key === ' ' || e.key.toLowerCase() === 'e') {
           e.preventDefault()
+          const curSel = selectionRef.current
+          if (curSel) {
+            const curTokens = actionsRef.current.flatTokens
+              .slice(curSel.startIndex, curSel.endIndex + 1)
+              .map((ft) => ft.token)
+            const target = editTargetOfTokens(curTokens)
+            if (target) {
+              editRequest(target)
+              return
+            }
+          }
           const token = byId.get(activeId)!
           if (token.rule) editRequest({ kind: 'rule', rule: token.rule })
           else if (token.cn) editRequest({ kind: 'text', text: token.cn })
@@ -516,6 +640,7 @@ export default function App() {
         }
         if (e.key === 'Escape') {
           setActiveTokenId(null)
+          actionsRef.current.setSelection(null)
           return
         }
       }
@@ -582,6 +707,13 @@ export default function App() {
       <Workspace
         doc={doc}
         activeTokenId={activeTokenId}
+        selectedTokenIds={selectedTokenIds}
+        selection={dialog ? null : selection}
+        flatTokens={flatTokens}
+        isMobile={isMobile}
+        onExpandLeft={handleExpandLeft}
+        onExpandRight={handleExpandRight}
+        onClearSelection={handleClearSelection}
         onClickToken={handleClickToken}
         onEditRequest={handleEditRequest}
         onPageChange={handlePageChange}

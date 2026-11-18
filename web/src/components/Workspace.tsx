@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DocumentState, Paragraph, Token } from '../core/types'
 import { SearchIcon } from '../icons/SvgIcons'
 import { FindBar } from './FindBar'
+import { MobileSelectionToolbar } from './MobileSelectionToolbar'
 import { PageControls } from './PageControls'
 import { Splitter } from './Splitter'
 import { TokenView } from './TokenView'
-import type { EditTarget } from './editTarget'
+import { editTargetOfTokens, type EditTarget, type Role } from './editTarget'
+import type { FlatToken, TokenSelection } from '../mobile'
 
 const NO_PARAGRAPHS: Paragraph[] = []
 
@@ -42,7 +44,20 @@ function saveLayout(layout: Layout) {
 interface WorkspaceProps {
   doc: DocumentState
   activeTokenId: number | null
-  onClickToken: (token: Token | null, viaTouch: boolean) => void
+  selectedTokenIds?: number[]
+  selection?: TokenSelection | null
+  flatTokens?: FlatToken[]
+  isMobile?: boolean
+  onExpandLeft?: () => void
+  onExpandRight?: () => void
+  onClearSelection?: () => void
+  onClickToken: (
+    token: Token | null,
+    viaTouch: boolean,
+    pIdx?: number,
+    tIdx?: number,
+    role?: Role,
+  ) => void
   onEditRequest: (target: EditTarget) => void
   onPageChange: (page: number) => void
   onCopyVietnamese: () => void
@@ -53,6 +68,13 @@ interface WorkspaceProps {
 export function Workspace({
   doc,
   activeTokenId,
+  selectedTokenIds,
+  selection,
+  flatTokens,
+  isMobile,
+  onExpandLeft,
+  onExpandRight,
+  onClearSelection,
   onClickToken,
   onEditRequest,
   onPageChange,
@@ -129,9 +151,16 @@ export function Workspace({
 
   // Highlights the hovered and selected token in every pane. Only this rule changes on hover:
   // the panes keep their DOM, and no font metrics change, so text never shifts.
-  const highlighted = [hoveredTokenId, activeTokenId]
-    .filter((id) => id !== null)
-    .map((id) => `.token-canvas .token[data-tid="${id}"]`)
+  const allSelectedIds = selectedTokenIds && selectedTokenIds.length > 0
+    ? selectedTokenIds
+    : activeTokenId !== null
+      ? [activeTokenId]
+      : []
+
+  const highlighted = [
+    ...(hoveredTokenId !== null ? [hoveredTokenId] : []),
+    ...allSelectedIds,
+  ].map((id) => `.token-canvas .token[data-tid="${id}"]`)
   const highlightCss = highlighted.length
     ? `${highlighted.join(', ')} { color: var(--accent-hover-token); background-color: var(--highlight-token-bg); }`
     : ''
@@ -248,6 +277,24 @@ export function Workspace({
           />
         </div>
       </section>
+
+      {isMobile && selection && flatTokens && onExpandLeft && onExpandRight && onClearSelection && (
+        <MobileSelectionToolbar
+          selection={selection}
+          flatTokens={flatTokens}
+          workspaceRef={workspaceRef}
+          onExpandLeft={onExpandLeft}
+          onExpandRight={onExpandRight}
+          onEdit={() => {
+            const selected = flatTokens
+              .slice(selection.startIndex, selection.endIndex + 1)
+              .map((ft) => ft.token)
+            const target = editTargetOfTokens(selected)
+            if (target) onEditRequest(target)
+          }}
+          onClose={onClearSelection}
+        />
+      )}
     </main>
   )
 }

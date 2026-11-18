@@ -1690,3 +1690,112 @@ body.resizing-rows * {
     display: none;
   }
 }
+
+/* ---- Mobile Selection Toolbar ---- */
+.mobile-selection-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background-color: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  padding: 3px 5px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  user-select: none;
+  animation: mobileToolbarFadeIn 0.12s ease-out;
+  touch-action: manipulation;
+  width: 205px;
+  min-width: 205px;
+  max-width: 205px;
+  box-sizing: border-box;
+}
+
+@keyframes mobileToolbarFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mobile-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  border-radius: 16px;
+  padding: 6px 0;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.15s, opacity 0.15s;
+  min-height: 36px;
+  box-sizing: border-box;
+}
+
+.mobile-toolbar-btn:active:not(:disabled) {
+  background-color: var(--bg-selected);
+}
+
+.mobile-toolbar-btn:disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+}
+
+.mobile-toolbar-arrow {
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
+  padding: 6px 0;
+}
+
+.mobile-toolbar-arrow svg {
+  width: 17px;
+  height: 17px;
+}
+
+.mobile-toolbar-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background-color: var(--accent-purple);
+  color: #ffffff;
+  font-weight: 600;
+  padding: 6px 8px;
+  border-radius: 15px;
+  width: 80px;
+  min-width: 80px;
+  max-width: 80px;
+  box-sizing: border-box;
+}
+
+.mobile-toolbar-edit:active {
+  background-color: var(--accent-purple-hover);
+}
+
+.mobile-toolbar-count {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.mobile-toolbar-close {
+  width: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  padding: 6px 0;
+  color: var(--text-muted);
+}
+
+.mobile-toolbar-close:active {
+  color: var(--text-primary);
+}
+
+.mobile-toolbar-close svg {
+  width: 13px;
+  height: 13px;
+}
