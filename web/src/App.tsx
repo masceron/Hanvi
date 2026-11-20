@@ -12,7 +12,7 @@ import { NamesetsManager } from './components/NamesetsManager'
 import { PasteDialog } from './components/PasteDialog'
 import { RulePopup } from './components/RulePopup'
 import { Workspace } from './components/Workspace'
-import { core } from './core/client'
+import { convert, core } from './core/client'
 import { paginate } from './core/paginate'
 import type { DocumentState, NameSet, Rule, Token } from './core/types'
 import { readClipboard, writeClipboard } from './clipboard'
@@ -132,7 +132,7 @@ export default function App() {
     setStatusMessage(`Converting page ${pageIdx + 1}…`)
 
     try {
-      const converted = await core.convert(text)
+      const converted = await convert(text)
       if (id !== conversionId.current) return
       setDoc((d) => ({ ...d, currentPage: pageIdx, document: converted }))
       setProgressPercent(100)

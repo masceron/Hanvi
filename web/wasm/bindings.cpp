@@ -47,38 +47,62 @@ namespace {
         return spaces;
     }
 
-    val document_to_js(const AlignedDocument &document) {
-        val paragraphs = val::array();
+    // Token flags in a packed document; must match decodeDocument in web/src/core/packed.ts.
+    enum : uint32_t {
+        CnSpace = 1,
+        SvSpace = 2,
+        VnSpace = 4,
+        IsRule = 8,
+        HasRule = 16,
+    };
+
+    // A converted document packed into two flat arrays, so the bindings create two JS objects instead of
+    // several per token (building those dominated convert()). `ints` holds the paragraph count, then per
+    // paragraph its token count and per token: id, flags, then the lengths of cn, sv, vn and, with HasRule,
+    // of the rule's four strings. `chars` holds those strings back to back in the same order.
+    std::vector<uint32_t> packed_ints;
+    std::u16string packed_chars;
+
+    void pack_string(const std::u16string &text) {
+        packed_ints.push_back(static_cast<uint32_t>(text.size()));
+        packed_chars += text;
+    }
+
+    val pack_document(const AlignedDocument &document) {
+        packed_ints.clear();
+        packed_chars.clear();
+        packed_ints.push_back(static_cast<uint32_t>(document.paragraphs.size()));
         for (const auto &paragraph: document.paragraphs) {
             const auto cn_spaces = spaces_before(paragraph, LanguageRole::Chinese);
             const auto sv_spaces = spaces_before(paragraph, LanguageRole::SinoVietnamese);
             const auto vn_spaces = spaces_before(paragraph, LanguageRole::Vietnamese);
 
-            val tokens = val::array();
+            packed_ints.push_back(static_cast<uint32_t>(paragraph.tokens.size()));
             for (size_t t = 0; t < paragraph.tokens.size(); ++t) {
                 const auto &token = paragraph.tokens[t];
-                val js_token = val::object();
-                js_token.set("id", token.id);
-                js_token.set("cn", token.cn);
-                js_token.set("sv", token.sv);
-                js_token.set("vn", token.vn);
-                js_token.set("cnSpace", bool{cn_spaces[t]});
-                js_token.set("svSpace", bool{sv_spaces[t]});
-                js_token.set("vnSpace", bool{vn_spaces[t]});
-                js_token.set("isRule", token.is_rule());
-                if (const Rule *rule = token.rule) {
-                    val js_rule = val::object();
-                    js_rule.set("originalStart", rule->original_start);
-                    js_rule.set("originalEnd", rule->original_end);
-                    js_rule.set("translationStart", rule->translation_start);
-                    js_rule.set("translationEnd", rule->translation_end);
-                    js_token.set("rule", js_rule);
+                const Rule *rule = token.rule;
+                packed_ints.push_back(static_cast<uint32_t>(token.id));
+                packed_ints.push_back((cn_spaces[t] ? CnSpace : 0) | (sv_spaces[t] ? SvSpace : 0) |
+                                      (vn_spaces[t] ? VnSpace : 0) | (token.is_rule() ? IsRule : 0) |
+                                      (rule ? HasRule : 0));
+                pack_string(token.cn);
+                pack_string(token.sv);
+                pack_string(token.vn);
+                if (rule) {
+                    pack_string(rule->original_start);
+                    pack_string(rule->original_end);
+                    pack_string(rule->translation_start);
+                    pack_string(rule->translation_end);
                 }
-                tokens.call<void>("push", js_token);
             }
-            paragraphs.call<void>("push", tokens);
         }
-        return paragraphs;
+
+        // Views into wasm memory: valid only until the next call into the module, so JS copies them at once.
+        val result = val::object();
+        result.set("ints", val(emscripten::typed_memory_view(packed_ints.size(), packed_ints.data())));
+        result.set("chars", val(emscripten::typed_memory_view(packed_chars.size(),
+                                                              reinterpret_cast<const uint16_t *>(packed_chars.data()))));
+        return result;
     }
 
     // embind marshals std::u16string to and from JS strings (both UTF-16) but not string views.
@@ -87,7 +111,7 @@ namespace {
     }
 
     val convert_document(const std::u16string &text) {
-        return document_to_js(*convert(text));
+        return pack_document(*convert(text));
     }
 
     std::u16string convert_plain_text(const std::u16string &text) {

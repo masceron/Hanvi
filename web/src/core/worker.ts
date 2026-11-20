@@ -2,7 +2,8 @@
 // so it lives here rather than on the UI thread.
 import * as Comlink from 'comlink'
 import createHanvi, { type MainModule } from './generated/hanvi.js'
-import type { Entry, HistoryAction, Lookup, NameSet, Paragraph, Priority, UndoState } from './types'
+import { copyPacked } from './packed'
+import type { Entry, HistoryAction, Lookup, NameSet, Priority, UndoState } from './types'
 
 const DATA_URL = `${import.meta.env.BASE_URL}data/`
 const OPENCC_FILES = [
@@ -262,7 +263,13 @@ const api = {
     })
   },
 
-  convert: (text: string) => read((): Paragraph[] => hanvi.convert(hanvi.normalize(text))),
+  // Packed (see packed.ts) because cloning the token objects through postMessage costs more than
+  // building them on the other side; the client decodes it.
+  convert: (text: string) =>
+    read(() => {
+      const packed = copyPacked(hanvi.convert(hanvi.normalize(text)))
+      return Comlink.transfer(packed, [packed.ints.buffer])
+    }),
   convertPlain: (text: string) => read((): string => hanvi.convertPlain(hanvi.normalize(text))),
   reloadDict: () => read(() => hanvi.reloadDict()),
 
