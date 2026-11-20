@@ -210,7 +210,9 @@ export function Workspace({
       <section className="column-right">
         <div className="pane-container pane-vn">
           <div className="pane-header">
-            <span className="pane-title">Vietnamese Translation</span>
+            <span className="pane-title">
+              Vietnamese<span className="pane-title-extra"> Translation</span>
+            </span>
             <div className="pane-header-actions">
               <button
                 className="btn-icon-label"
@@ -219,6 +221,10 @@ export function Workspace({
               >
                 <SearchIcon />
                 <span>Find</span>
+              </button>
+              {/* Phones have no Ctrl+V: this replaces the text once the empty page's buttons are gone. */}
+              <button className="btn-sm" onClick={onPaste} title="Replace the text with the clipboard's">
+                Paste
               </button>
               <button className="btn-sm" onClick={onCopyVietnamese} title="Copy Vietnamese text">
                 Copy

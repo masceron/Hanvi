@@ -1581,6 +1581,11 @@ body.resizing-rows * {
     padding: 12px 14px;
   }
 
+  /* The pane's own header holds Find, Paste and Copy: the short title keeps it on one line. */
+  .pane-title-extra {
+    display: none;
+  }
+
   .bottom-bar {
     gap: 8px;
     padding: 0 8px;
