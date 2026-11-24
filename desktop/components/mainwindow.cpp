@@ -332,12 +332,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     });
 
     connect(ui->read_from_file, &QAction::triggered, this, [this] {
-        const auto name = QFileDialog::getOpenFileName(this, "Open file", "/", "Text files (*.txt)");
+        static QString prev_dir = "/";
+        const auto name = QFileDialog::getOpenFileName(this, "Open file", prev_dir, "Text files (*.txt)");
         if (name.isEmpty()) return;
 
         if (const auto input = load_from_file(name); input.has_value()) {
             const QFileInfo fi(name);
             const QString title = fi.fileName();
+            //Remember the directory.
+            prev_dir = fi.absolutePath();
+
             if (auto *cur = current_tab(); cur && cur->input_text.isEmpty()) {
                 cur->title = title;
                 cur->file_name = name;
