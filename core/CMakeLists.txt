@@ -1,7 +1,7 @@
 include(FetchContent)
 
 option(HANVI_BUILD_OPENCC_DICTIONARIES "Generate OpenCC .ocd2 dictionary files with host tools" ON)
-if (ANDROID OR CMAKE_CROSSCOMPILING)
+if (CMAKE_CROSSCOMPILING)
     set(HANVI_BUILD_OPENCC_DICTIONARIES OFF CACHE BOOL "" FORCE)
 endif ()
 

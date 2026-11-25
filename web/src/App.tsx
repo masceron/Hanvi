@@ -1,5 +1,6 @@
 import * as Comlink from 'comlink'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRegisterSW } from 'virtual:pwa-register/react'
 import { BottomBar } from './components/BottomBar'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { DictPopup } from './components/DictPopup'
@@ -45,6 +46,14 @@ const INITIAL_DOCUMENT: DocumentState = {
 }
 
 export default function App() {
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW({
+    onRegisterError(error) {
+      console.error('Service worker registration failed:', error)
+    },
+  })
   const isMobile = useIsMobileBrowser()
   const [coreStatus, setCoreStatus] = useState<CoreStatus>({ state: 'loading' })
   const [nameSets, setNameSets] = useState<NameSet[]>([])
@@ -660,6 +669,9 @@ export default function App() {
               : 'Ready'
         }
         isBusy={isBusy}
+        hasUpdate={needRefresh}
+        onApplyUpdate={() => void updateServiceWorker(true)}
+        onDismissUpdate={() => setNeedRefresh(false)}
         onToggleMenu={() => setIsMenuOpen((prev) => !prev)}
         onCloseMenu={() => setIsMenuOpen(false)}
         onOpenFile={handleOpenFile}

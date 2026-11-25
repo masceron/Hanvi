@@ -1,6 +1,6 @@
 # CoreLogic (Hanvi Core Engine)
 
-`CoreLogic` is a high-performance, standalone C++23 translation and text alignment engine for Chinese-to-Vietnamese translation. It powers the Hanvi reader and CLI tools, and is designed to be easily embedded into custom frontends (e.g., Qt/QML, Flutter, native Android via JNI/NDK, or CLI/server daemons).
+`CoreLogic` is a high-performance, standalone C++23 translation and text alignment engine for Chinese-to-Vietnamese translation. It powers the Hanvi reader and CLI tools, and is designed to be easily embedded into custom frontends (e.g., Qt/QML, WebAssembly, or CLI/server daemons).
 
 ---
 
@@ -67,7 +67,7 @@ Any application running `CoreLogic` must provide access to two asset groups:
 - **Internal Encoding (UTF-16)**:
   `CoreLogic` operates internally on `std::u16string` and `std::u16string_view`. Because BMP characters (standard Chinese and Latin characters) occupy exactly one 16-bit code unit, this avoids multi-byte scanning overhead.
 - **External UTF-8 Convenience APIs**:
-  High-level UTF-8 wrappers (`convert_plain_utf8`, `normalize_text_utf8`, `to_simplified_chinese_utf8`) are provided for CLI tools and other UTF-8 frontends. Do **not** use them for JNI; see [Android notes](#6-android-ndk--jni-implementation-notes).
+  High-level UTF-8 wrappers (`convert_plain_utf8`, `normalize_text_utf8`, `to_simplified_chinese_utf8`) are provided for CLI tools and other UTF-8 frontends.
 - **`StringView` Null vs. Empty Semantics**:
   Dictionary translations can be valid but **empty** (e.g. grammatical particle `的` translating to `""` to omit it in certain contexts).
   - `view.isNull()` $\rightarrow$ Checks `data() == nullptr` (entry does not exist).
@@ -88,7 +88,7 @@ All dictionary queries access in-memory data structures loaded from `dict.db`.
 // 1. Initialize and load dictionaries (blocking / synchronous)
 hanvi::load_dict("path/to/dict.db");
 
-// (Optional) Explicitly configure OpenCC t2s.json path (e.g. for Android internal storage)
+// (Optional) Explicitly configure OpenCC t2s.json path
 // If not called, automatically searches standard relative and executable paths.
 hanvi::init_opencc("path/to/opencc/t2s.json");
 
@@ -126,7 +126,7 @@ Ideal for bulk conversion, chapter exports, and background translation jobs.
 ```cpp
 #include "core/converter.h"
 
-// --- UTF-8 API (convenient for JNI / CLI) ---
+// --- UTF-8 API (convenient for CLI / UTF-8 frontends) ---
 std::string raw_chinese = "伴随着房门突然被推开的响动...";
 
 // Step 1: Normalize (converts Traditional -> Simplified Chinese & fixes full-width punctuation)
@@ -195,7 +195,7 @@ std::u16string sv_text = doc->get_text_range(selection, hanvi::LanguageRole::Sin
 
 ### D. Dictionary Editing & Persistent CRUD (`core/io.h` vs. `core/db.h`)
 
-- **`core/io.h` (`io_*`)**: High-level transactional CRUD that updates **both** the in-memory Trie/maps and writes the change to `dict.db`. Always use this for interactive editing. The in-memory structures are not locked, so an `io_*` call must not overlap any conversion or another `io_*` call (see [Threading](#6-android-ndk--jni-implementation-notes)).
+- **`core/io.h` (`io_*`)**: High-level transactional CRUD that updates **both** the in-memory Trie/maps and writes the change to `dict.db`. Always use this for interactive editing. The in-memory structures are not locked, so an `io_*` call must not overlap any conversion or another `io_*` call.
 - **`core/db.h` (`db_*`)**: Low-level database operations that write directly to `dict.db` without altering in-memory state (useful for offline migrations or CLI batch import tools).
 
 ```cpp
@@ -233,7 +233,7 @@ hanvi::io_import_name_set(u"Imported", entries);  // std::vector<hanvi::Entry>; 
 hanvi::io_delete_name_set(*set_id);               // also deactivates it if it was the active set
 ```
 
-**Frontends must not open `dict.db` themselves** (no QtSql, Room, or raw SQLite): a second connection, especially through a second copy of SQLite, can corrupt the database on POSIX systems and bypasses the in-memory state. Read-only queries for editor UIs are provided in `core/db.h`:
+**Frontends must not open `dict.db` themselves** (no QtSql or raw SQLite): a second connection, especially through a second copy of SQLite, can corrupt the database on POSIX systems and bypasses the in-memory state. Read-only queries for editor UIs are provided in `core/db.h`:
 
 ```cpp
 #include "core/db.h"
@@ -290,34 +290,11 @@ bool is_lower  = hanvi::is_lower_char16(u'â'); // Returns true
 
 ---
 
-## 6. Android NDK / JNI Implementation Notes
-
-When porting to Android:
-1. **Asset Extraction**: APK assets cannot be opened by path. On first launch, copy `dict.db` and the `opencc/` asset folder from the APK `assets` into the app's internal storage (`context.getFilesDir().getAbsolutePath()`). Never overwrite an existing `dict.db`, since it holds the user's edits.
-2. **Sharing & Backup**: `dict.db` is meant to be shared and backed up independently of the app. Offer import/export through the Storage Access Framework (`ACTION_CREATE_DOCUMENT` / `ACTION_OPEN_DOCUMENT`). Call `close_db()` before replacing the file, then `load_dict()` again.
-3. **JNI Wrappers**: Expose JNI methods matching your UI needs:
-   - `nativeInit(String dbPath, String openccConfigPath)` $\rightarrow$ calls `hanvi::init_opencc(openccConfigPath)` and `hanvi::load_dict(dbPath)`.
-   - `nativeConvertPlain(String text)` $\rightarrow$ calls `hanvi::convert_plain(hanvi::normalize_text(text))`.
-   - `nativeConvertAligned(String text)` $\rightarrow$ calls `hanvi::convert(...)` and serializes tokens into a flat primitive array or Java/Kotlin data classes.
-4. **String Encoding**: Use the **UTF-16** API. Java strings are UTF-16 internally, so `GetStringChars` / `NewString` map straight to `std::u16string_view` / `std::u16string` with no conversion. Do not use `GetStringUTFChars` / `NewStringUTF` with the `*_utf8` functions: JNI uses *modified* UTF-8, which encodes characters outside the BMP (CJK Extension B and later) as surrogate pairs that `to_utf16` does not decode correctly.
-5. **Threading**:
-   - Conversions (`convert_plain`, `convert`, `normalize_text`) only read the in-memory dictionary, so several can run at once from background coroutines/threads.
-   - The in-memory Trie/maps have **no lock**. Dictionary mutations (`io_*`, `load_name_set`, `reload_dict`) must not overlap **any** conversion or each other. Funnel both through a single dispatcher, or guard them with a read-write lock on the Kotlin side.
-   - The `load_dict` / `reload_dict` callback runs on a detached native thread that is not attached to the JVM. Calling into Kotlin from it requires `AttachCurrentThread`. It is simpler to call the blocking overloads from a background coroutine. Progress callbacks run synchronously on the thread that called the conversion.
-6. **CMake Cross-Compilation**:
-   - Configure with `-DHANVI_BUILD_DESKTOP=OFF -DHANVI_BUILD_CLI=OFF`, so that Qt is not required.
-   - `core/CMakeLists.txt` automatically sets `HANVI_BUILD_OPENCC_DICTIONARIES=OFF` when cross-compiling (`ANDROID` or `CMAKE_CROSSCOMPILING`). This avoids attempting to run target-compiled binary dictionary tools on the host machine.
-   - The `.ocd2` files must therefore come from a host (desktop) build. A desktop or CLI build collects them, together with `t2s.json`, in `<build>/opencc/`. Copy that folder to the app's `assets/opencc/`.
-
-   - For a build that packages the data itself (such as the WebAssembly build), point `-DHANVI_OPENCC_DATA_DIR=<build>/opencc` at that folder instead.
-
----
-
-## 7. WebAssembly (Emscripten) Notes
+## 6. WebAssembly (Emscripten) Notes
 
 The core is plain C++23 with no platform-specific code, so it builds for WebAssembly unchanged:
 
-- **Build only the core.** Configure with `emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release`; the desktop app and CLI are switched off automatically. The embind bindings (`web/wasm/`) and the React UI live in `web/`, like the Android JNI layer; see [web/README.md](../web/README.md).
+- **Build only the core.** Configure with `emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release`; the desktop app and CLI are switched off automatically. The embind bindings (`web/wasm/`) and the React UI live in `web/`; see [web/README.md](../web/README.md).
 - **No threads needed.** The build is single-threaded and meant to run inside a Web Worker, so the page needs no cross-origin isolation headers. Where threads cannot be created, the dictionary loader runs its parts one after another and `load_dict()` with a callback loads inline, then calls it.
 - **Exceptions are enabled** (`-fwasm-exceptions`, set in `CompilerOptions.cmake`), since the core and OpenCC catch errors and the thread fallbacks above rely on it.
 - **Persisting edits is the caller's job.** The database file lives in Emscripten's in-memory file system. `db_change_count()` tells whether anything changed; `save_db_copy(path)` writes a consistent copy (or read the file itself) to keep in IndexedDB/OPFS and to offer for download and upload, so it can be backed up and shared.

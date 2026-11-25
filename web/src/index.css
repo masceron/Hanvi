@@ -98,6 +98,45 @@ body {
   padding: 0 8px;
 }
 
+.update-pill {
+  display: inline-flex;
+  align-items: center;
+  background: var(--accent-purple);
+  color: #ffffff;
+  border-radius: 999px;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.update-reload-btn,
+.update-dismiss-btn {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 5px 8px;
+  transition: background-color 0.15s;
+}
+
+.update-reload-btn {
+  font-weight: 600;
+  padding-right: 6px;
+}
+
+.update-dismiss-btn {
+  padding-left: 5px;
+  padding-right: 7px;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.update-reload-btn:hover,
+.update-dismiss-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
 .busy-dot {
   width: 8px;
   height: 8px;

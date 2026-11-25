@@ -4,6 +4,9 @@ interface HeaderProps {
   isMenuOpen: boolean
   statusText: string
   isBusy: boolean
+  hasUpdate?: boolean
+  onApplyUpdate?: () => void
+  onDismissUpdate?: () => void
   onToggleMenu: () => void
   onCloseMenu: () => void
   onOpenFile: () => void
@@ -30,6 +33,9 @@ export function Header({
   isMenuOpen,
   statusText,
   isBusy,
+  hasUpdate,
+  onApplyUpdate,
+  onDismissUpdate,
   onToggleMenu,
   onCloseMenu,
   onOpenFile,
@@ -74,6 +80,27 @@ export function Header({
       />
 
       <div className="header-status">
+        {hasUpdate && (
+          <div className="update-pill" role="status">
+            <button
+              type="button"
+              className="update-reload-btn"
+              onClick={onApplyUpdate}
+              title="Reload to apply the new version"
+            >
+              Update ready · Reload
+            </button>
+            <button
+              type="button"
+              className="update-dismiss-btn"
+              onClick={onDismissUpdate}
+              aria-label="Dismiss update notification"
+              title="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+        )}
         {isBusy && <span className="busy-dot" />}
         <span className="status-label">{statusText}</span>
       </div>

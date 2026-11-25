@@ -45,3 +45,4 @@ Prerequisites: [emsdk](https://emscripten.org/docs/getting_started/downloads.htm
 - `dict.db` is compressed to `dict.db.gz` (~14 MB) during build to stay within Cloudflare Pages' 25MB asset limit, and decompressed on load via `DecompressionStream('gzip')`.
 - Dictionary edits are saved in the browser's origin private file system (OPFS).
 - Each browser tab has its own in-memory copy, kept in sync via Web Locks and `BroadcastChannel`.
+- Packaged as an installable PWA via `vite-plugin-pwa`, precaching the app bundle, WASM core, OpenCC data, and `dict.db.gz` for offline use.
