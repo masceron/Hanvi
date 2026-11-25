@@ -178,7 +178,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     tab_bar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
     QFont tab_font = tab_bar->font();
-    tab_font.setFamilies({"Noto Sans SC", "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI"});
+    tab_font.setFamilies({"Noto Sans", "Noto Sans SC"});
     tab_font.setPointSizeF(9.5);
     tab_font.setWeight(QFont::Normal);
     tab_bar->setFont(tab_font);
@@ -274,7 +274,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     ui->sv_output->set_session(session);
     ui->sv_output->set_role(LanguageRole::SinoVietnamese);
-    QFont sv_font("Tahoma");
+    QFont sv_font("Noto Sans");
+    sv_font.setFamilies({"Noto Sans", "Noto Sans SC"});
     sv_font.setStyleHint(QFont::SansSerif);
     sv_font.setPixelSize(16);
     ui->sv_output->set_font(sv_font);
@@ -282,7 +283,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     ui->vn_output->set_session(session);
     ui->vn_output->set_role(LanguageRole::Vietnamese);
-    QFont vn_font("Tahoma");
+    QFont vn_font("Noto Sans");
+    vn_font.setFamilies({"Noto Sans", "Noto Sans SC"});
     vn_font.setStyleHint(QFont::SansSerif);
     vn_font.setPixelSize(16);
     ui->vn_output->set_font(vn_font);

@@ -52,7 +52,8 @@ QVariant EntriesModel::data(const QModelIndex &index, const int role) const {
             return f;
         }
         if (index.column() == 1) {
-            QFont f(QStringLiteral("Tahoma"));
+            QFont f(QStringLiteral("Noto Sans"));
+            f.setFamilies({QStringLiteral("Noto Sans"), QStringLiteral("Noto Sans SC")});
             f.setPointSize(10);
             return f;
         }

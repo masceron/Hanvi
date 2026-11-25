@@ -74,14 +74,14 @@
        </property>
        <property name="font">
         <font>
-         <family>Segoe UI</family>
+         <family>Noto Sans</family>
          <pointsize>12</pointsize>
          <italic>false</italic>
          <bold>true</bold>
         </font>
        </property>
        <property name="styleSheet">
-        <string notr="true">font: 700 12pt &quot;Segoe UI&quot;;</string>
+        <string notr="true">font: 700 12pt &quot;Noto Sans&quot;;</string>
        </property>
        <property name="text">
         <string>Sino-Vietnamese reading</string>
@@ -101,13 +101,13 @@
        </property>
        <property name="font">
         <font>
-         <family>Tahoma</family>
+         <family>Noto Sans</family>
          <pointsize>12</pointsize>
         </font>
        </property>
        <property name="styleSheet">
         <string notr="true">font-size: 12pt;
-font-family: &quot;Tahoma&quot;</string>
+font-family: &quot;Noto Sans&quot;</string>
        </property>
        <property name="text">
         <string/>
@@ -128,14 +128,14 @@ font-family: &quot;Tahoma&quot;</string>
       <widget class="QLabel" name="label_2">
        <property name="font">
         <font>
-         <family>Segoe UI</family>
+         <family>Noto Sans</family>
          <pointsize>12</pointsize>
          <italic>false</italic>
          <bold>true</bold>
         </font>
        </property>
        <property name="styleSheet">
-        <string notr="true">font: 700 12pt &quot;Segoe UI&quot;;</string>
+        <string notr="true">font: 700 12pt &quot;Noto Sans&quot;;</string>
        </property>
        <property name="text">
         <string>Name</string>
@@ -155,7 +155,7 @@ font-family: &quot;Tahoma&quot;</string>
        </property>
        <property name="styleSheet">
         <string notr="true">font-size: 12pt;
-font-family: &quot;Tahoma&quot;</string>
+font-family: &quot;Noto Sans&quot;</string>
        </property>
        <property name="alignment">
         <set>Qt::AlignmentFlag::AlignCenter</set>
@@ -177,14 +177,14 @@ font-family: &quot;Tahoma&quot;</string>
          </property>
          <property name="font">
           <font>
-           <family>Segoe UI</family>
+           <family>Noto Sans</family>
            <pointsize>11</pointsize>
            <italic>false</italic>
            <bold>false</bold>
           </font>
          </property>
          <property name="styleSheet">
-          <string notr="true">font: 11pt &quot;Segoe UI&quot;;
+          <string notr="true">font: 11pt &quot;Noto Sans&quot;;
 padding-right: 55px;</string>
          </property>
          <property name="text">
@@ -260,7 +260,7 @@ font-weight: bold;</string>
         <widget class="QPushButton" name="cap_1_name">
          <property name="font">
           <font>
-           <family>Segoe UI</family>
+           <family>Noto Sans</family>
            <pointsize>11</pointsize>
            <italic>false</italic>
            <bold>true</bold>
@@ -270,7 +270,7 @@ font-weight: bold;</string>
           <enum>Qt::FocusPolicy::NoFocus</enum>
          </property>
          <property name="styleSheet">
-          <string notr="true">font: 700 11pt &quot;Segoe UI&quot;;</string>
+          <string notr="true">font: 700 11pt &quot;Noto Sans&quot;;</string>
          </property>
          <property name="text">
           <string>1</string>
@@ -284,7 +284,7 @@ font-weight: bold;</string>
         <widget class="QPushButton" name="cap_2_name">
          <property name="font">
           <font>
-           <family>Segoe UI</family>
+           <family>Noto Sans</family>
            <pointsize>11</pointsize>
            <italic>false</italic>
            <bold>true</bold>
@@ -294,7 +294,7 @@ font-weight: bold;</string>
           <enum>Qt::FocusPolicy::NoFocus</enum>
          </property>
          <property name="styleSheet">
-          <string notr="true">font: 700 11pt &quot;Segoe UI&quot;;</string>
+          <string notr="true">font: 700 11pt &quot;Noto Sans&quot;;</string>
          </property>
          <property name="text">
           <string>2</string>
@@ -468,7 +468,7 @@ font-weight: bold;</string>
      <item>
       <widget class="QLabel" name="label_5">
        <property name="styleSheet">
-        <string notr="true">font: 11pt &quot;Segoe UI&quot;;</string>
+        <string notr="true">font: 11pt &quot;Noto Sans&quot;;</string>
        </property>
        <property name="text">
         <string>Capitalize</string>
@@ -513,7 +513,7 @@ font-weight: bold;</string>
         <widget class="QPushButton" name="cap_1_phrase">
          <property name="font">
           <font>
-           <family>Segoe UI</family>
+           <family>Noto Sans</family>
            <pointsize>11</pointsize>
            <italic>false</italic>
            <bold>true</bold>
@@ -523,7 +523,7 @@ font-weight: bold;</string>
           <enum>Qt::FocusPolicy::NoFocus</enum>
          </property>
          <property name="styleSheet">
-          <string notr="true">font: 700 11pt &quot;Segoe UI&quot;;</string>
+          <string notr="true">font: 700 11pt &quot;Noto Sans&quot;;</string>
          </property>
          <property name="text">
           <string>1</string>
@@ -537,7 +537,7 @@ font-weight: bold;</string>
         <widget class="QPushButton" name="cap_2_phrase">
          <property name="font">
           <font>
-           <family>Segoe UI</family>
+           <family>Noto Sans</family>
            <pointsize>11</pointsize>
            <italic>false</italic>
            <bold>true</bold>
@@ -547,7 +547,7 @@ font-weight: bold;</string>
           <enum>Qt::FocusPolicy::NoFocus</enum>
          </property>
          <property name="styleSheet">
-          <string notr="true">font: 700 11pt &quot;Segoe UI&quot;;</string>
+          <string notr="true">font: 700 11pt &quot;Noto Sans&quot;;</string>
          </property>
          <property name="text">
           <string>2</string>

@@ -111,7 +111,7 @@
           <widget class="QLineEdit" name="add_translation">
            <property name="font">
             <font>
-             <family>Tahoma</family>
+             <family>Noto Sans</family>
              <pointsize>10</pointsize>
             </font>
            </property>

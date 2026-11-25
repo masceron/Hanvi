@@ -29,7 +29,7 @@
    <item>
     <widget class="QLabel" name="label">
      <property name="styleSheet">
-      <string notr="true">font: 700 13pt &quot;Tahoma&quot;;</string>
+      <string notr="true">font: 700 13pt &quot;Noto Sans&quot;;</string>
      </property>
      <property name="text">
       <string>Luật nhân</string>
@@ -55,7 +55,7 @@
        <item>
         <widget class="QLabel" name="label_2">
          <property name="styleSheet">
-          <string notr="true">font: 700 11pt &quot;Segoe UI&quot;;
+          <string notr="true">font: 700 11pt &quot;Noto Sans&quot;;
 color: lightgrey;</string>
          </property>
          <property name="text">
@@ -96,7 +96,7 @@ outline: none;</string>
          <item>
           <widget class="QLabel" name="original_placeholder">
            <property name="styleSheet">
-            <string notr="true">font: 700 16pt &quot;Segoe UI&quot;;
+            <string notr="true">font: 700 16pt &quot;Noto Sans&quot;;
 border: 1px solid #0078d7;
 border-radius: 15px;
 padding: 0 2px;</string>
@@ -146,7 +146,7 @@ outline: none;</string>
        <item>
         <widget class="QLabel" name="label_3">
          <property name="styleSheet">
-          <string notr="true">font: 700 11pt &quot;Segoe UI&quot;;
+          <string notr="true">font: 700 11pt &quot;Noto Sans&quot;;
 color: lightgrey;</string>
          </property>
          <property name="text">
@@ -164,7 +164,7 @@ color: lightgrey;</string>
            <property name="styleSheet">
             <string notr="true">background-color: transparent;
 border-width: 0;
-font: 12pt &quot;Tahoma&quot;;
+font: 12pt &quot;Noto Sans&quot;;
 padding: 6px 0;
 outline: none;</string>
            </property>
@@ -182,7 +182,7 @@ outline: none;</string>
          <item>
           <widget class="QLabel" name="translated_placeholder">
            <property name="styleSheet">
-            <string notr="true">font: 700 16pt &quot;Segoe UI&quot;;
+            <string notr="true">font: 700 16pt &quot;Noto Sans&quot;;
 border: 1px solid #0078d7;
 border-radius: 15px;
 padding: 0 2px;</string>
@@ -203,7 +203,7 @@ padding: 0 2px;</string>
            <property name="styleSheet">
             <string notr="true">background-color: transparent;
 border-width: 0;
-font: 12pt &quot;Tahoma&quot;;
+font: 12pt &quot;Noto Sans&quot;;
 padding: 6px 0;
 outline: none;</string>
            </property>

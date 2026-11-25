@@ -14,14 +14,21 @@ void init_style(QApplication &app) {
     QApplication::setWindowIcon(QIcon(":/resources/icon.ico"));
     QApplication::setStyle(QStyleFactory::create("Fusion"));
 
-    const QString font_path = QCoreApplication::applicationDirPath() + "/NotoSansSC.ttf";
-    if (QFile::exists(font_path)) {
-        QFontDatabase::addApplicationFont(font_path);
-    } else if (QFile::exists("desktop/resources/NotoSansSC.ttf")) {
-        QFontDatabase::addApplicationFont("desktop/resources/NotoSansSC.ttf");
-    } else if (QFile::exists("resources/NotoSansSC.ttf")) {
-        QFontDatabase::addApplicationFont("resources/NotoSansSC.ttf");
+    for (const auto *font_file : {"NotoSansSC.ttf", "NotoSans-Regular.ttf", "NotoSans-Bold.ttf"}) {
+        const QString font_path = QCoreApplication::applicationDirPath() + "/" + font_file;
+        if (QFile::exists(font_path)) {
+            QFontDatabase::addApplicationFont(font_path);
+        } else if (const QString desktop_res = QStringLiteral("desktop/resources/") + font_file; QFile::exists(desktop_res)) {
+            QFontDatabase::addApplicationFont(desktop_res);
+        } else if (const QString res = QStringLiteral("resources/") + font_file; QFile::exists(res)) {
+            QFontDatabase::addApplicationFont(res);
+        }
     }
+
+    QFont app_font(QStringLiteral("Noto Sans"));
+    app_font.setFamilies({QStringLiteral("Noto Sans"), QStringLiteral("Noto Sans SC")});
+    app_font.setStyleHint(QFont::SansSerif);
+    QApplication::setFont(app_font);
 
     const QString css =
 #include "global.qcss"

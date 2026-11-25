@@ -53,7 +53,7 @@ QLabel#matches {
     background: transparent;
     color: #9a9aa6;
     font-size: 9pt;
-    font-family: &quot;Segoe UI&quot;, &quot;Tahoma&quot;, sans-serif;
+    font-family: &quot;Noto Sans&quot;, sans-serif;
     padding: 0px 4px;
     min-height: 24px;
     max-height: 24px;
@@ -201,7 +201,7 @@ QPushButton#close:pressed {
        </property>
        <property name="font">
         <font>
-         <family>Segoe UI</family>
+         <family>Noto Sans</family>
          <pointsize>9</pointsize>
         </font>
        </property>
@@ -241,7 +241,7 @@ QPushButton#close:pressed {
        </property>
        <property name="font">
         <font>
-         <family>Tahoma</family>
+         <family>Noto Sans SC</family>
          <pointsize>8</pointsize>
         </font>
        </property>
@@ -275,7 +275,7 @@ QPushButton#close:pressed {
        </property>
        <property name="font">
         <font>
-         <family>Tahoma</family>
+         <family>Noto Sans SC</family>
          <pointsize>8</pointsize>
         </font>
        </property>
@@ -309,7 +309,7 @@ QPushButton#close:pressed {
        </property>
        <property name="font">
         <font>
-         <family>Tahoma</family>
+         <family>Noto Sans</family>
          <pointsize>9</pointsize>
          <bold>true</bold>
         </font>

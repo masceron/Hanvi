@@ -71,7 +71,7 @@
      <item>
       <widget class="QPushButton" name="import_set">
        <property name="styleSheet">
-        <string notr="true">font: 700 12pt &quot;Segoe UI&quot;;</string>
+        <string notr="true">font: 700 12pt &quot;Noto Sans&quot;;</string>
        </property>
        <property name="text">
         <string>Import...</string>
@@ -81,7 +81,7 @@
      <item>
       <widget class="QPushButton" name="add_new">
        <property name="styleSheet">
-        <string notr="true">font: 700 12pt &quot;Segoe UI&quot;;</string>
+        <string notr="true">font: 700 12pt &quot;Noto Sans&quot;;</string>
        </property>
        <property name="text">
         <string>Create a new nameset</string>
