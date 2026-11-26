@@ -24,6 +24,79 @@ namespace hanvi {
                 }
             }
         };
+
+        // Finds the override for each token as the converter emits it; without overrides this costs one
+        // branch per token. Positions passed in are offsets into the converted input.
+        class OverrideLookup {
+        public:
+            OverrideLookup(const OverrideSet &set, const size_t text_length)
+                : entries_(set.entries), base_(set.text_offset) {
+                for (size_t k = 0; k < entries_.size(); ++k) {
+                    if (entries_[k].offset >= base_ && entries_[k].offset - base_ < text_length) {
+                        order_.push_back(k);
+                    }
+                }
+                std::ranges::stable_sort(order_, {}, [this](const size_t k) { return entries_[k].offset; });
+                matched_.assign(order_.size(), false);
+            }
+
+            [[nodiscard]] size_t base() const noexcept { return base_; }
+
+            const TokenOverride *find(const size_t pos, const std::u16string_view cn) {
+                if (order_.empty()) return nullptr;
+                const size_t offset = base_ + pos;
+                auto it = std::ranges::lower_bound(order_, offset, {},
+                                                   [this](const size_t k) { return entries_[k].offset; });
+                for (; it != order_.end() && entries_[*it].offset == offset; ++it) {
+                    if (const size_t slot = it - order_.begin(); !matched_[slot] && entries_[*it].cn == cn) {
+                        matched_[slot] = true;
+                        return &entries_[*it];
+                    }
+                }
+                return nullptr;
+            }
+
+            [[nodiscard]] std::vector<size_t> unmatched() const {
+                std::vector<size_t> result;
+                for (size_t slot = 0; slot < order_.size(); ++slot) {
+                    if (!matched_[slot]) result.push_back(order_[slot]);
+                }
+                std::ranges::sort(result);
+                return result;
+            }
+
+        private:
+            std::span<const TokenOverride> entries_;
+            size_t base_;
+            std::vector<size_t> order_; // indices into entries_ within the converted input, by offset
+            std::vector<bool> matched_; // per slot of order_
+        };
+    }
+
+    // Replaces a token's translation with its override. cap_before is cap_next as it was when the token
+    // began: if the dictionary translation took the sentence's capital, the override takes it instead,
+    // or hands it on to the next word when it omits this one.
+    static bool apply_override(const TokenOverride *override_entry, const bool cap_before, bool &cap_next,
+                               std::u16string &translation) {
+        if (override_entry == nullptr) return false;
+        const bool took_capital = cap_before && !cap_next;
+        translation = override_entry->vn;
+        if (took_capital) {
+            if (translation.empty()) {
+                cap_next = true;
+            } else if (is_lower_char16(translation[0])) {
+                translation[0] = to_upper_char16(translation[0]);
+            }
+        }
+        return true;
+    }
+
+    // Sets a finished token's offset in the full text and applies its override; pos is the token's
+    // offset in the converted input.
+    static void finish_token(Token &tok, const size_t pos, OverrideLookup &overrides, const bool cap_before,
+                             bool &cap_next) {
+        tok.offset = static_cast<uint32_t>(overrides.base() + pos);
+        tok.overridden = apply_override(overrides.find(pos, tok.cn), cap_before, cap_next, tok.vn);
     }
 
     static std::u16string get_sv(const std::u16string_view &cn) {
@@ -294,7 +367,7 @@ namespace hanvi {
 
     static void convert_recursive_aligned(const std::u16string_view &input, int start_offset, uint32_t &token_counter,
                                           bool &cap_next, bool &in_quote,
-                                          Progress &progress, AlignedDocument &doc) {
+                                          Progress &progress, OverrideLookup &overrides, AlignedDocument &doc) {
         size_t i = 0;
 
         while (i < input.length()) {
@@ -317,6 +390,9 @@ namespace hanvi {
                 continue;
             }
 
+            const bool cap_before = cap_next;
+            const size_t pos = static_cast<size_t>(start_offset) + i;
+
             if (current_name_set_id != -1) {
                 if (Match match = name_set_dictionary.find(input, static_cast<int>(i));
                     match.length > 0 && match.priority == NAME) {
@@ -331,6 +407,7 @@ namespace hanvi {
                     tok.cn = std::u16string(input.substr(i, match.length));
                     tok.sv = std::move(sv);
                     tok.vn = match.translation.str();
+                    finish_token(tok, pos, overrides, cap_before, cap_next);
 
                     i += match.length;
                     progress.update(match.length);
@@ -354,6 +431,7 @@ namespace hanvi {
                 tok.cn = std::u16string(input.substr(i, length));
                 tok.sv = std::move(sv);
                 tok.vn = translation.str();
+                finish_token(tok, pos, overrides, cap_before, cap_next);
 
                 i += length;
                 progress.update(length);
@@ -387,6 +465,7 @@ namespace hanvi {
 
                         Token start_tok;
                         start_tok.id = rule_uid;
+                        start_tok.offset = static_cast<uint32_t>(overrides.base() + pos);
                         start_tok.cn = rule->original_start;
                         start_tok.sv = get_sv(rule->original_start);
                         start_tok.vn = t_start;
@@ -396,12 +475,14 @@ namespace hanvi {
                         convert_recursive_aligned(input.substr(inner_start_idx, inner_len),
                                                   start_offset + inner_start_idx,
                                                   token_counter,
-                                                  cap_next, in_quote, progress, doc);
+                                                  cap_next, in_quote, progress, overrides, doc);
 
                         progress.update(rule_end_len);
 
                         Token end_tok;
                         end_tok.id = rule_uid;
+                        end_tok.offset = static_cast<uint32_t>(overrides.base() + start_offset +
+                                                               rule_match->abs_start_of_end_token);
                         end_tok.cn = rule->original_end;
                         end_tok.sv = get_sv(rule->original_end);
                         end_tok.vn = rule->translation_end;
@@ -464,6 +545,7 @@ namespace hanvi {
                 tok.cn = std::u16string(input.substr(i, length));
                 tok.sv = std::move(sv);
                 tok.vn = std::move(trans);
+                finish_token(tok, pos, overrides, cap_before, cap_next);
 
                 i += length;
                 progress.update(length);
@@ -509,6 +591,7 @@ namespace hanvi {
                     tok.cn = std::move(word);
                     tok.sv = std::move(sv_word);
                     tok.vn = std::move(vn_word);
+                    finish_token(tok, pos, overrides, cap_before, cap_next);
 
                     i += len;
                     progress.update(static_cast<int>(len));
@@ -590,6 +673,7 @@ namespace hanvi {
                 tok.cn = std::move(source_text);
                 tok.sv = std::move(sv_text);
                 tok.vn = std::move(translated_text);
+                finish_token(tok, pos, overrides, cap_before, cap_next);
 
                 i += char_len;
                 progress.update(static_cast<int>(char_len));
@@ -600,7 +684,8 @@ namespace hanvi {
     }
 
     std::shared_ptr<AlignedDocument> convert(const std::u16string_view input,
-                                             const std::function<void(int)> &progress_callback) {
+                                             const std::function<void(int)> &progress_callback,
+                                             const OverrideSet &overrides) {
         auto doc = std::make_shared<AlignedDocument>();
         doc->paragraphs.emplace_back();
 
@@ -609,12 +694,14 @@ namespace hanvi {
         bool in_quote = false;
 
         Progress progress(progress_callback);
+        OverrideLookup lookup(overrides, input.length());
 
-        convert_recursive_aligned(input, 0, token_counter, cap_next, in_quote, progress, *doc);
+        convert_recursive_aligned(input, 0, token_counter, cap_next, in_quote, progress, lookup, *doc);
 
         if (doc->paragraphs.size() > 1 && doc->paragraphs.back().empty()) {
             doc->paragraphs.pop_back();
         }
+        doc->stale_overrides = lookup.unmatched();
 
         doc->build_index();
         return doc;
@@ -627,7 +714,8 @@ namespace hanvi {
         };
     }
 
-    static PlainResult convert_recursive_plain(const std::u16string_view &input, bool &cap_next, Progress &progress,
+    static PlainResult convert_recursive_plain(const std::u16string_view &input, const size_t start_offset,
+                                               bool &cap_next, Progress &progress, OverrideLookup &overrides,
                                                bool &in_quote, bool &in_single_quote) {
         PlainResult out;
         size_t i = 0;
@@ -655,6 +743,9 @@ namespace hanvi {
                 continue;
             }
 
+            const bool cap_before = cap_next;
+            const size_t pos = start_offset + i;
+
             if (current_name_set_id != -1) {
                 if (Match match = name_set_dictionary.find(input, static_cast<int>(i));
                     match.length > 0 && match.priority == NAME) {
@@ -663,6 +754,7 @@ namespace hanvi {
                         if (!trans.empty() && is_lower_char16(trans[0])) trans[0] = to_upper_char16(trans[0]);
                         cap_next = false;
                     }
+                    apply_override(overrides.find(pos, input.substr(i, match.length)), cap_before, cap_next, trans);
 
                     out.text += trans;
                     i += match.length;
@@ -671,7 +763,7 @@ namespace hanvi {
                     progress.update(match.length);
 
                     if (should_append_space(input, i, 0, in_quote, in_single_quote) && (
-                            out.text.empty() || out.text.back() != u' ')) {
+                            out.text.empty() || (out.text.back() != u' ' && out.text.back() != u'\n'))) {
                         out.text += u' ';
                     }
 
@@ -687,12 +779,13 @@ namespace hanvi {
                     if (!trans.empty() && is_lower_char16(trans[0])) trans[0] = to_upper_char16(trans[0]);
                     cap_next = false;
                 }
+                apply_override(overrides.find(pos, input.substr(i, length)), cap_before, cap_next, trans);
                 out.text += trans;
                 i += length;
                 out.length_consumed += length;
 
                 if (should_append_space(input, i, 0, in_quote, in_single_quote) && (
-                        out.text.empty() || out.text.back() != u' ')) {
+                        out.text.empty() || (out.text.back() != u' ' && out.text.back() != u'\n'))) {
                     out.text += u' ';
                 }
 
@@ -721,8 +814,9 @@ namespace hanvi {
                             cap_next = false;
                         }
 
-                        auto [text, _] = convert_recursive_plain(input.substr(inner_start_idx, inner_len), cap_next,
-                                                                 progress, in_quote, in_single_quote);
+                        auto [text, _] = convert_recursive_plain(input.substr(inner_start_idx, inner_len),
+                                                                 start_offset + inner_start_idx, cap_next,
+                                                                 progress, overrides, in_quote, in_single_quote);
 
                         progress.update(end_len);
 
@@ -741,7 +835,7 @@ namespace hanvi {
                         out.length_consumed += start_len + inner_len + end_len;
 
                         if (should_append_space(input, i, 0, in_quote, in_single_quote) && (
-                                out.text.empty() || out.text.back() != u' ')) {
+                                out.text.empty() || (out.text.back() != u' ' && out.text.back() != u'\n'))) {
                             out.text += u' ';
                         }
                         continue;
@@ -789,13 +883,14 @@ namespace hanvi {
                     if (!trans.empty() && is_lower_char16(trans[0])) trans[0] = to_upper_char16(trans[0]);
                     cap_next = false;
                 }
+                apply_override(overrides.find(pos, input.substr(i, length)), cap_before, cap_next, trans);
 
                 out.text += trans;
                 i += length;
                 out.length_consumed += length;
 
                 if (should_append_space(input, i, 0, in_quote, in_single_quote) && (
-                        out.text.empty() || out.text.back() != u' ')) {
+                        out.text.empty() || (out.text.back() != u' ' && out.text.back() != u'\n'))) {
                     out.text += u' ';
                 }
 
@@ -831,13 +926,14 @@ namespace hanvi {
                         if (is_lower_char16(word[0])) word[0] = to_upper_char16(word[0]);
                         cap_next = false;
                     }
+                    apply_override(overrides.find(pos, input.substr(start_idx, len)), cap_before, cap_next, word);
 
                     out.text += word;
                     i += len;
                     out.length_consumed += static_cast<int>(len);
 
                     if (should_append_space(input, i, 0, in_quote, in_single_quote) && (
-                            out.text.empty() || out.text.back() != u' ')) {
+                            out.text.empty() || (out.text.back() != u' ' && out.text.back() != u'\n'))) {
                         out.text += u' ';
                     }
 
@@ -898,6 +994,9 @@ namespace hanvi {
                     }
                 }
 
+                apply_override(overrides.find(pos, input.substr(i, char_len)), cap_before, cap_next,
+                               translated_text);
+
                 // A space can be waiting before closing punctuation when the word between them
                 // translated to nothing (e.g. 的 in 调配的,).
                 if ((translated_text == u"\"" && in_quote) || (translated_text == u"'" && in_single_quote) ||
@@ -919,7 +1018,7 @@ namespace hanvi {
                     } else {
                         in_quote = false;
                         if (should_append_space(input, i, last_char, in_quote, in_single_quote) && (
-                                out.text.empty() || out.text.back() != u' ')) {
+                                out.text.empty() || (out.text.back() != u' ' && out.text.back() != u'\n'))) {
                             out.text += u' ';
                         }
                     }
@@ -929,13 +1028,13 @@ namespace hanvi {
                     } else {
                         in_single_quote = false;
                         if (should_append_space(input, i, last_char, in_quote, in_single_quote) && (
-                                out.text.empty() || out.text.back() != u' ')) {
+                                out.text.empty() || (out.text.back() != u' ' && out.text.back() != u'\n'))) {
                             out.text += u' ';
                         }
                     }
                 } else if (!translated_text.empty() && should_append_space(
                                input, i, last_char, in_quote,
-                               in_single_quote) && (out.text.empty() || out.text.back() != u' ')) {
+                               in_single_quote) && (out.text.empty() || (out.text.back() != u' ' && out.text.back() != u'\n'))) {
                     out.text += u' ';
                 }
 
@@ -945,12 +1044,14 @@ namespace hanvi {
         return out;
     }
 
-    std::u16string convert_plain(const std::u16string_view input, const std::function<void(int)> &progress_callback) {
+    std::u16string convert_plain(const std::u16string_view input, const std::function<void(int)> &progress_callback,
+                                 const OverrideSet &overrides) {
         bool cap_next = true;
         bool in_quote = false;
         bool in_single_quote = false;
         Progress progress(progress_callback);
-        auto [text, _] = convert_recursive_plain(input, cap_next, progress, in_quote, in_single_quote);
+        OverrideLookup lookup(overrides, input.length());
+        auto [text, _] = convert_recursive_plain(input, 0, cap_next, progress, lookup, in_quote, in_single_quote);
 
         size_t start = 0;
         while (start < text.size() && (text[start] == u' ' || text[start] == u'\t' || text[start] == u'\r' || text[

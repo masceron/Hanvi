@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include "aligned_document.h"
@@ -9,11 +10,22 @@
 namespace hanvi {
     void init_opencc(const std::string &config_path);
 
+    // Overrides to apply during a conversion. `entries` need not be sorted; offsets are into the full
+    // text, and `text_offset` is where the converted input starts in it (a page's start, else 0).
+    // Rule tokens (被...) are never overridden.
+    struct OverrideSet {
+        std::span<const TokenOverride> entries;
+        size_t text_offset = 0;
+    };
+
+    // Token offsets are reported relative to the full text, i.e. shifted by overrides.text_offset.
     std::shared_ptr<AlignedDocument> convert(std::u16string_view input,
-                                             const std::function<void(int)> &progress_callback = nullptr);
+                                             const std::function<void(int)> &progress_callback = nullptr,
+                                             const OverrideSet &overrides = {});
 
     std::u16string convert_plain(std::u16string_view input,
-                                 const std::function<void(int)> &progress_callback = nullptr);
+                                 const std::function<void(int)> &progress_callback = nullptr,
+                                 const OverrideSet &overrides = {});
 
     std::u16string to_simplified_chinese(std::u16string_view input);
 
@@ -30,6 +42,7 @@ namespace hanvi {
     std::string normalize_text_utf8(std::string_view input);
 } // namespace hanvi
 
+using hanvi::OverrideSet;
 using hanvi::init_opencc;
 using hanvi::convert;
 using hanvi::convert_plain;

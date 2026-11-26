@@ -15,13 +15,24 @@ namespace hanvi {
         Vietnamese
     };
 
+    // A translation the user picked for one occurrence of a word, replacing the dictionary's.
+    // It applies only while the text still has a token that starts at `offset` and reads `cn`, so a
+    // dictionary edit that changes the segmentation there leaves it unapplied instead of misplacing it.
+    struct TokenOverride {
+        size_t offset = 0; // UTF-16 offset of the token's first character in the full text
+        std::u16string cn;
+        std::u16string vn; // may be empty, to omit the word
+    };
+
     struct Token {
         uint32_t id = 0;
+        uint32_t offset = 0; // UTF-16 offset of cn in the full text (see convert's text_offset)
         std::u16string cn;
         std::u16string sv;
         std::u16string vn;
         const Rule *rule = nullptr;
         bool has_trailing_space = false;
+        bool overridden = false; // vn comes from a TokenOverride
 
         [[nodiscard]] const std::u16string &text(const LanguageRole role) const noexcept {
             switch (role) {
@@ -136,6 +147,10 @@ namespace hanvi {
     public:
         std::vector<Paragraph> paragraphs;
 
+        // Indices (into the overrides passed to convert) of those inside the converted text that
+        // matched no token; the caller usually drops them.
+        std::vector<size_t> stale_overrides;
+
         void build_index();
 
         [[nodiscard]] const Token *find_token(uint32_t id) const noexcept;
@@ -157,6 +172,7 @@ namespace hanvi {
 } // namespace hanvi
 
 using hanvi::LanguageRole;
+using hanvi::TokenOverride;
 using hanvi::Token;
 namespace Typography = hanvi::Typography;
 using hanvi::DocumentPosition;

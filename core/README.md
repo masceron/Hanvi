@@ -168,8 +168,10 @@ for (size_t p = 0; p < doc->paragraphs.size(); ++p) {
         const auto& cn = tok.cn;                  // Original Chinese word/phrase
         const auto& sv = tok.sv;                  // Sino-Vietnamese reading (Hán Việt)
         const auto& vn = tok.vn;                  // Vietnamese translated meaning
+        uint32_t at    = tok.offset;              // UTF-16 offset of cn in the full text
         bool is_rule   = tok.is_rule();           // Matched a grammatical rule?
         bool space     = tok.has_trailing_space;  // Recommended trailing space
+        bool edited    = tok.overridden;          // vn comes from a TokenOverride
     }
 }
 
@@ -190,6 +192,30 @@ std::u16string vn_text = doc->get_text_range(selection, hanvi::LanguageRole::Vie
 std::u16string cn_text = doc->get_text_range(selection, hanvi::LanguageRole::Chinese);
 std::u16string sv_text = doc->get_text_range(selection, hanvi::LanguageRole::SinoVietnamese);
 ```
+
+#### Per-occurrence overrides
+
+When a word means different things in one text (明明 as a name and as "clearly"), the user can pick a translation for a single occurrence. The frontend keeps the overrides and passes them to every conversion; the core applies them while emitting tokens, so capitalization and spacing follow the replacement. Token boundaries never change.
+
+An override is anchored by the token's UTF-16 offset in the full text and its Chinese text. It applies only while a token still starts there and reads the same `cn`. If a dictionary edit changes the segmentation, the override is reported in `stale_overrides` instead of landing on a different word. Rule tokens (`被...`) are never overridden.
+
+```cpp
+std::vector<hanvi::TokenOverride> overrides{
+    {.offset = tok.offset, .cn = tok.cn, .vn = u"Minh Minh"}, // vn may be empty to omit the word
+};
+
+// A page: offsets stay full-text, text_offset says where the page starts in it.
+const size_t page_start = page.data() - full_text.data();
+auto doc = hanvi::convert(page, nullptr, {.entries = overrides, .text_offset = page_start});
+for (const size_t index: doc->stale_overrides) {
+    // overrides[index] lies inside this page but no longer matches a token; usually dropped.
+}
+
+// Export: the whole text, with the same overrides.
+std::u16string vn = hanvi::convert_plain(full_text, nullptr, {.entries = overrides});
+```
+
+`entries` need not be sorted. Overrides outside the converted input are ignored and are never reported as stale. A page's segmentation matches the whole text's, because conversion state resets at each line break and pages end on one. The exception is a grammar rule whose two parts straddle a page break.
 
 ---
 

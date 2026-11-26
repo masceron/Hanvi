@@ -100,6 +100,7 @@ namespace hanvi {
 
     void AlignedDocument::clear() noexcept {
         paragraphs.clear();
+        stale_overrides.clear();
         token_lut_.clear();
         total_tokens_ = 0;
     }
