@@ -41,12 +41,12 @@ jobs:
       web: ${{ steps.filter.outputs.web }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 2
 
       - name: Filter Changed Paths
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -87,7 +87,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -112,9 +112,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build 7zip libgl-dev libegl-dev libxkbcommon-dev
+          codename=$(lsb_release -cs)
           curl -sSfL -o llvm.sh https://apt.llvm.org/llvm.sh
-          sudo bash llvm.sh
-          ls -d /usr/lib/llvm-*/bin | sort -V | tail -n 1 >> "$GITHUB_PATH"
+          llvm_ver=$(comm -12 \
+            <(curl -sSfL "https://apt.llvm.org/${codename}/dists/" | grep -oE "llvm-toolchain-${codename}-[0-9]+" | grep -oE '[0-9]+$' | sort -u) \
+            <(grep -oE 'LLVM_VERSION_PATTERNS\[[0-9]+\]="-[0-9]+"' llvm.sh | grep -oE '[0-9]+' | sort -u) \
+            | sort -n | tail -n 1)
+          test -n "$llvm_ver"
+          sudo bash llvm.sh "$llvm_ver"
+          echo "/usr/lib/llvm-${llvm_ver}/bin" >> "$GITHUB_PATH"
 
       - name: Configure CMake
         run: cmake -B build -S . -G "Ninja" -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Release
@@ -126,7 +132,7 @@ jobs:
         run: cmake --build build --target MakePortableZip --config Release -j 16
 
       - name: Upload Archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: build/Hanvi.7z
@@ -141,10 +147,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download Archives
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
 
@@ -184,7 +190,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -192,14 +198,14 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ninja-build
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: 'npm'
           cache-dependency-path: 'web/package-lock.json'
 
       - name: Setup Emscripten
-        uses: emscripten-core/setup-emsdk@v15
+        uses: emscripten-core/setup-emsdk@v16
         with:
           version: 'latest'
 
@@ -225,7 +231,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
