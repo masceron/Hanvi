@@ -389,6 +389,13 @@ body {
   transition: color 0.1s, background-color 0.1s;
 }
 
+/* A translation picked for this occurrence only. */
+.token.token-overridden {
+  text-decoration: underline dotted var(--accent-purple-hover);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
 .token.search-match {
   background-color: rgba(160, 110, 20, 0.7);
   color: #ffffff;
@@ -1401,6 +1408,12 @@ body {
   opacity: 1;
   background: rgba(0, 0, 0, 0.45);
   transform: scale(1.1);
+}
+
+/* With "Only here" ticked, a click picks the meaning instead of dragging it. */
+.chip.chip-pickable {
+  padding: 4px 12px;
+  cursor: pointer;
 }
 
 .chip-empty {

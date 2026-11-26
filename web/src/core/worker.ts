@@ -3,7 +3,7 @@
 import * as Comlink from 'comlink'
 import createHanvi, { type MainModule } from './generated/hanvi.js'
 import { copyPacked } from './packed'
-import type { Entry, HistoryAction, Lookup, NameSet, Priority, UndoState } from './types'
+import type { Entry, HistoryAction, Lookup, NameSet, Priority, TokenOverride, UndoState } from './types'
 
 const DATA_URL = `${import.meta.env.BASE_URL}data/`
 const OPENCC_FILES = [
@@ -263,14 +263,19 @@ const api = {
     })
   },
 
+  // Texts are normalized once, when loaded, so that offsets into them stay put; the conversions
+  // take normalized text.
+  normalize: (text: string) => read((): string => hanvi.normalize(text)),
   // Packed (see packed.ts) because cloning the token objects through postMessage costs more than
-  // building them on the other side; the client decodes it.
-  convert: (text: string) =>
+  // building them on the other side; the client decodes it. textOffset is where text (a page)
+  // starts in the text the overrides' offsets refer to.
+  convert: (text: string, overrides: TokenOverride[], textOffset: number) =>
     read(() => {
-      const packed = copyPacked(hanvi.convert(hanvi.normalize(text)))
+      const packed = copyPacked(hanvi.convert(text, overrides, textOffset))
       return Comlink.transfer(packed, [packed.ints.buffer])
     }),
-  convertPlain: (text: string) => read((): string => hanvi.convertPlain(hanvi.normalize(text))),
+  convertPlain: (text: string, overrides: TokenOverride[]) =>
+    read((): string => hanvi.convertPlain(text, overrides)),
   reloadDict: () => read(() => hanvi.reloadDict()),
 
   nameSets: () => read((): NameSet[] => hanvi.nameSets()),

@@ -1,11 +1,13 @@
 import type { Paragraph, Rule, Token } from './types'
 
 // A converted document as convert() in web/wasm/bindings.cpp packs it: `ints` holds the paragraph
-// count, then per paragraph its token count and per token: id, flags, then the lengths of cn, sv, vn
-// and, with HAS_RULE, of the rule's four strings. `chars` holds those strings back to back.
+// count, then per paragraph its token count and per token: id, offset, flags, then the lengths of cn,
+// sv, vn and, with HAS_RULE, of the rule's four strings. `chars` holds those strings back to back.
+// `stale` lists the overrides passed in that matched no token.
 export interface PackedDocument {
   ints: Uint32Array<ArrayBuffer>
   chars: string
+  stale: number[]
 }
 
 const CN_SPACE = 1
@@ -13,12 +15,13 @@ const SV_SPACE = 2
 const VN_SPACE = 4
 const IS_RULE = 8
 const HAS_RULE = 16
+const OVERRIDDEN = 32
 
 const utf16 = new TextDecoder('utf-16le')
 
 // Copies the module's views of wasm memory, which the next call into the module may invalidate.
-export function copyPacked(view: { ints: Uint32Array; chars: Uint16Array }): PackedDocument {
-  return { ints: view.ints.slice(), chars: utf16.decode(view.chars) }
+export function copyPacked(view: { ints: Uint32Array; chars: Uint16Array; stale: number[] }): PackedDocument {
+  return { ints: view.ints.slice(), chars: utf16.decode(view.chars), stale: view.stale }
 }
 
 export function decodeDocument({ ints, chars }: PackedDocument): Paragraph[] {
@@ -36,9 +39,11 @@ export function decodeDocument({ ints, chars }: PackedDocument): Paragraph[] {
     const tokens: Token[] = new Array(ints[i++])
     for (let t = 0; t < tokens.length; t++) {
       const id = ints[i++]
+      const offset = ints[i++]
       const flags = ints[i++]
       const token: Token = {
         id,
+        offset,
         cn: next(),
         sv: next(),
         vn: next(),
@@ -46,6 +51,7 @@ export function decodeDocument({ ints, chars }: PackedDocument): Paragraph[] {
         svSpace: (flags & SV_SPACE) !== 0,
         vnSpace: (flags & VN_SPACE) !== 0,
         isRule: (flags & IS_RULE) !== 0,
+        overridden: (flags & OVERRIDDEN) !== 0,
       }
       if (flags & HAS_RULE) {
         const rule: Rule = {

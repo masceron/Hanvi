@@ -1,14 +1,21 @@
 import * as Comlink from 'comlink'
 import { decodeDocument } from './packed'
-import type { Paragraph } from './types'
+import type { Paragraph, TokenOverride } from './types'
 import type { CoreApi } from './worker'
 
-export type { DocumentState, NameSet, Paragraph, Token } from './types'
+export type { DocumentState, NameSet, Paragraph, Token, TokenOverride } from './types'
 
 export const core = Comlink.wrap<CoreApi>(
   new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' }),
 )
 
-export async function convert(text: string): Promise<Paragraph[]> {
-  return decodeDocument(await core.convert(text))
+export interface Converted {
+  paragraphs: Paragraph[]
+  // The overrides passed in that lie in the text but no longer match a token there.
+  stale: TokenOverride[]
+}
+
+export async function convert(text: string, overrides: TokenOverride[], textOffset: number): Promise<Converted> {
+  const packed = await core.convert(text, overrides, textOffset)
+  return { paragraphs: decodeDocument(packed), stale: packed.stale.map((index) => overrides[index]) }
 }

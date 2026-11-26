@@ -2,6 +2,8 @@
 
 export interface Token {
   id: number
+  // UTF-16 offset of cn in the document's (normalized) text.
+  offset: number
   cn: string
   sv: string
   vn: string
@@ -10,7 +12,17 @@ export interface Token {
   svSpace: boolean
   vnSpace: boolean
   isRule: boolean
+  // vn is a translation picked for this occurrence only.
+  overridden: boolean
   rule?: Rule
+}
+
+// A translation picked for one occurrence of a word (core's TokenOverride): it applies while a
+// token still starts at `offset` in the document's text and reads `cn`.
+export interface TokenOverride {
+  offset: number
+  cn: string
+  vn: string
 }
 
 export interface Rule {
@@ -70,7 +82,10 @@ export interface Lookup {
 export interface DocumentState {
   // Shown in the browser tab; empty for text typed or pasted into the source box.
   title: string
-  rawText: string
+  // The whole text, normalized (simplified, canonical punctuation) when it was loaded; token and
+  // override offsets refer to it.
+  text: string
+  // Consecutive slices of text.
   pages: string[]
   currentPage: number
   pageLength: number

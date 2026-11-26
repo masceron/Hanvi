@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { core } from '../core/client'
-import { GLOBAL, Priority, type Lookup, type NameSet } from '../core/types'
+import { GLOBAL, Priority, type Lookup, type NameSet, type Token } from '../core/types'
 import { CloseIcon } from '../icons/SvgIcons'
 import { Modal } from './Modal'
 
 interface DictPopupProps {
   // Chinese text being edited: a token, or a selection spanning several.
   text: string
+  // The token the popup was opened on, when it is exactly that one token: with "Only here" ticked,
+  // edits then pick its translation for this occurrence instead of changing the dictionary.
+  token?: Token
+  // The translation picked for that occurrence, if any.
+  picked?: string | null
   activeNameSet: NameSet | null
+  // vn null goes back to the dictionary's translation. Required for `token` to be used. The page
+  // shows the pick once the popup closes, like dictionary edits.
+  onOverride?: (token: Token, vn: string | null) => void
   onClose: (changed: boolean) => void
 }
 
@@ -53,7 +61,7 @@ function CapitalizeRow({ value, onChange }: { value: string; onChange: (text: st
   )
 }
 
-export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
+export function DictPopup({ text, token, picked: initialPick = null, activeNameSet, onOverride, onClose }: DictPopupProps) {
   const [entry, setEntry] = useState<Lookup | null>(null)
   const [changed, setChanged] = useState(false)
   const changedRef = useRef(false)
@@ -64,6 +72,12 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
   const [storedName, setStoredName] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [useNameSet, setUseNameSet] = useState(false)
+
+  // "Only here": starts ticked when the word already has a pick, so that edits stay on it.
+  const canPick = token !== undefined && onOverride !== undefined
+  const [onlyHere, setOnlyHere] = useState(canPick && initialPick !== null)
+  // The occurrence's picked translation, or null while it follows the dictionary.
+  const [picked, setPicked] = useState<string | null>(initialPick)
 
   const [phrases, setPhrases] = useState<string[]>([])
   const [newMeaning, setNewMeaning] = useState('')
@@ -92,8 +106,19 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
   const nameTarget = useNameSet && activeNameSet ? activeNameSet.id : GLOBAL
   const trimmedName = name.trim()
 
+  function pick(vn: string | null) {
+    if (!token || !onOverride) return
+    setChanged(true)
+    setPicked(vn)
+    onOverride(token, vn)
+  }
+
   // Each edit updates the popup first: the worker applies edits in order, so there is nothing to wait for.
   async function saveName() {
+    if (onlyHere) {
+      if (trimmedName && trimmedName !== picked) pick(trimmedName)
+      return
+    }
     if (!trimmedName || trimmedName === storedName) return
     setChanged(true)
     setStoredName(trimmedName)
@@ -102,6 +127,10 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
   }
 
   async function deleteName() {
+    if (onlyHere) {
+      pick(null)
+      return
+    }
     setChanged(true)
     setStoredName(null)
     setName('')
@@ -111,6 +140,11 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
   async function addMeaning() {
     const meaning = newMeaning.trim()
     if (!meaning) return
+    if (onlyHere) {
+      setNewMeaning('')
+      pick(meaning)
+      return
+    }
     setChanged(true)
     // The core puts a new meaning first and drops an existing copy of it.
     const updated = [meaning, ...phrases.filter((p) => p !== meaning)]
@@ -129,6 +163,10 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
   }
 
   async function deletePhrase() {
+    if (onlyHere) {
+      pick(null)
+      return
+    }
     setChanged(true)
     setPhrases([])
     savedOrder.current = []
@@ -185,6 +223,18 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
           </div>
         </div>
 
+        <label
+          className={`nameset-toggle only-here-toggle ${canPick ? '' : 'disabled'}`}
+          title={
+            canPick
+              ? 'Edits pick the translation of this occurrence only, leaving the dictionary alone'
+              : 'Open the popup on a single word to change only that occurrence'
+          }
+        >
+          <input type="checkbox" checked={onlyHere} disabled={!canPick} onChange={(e) => setOnlyHere(e.target.checked)} />
+          <span>Only here{picked !== null && ` (picked: ${picked})`}</span>
+        </label>
+
         <section className="dict-card">
           <div className="dict-card-header">
             <span className="dict-card-title">Name</span>
@@ -201,7 +251,7 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
             <input
               type="checkbox"
               checked={useNameSet}
-              disabled={!activeNameSet}
+              disabled={!activeNameSet || onlyHere}
               onChange={(e) => setUseNameSet(e.target.checked)}
             />
             <span>{activeNameSet ? `Use current nameset (${activeNameSet.title})` : 'Use current nameset'}</span>
@@ -211,11 +261,19 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
             <button className="btn" disabled={!entry} onClick={() => setName(entry?.svReading ?? '')}>
               Use SV reading
             </button>
-            <button className="btn btn-primary" disabled={!trimmedName || trimmedName === storedName} onClick={saveName}>
-              Save
+            <button
+              className="btn btn-primary"
+              disabled={!trimmedName || trimmedName === (onlyHere ? picked : storedName)}
+              onClick={saveName}
+            >
+              {onlyHere ? 'Use here' : 'Save'}
             </button>
-            <button className="btn btn-danger-outline" disabled={storedName === null} onClick={deleteName}>
-              Delete
+            <button
+              className="btn btn-danger-outline"
+              disabled={onlyHere ? picked === null : storedName === null}
+              onClick={deleteName}
+            >
+              {onlyHere ? 'Remove pick' : 'Delete'}
             </button>
           </div>
         </section>
@@ -236,9 +294,14 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
             {phrases.map((meaning, i) => (
               <span
                 key={meaning}
-                className={`chip ${i === 0 ? 'chip-default' : ''} ${i === dragIndex ? 'dragging' : ''}`}
-                draggable
-                title={i === 0 ? 'Default meaning (drag to reorder)' : 'Drag to reorder'}
+                className={`chip ${
+                  (onlyHere ? meaning === picked : i === 0) ? 'chip-default' : ''
+                } ${onlyHere ? 'chip-pickable' : ''} ${i === dragIndex ? 'dragging' : ''}`}
+                draggable={!onlyHere}
+                title={
+                  onlyHere ? 'Use here' : i === 0 ? 'Default meaning (drag to reorder)' : 'Drag to reorder'
+                }
+                onClick={onlyHere ? () => pick(meaning) : undefined}
                 onDragStart={(e) => {
                   e.dataTransfer.effectAllowed = 'move'
                   e.dataTransfer.setData('text/plain', meaning)
@@ -248,17 +311,19 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
                 onDragEnd={finishDrag}
               >
                 <span>{meaning}</span>
-                <button
-                  type="button"
-                  className="chip-remove"
-                  title="Remove this meaning"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    void removeMeaning(meaning)
-                  }}
-                >
-                  <CloseIcon width={10} height={10} />
-                </button>
+                {!onlyHere && (
+                  <button
+                    type="button"
+                    className="chip-remove"
+                    title="Remove this meaning"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void removeMeaning(meaning)
+                    }}
+                  >
+                    <CloseIcon width={10} height={10} />
+                  </button>
+                )}
               </span>
             ))}
           </div>
@@ -276,10 +341,14 @@ export function DictPopup({ text, activeNameSet, onClose }: DictPopupProps) {
               Use SV reading
             </button>
             <button className="btn btn-primary" disabled={!newMeaning.trim()} onClick={addMeaning}>
-              Add
+              {onlyHere ? 'Use here' : 'Add'}
             </button>
-            <button className="btn btn-danger-outline" disabled={phrases.length === 0} onClick={deletePhrase}>
-              Delete
+            <button
+              className="btn btn-danger-outline"
+              disabled={onlyHere ? picked === null : phrases.length === 0}
+              onClick={deletePhrase}
+            >
+              {onlyHere ? 'Remove pick' : 'Delete'}
             </button>
           </div>
         </section>

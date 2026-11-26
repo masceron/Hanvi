@@ -2,7 +2,9 @@ import type { Paragraph, Rule, Token } from '../core/types'
 
 export type Role = 'cn' | 'sv' | 'vn'
 
-export type EditTarget = { kind: 'text'; text: string } | { kind: 'rule'; rule: Rule }
+// `token` is set when the text is exactly one token, whose translation can then be picked for that
+// occurrence alone.
+export type EditTarget = { kind: 'text'; text: string; token?: Token } | { kind: 'rule'; rule: Rule }
 
 // The token a TokenView span shows: the paragraph's index is on its <p>, the token's on the span.
 export function tokenOfSpan(span: HTMLElement, paragraphs: Paragraph[]): Token {
@@ -38,7 +40,8 @@ export function editTargetOfTokens(tokens: Token[]): EditTarget | null {
   const rule = tokens.find((t) => t.rule)?.rule
   if (rule) return { kind: 'rule', rule }
   const text = tokens.map((t) => t.cn).join('')
-  return text ? { kind: 'text', text } : null
+  if (!text) return null
+  return tokens.length === 1 ? { kind: 'text', text, token: tokens[0] } : { kind: 'text', text }
 }
 
 interface Piece {

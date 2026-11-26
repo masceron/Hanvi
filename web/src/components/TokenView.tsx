@@ -61,7 +61,7 @@ export const TokenView = memo(function TokenView({
     if (span && token) {
       span.title = `Chinese: ${token.cn}\nHán Việt: ${token.sv}\nVietnamese: ${token.vn}${
         token.isRule ? '\n(Rule Matched)' : ''
-      }`
+      }${token.overridden ? '\n(Picked for this occurrence)' : ''}`
     }
     onHoverToken(token?.id ?? null)
   }
@@ -105,11 +105,13 @@ export const TokenView = memo(function TokenView({
               matchCounter++
             }
 
-            const classes = isCurrentMatch
+            let classes = isCurrentMatch
               ? 'token search-match search-match-active'
               : isMatch
                 ? 'token search-match'
                 : 'token'
+            // Marked in the Chinese pane too, where a word picked to be omitted still shows.
+            if (token.overridden && role !== 'sv') classes += ' token-overridden'
 
             return (
               <Fragment key={tIdx}>

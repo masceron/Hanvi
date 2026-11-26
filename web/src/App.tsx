@@ -15,7 +15,7 @@ import { RulePopup } from './components/RulePopup'
 import { Workspace } from './components/Workspace'
 import { convert, core } from './core/client'
 import { paginate } from './core/paginate'
-import type { DocumentState, NameSet, Rule, Token } from './core/types'
+import type { DocumentState, NameSet, Rule, Token, TokenOverride } from './core/types'
 import { readClipboard, writeClipboard } from './clipboard'
 import { download } from './download'
 import { useIsMobileBrowser, type FlatToken, type TokenSelection } from './mobile'
@@ -27,7 +27,7 @@ type CoreStatus =
   | { state: 'error'; message: string }
 
 type Dialog =
-  | { kind: 'dict'; text: string }
+  | { kind: 'dict'; text: string; token?: Token; picked?: string | null }
   | { kind: 'rule'; rule: Rule }
   | { kind: 'entries'; source: EntriesSource }
   | { kind: 'namesets' }
@@ -37,7 +37,7 @@ type Dialog =
 
 const INITIAL_DOCUMENT: DocumentState = {
   title: '',
-  rawText: '',
+  text: '',
   pages: [],
   currentPage: 0,
   pageLength: 5000,
@@ -95,6 +95,9 @@ export default function App() {
   const dbInputRef = useRef<HTMLInputElement>(null)
   // Only the latest conversion request may update the document.
   const conversionId = useRef(0)
+  // Translations picked for single occurrences in the loaded text, kept until another text is
+  // loaded. Every conversion applies them; one whose word a dictionary edit re-segmented is dropped.
+  const overrides = useRef<TokenOverride[]>([])
 
   useEffect(() => {
     document.title = doc.title ? `${doc.title} – Hanvi` : 'Hanvi'
@@ -141,11 +144,21 @@ export default function App() {
     setStatusMessage(`Converting page ${pageIdx + 1}…`)
 
     try {
-      const converted = await convert(text)
+      const pageStart = pages.slice(0, pageIdx).reduce((sum, page) => sum + page.length, 0)
+      const { paragraphs, stale } = await convert(text, overrides.current, pageStart)
       if (id !== conversionId.current) return
-      setDoc((d) => ({ ...d, currentPage: pageIdx, document: converted }))
+      setDoc((d) => ({ ...d, currentPage: pageIdx, document: paragraphs }))
       setProgressPercent(100)
-      setStatusMessage('Conversion completed.')
+      if (stale.length > 0) {
+        overrides.current = overrides.current.filter((o) => !stale.includes(o))
+        setStatusMessage(
+          stale.length === 1
+            ? 'Conversion completed. A translation picked for one occurrence no longer fits the text and was dropped.'
+            : `Conversion completed. ${stale.length} translations picked for single occurrences no longer fit the text and were dropped.`,
+        )
+      } else {
+        setStatusMessage('Conversion completed.')
+      }
     } catch (err) {
       setStatusMessage(`Conversion error: ${err}`)
     } finally {
@@ -155,11 +168,14 @@ export default function App() {
 
   // Replaces the whole text (file, clipboard) and shows its first page. The Chinese pane is not
   // editable, as on the desktop: text only comes in whole, which keeps all panes token-aligned.
+  // The text is normalized here, once, so that offsets into it (tokens', overrides') stay valid.
   const loadText = useCallback(
-    async (text: string, title: string) => {
+    async (raw: string, title: string) => {
+      const text = await core.normalize(raw)
       const pages = paginate(text, doc.pageLength)
+      overrides.current = []
       setActiveTokenId(null)
-      setDoc((d) => ({ ...d, title, rawText: text, pages, currentPage: 0, document: null }))
+      setDoc((d) => ({ ...d, title, text, pages, currentPage: 0, document: null }))
       await convertPage(pages, 0)
     },
     [doc.pageLength, convertPage],
@@ -214,7 +230,7 @@ export default function App() {
 
   // Save converted text to file
   const handleSaveToFile = useCallback(async () => {
-    if (!doc.rawText) {
+    if (!doc.text) {
       setStatusMessage('No text to save.')
       return
     }
@@ -224,7 +240,7 @@ export default function App() {
     setProgressPercent(50)
 
     try {
-      const plainVn = await core.convertPlain(doc.rawText)
+      const plainVn = await core.convertPlain(doc.text, overrides.current)
       const baseName = (doc.title || 'hanvi').replace(/\.txt$/i, '')
       download(`${baseName}_vietnamese.txt`, plainVn)
 
@@ -235,7 +251,7 @@ export default function App() {
     } finally {
       setIsBusy(false)
     }
-  }, [doc.rawText, doc.title])
+  }, [doc.text, doc.title])
 
   // Copy Vietnamese text
   const handleCopyVietnamese = useCallback(() => {
@@ -350,7 +366,24 @@ export default function App() {
   }
 
   const handleEditRequest = useCallback((target: EditTarget) => {
-    setDialog(target.kind === 'rule' ? { kind: 'rule', rule: target.rule } : { kind: 'dict', text: target.text })
+    setDialog(
+      target.kind === 'rule'
+        ? { kind: 'rule', rule: target.rule }
+        : {
+            kind: 'dict',
+            text: target.text,
+            token: target.token,
+            // As picked, not as shown: the token's vn may carry a sentence's capital.
+            picked: target.token && (overrides.current.find((o) => o.offset === target.token!.offset)?.vn ?? null),
+          },
+    )
+  }, [])
+
+  // Picks a translation for one occurrence of a word, or (null) goes back to the dictionary's. The
+  // popup reports a change when it closes, which re-converts the page.
+  const handleOverride = useCallback((token: Token, vn: string | null) => {
+    const rest = overrides.current.filter((o) => o.offset !== token.offset)
+    overrides.current = vn === null ? rest : [...rest, { offset: token.offset, cn: token.cn, vn }]
   }, [])
 
   // Touch screens have no right-click (iOS fires no contextmenu at all), so tapping inside the
@@ -446,7 +479,7 @@ export default function App() {
 
   // Chars per page change
   async function handleCharPerPageChange(newChars: number) {
-    const pages = paginate(doc.rawText, newChars)
+    const pages = paginate(doc.text, newChars)
     setActiveTokenId(null)
     setDoc((d) => ({ ...d, pageLength: newChars, pages, currentPage: 0 }))
     await convertPage(pages, 0)
@@ -720,7 +753,14 @@ export default function App() {
       />
 
       {dialog?.kind === 'dict' && (
-        <DictPopup text={dialog.text} activeNameSet={activeNameset} onClose={dialogClosed} />
+        <DictPopup
+          text={dialog.text}
+          token={dialog.token}
+          picked={dialog.picked ?? null}
+          activeNameSet={activeNameset}
+          onOverride={handleOverride}
+          onClose={dialogClosed}
+        />
       )}
       {dialog?.kind === 'rule' && <RulePopup rule={dialog.rule} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'entries' && (

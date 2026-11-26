@@ -54,12 +54,13 @@ namespace {
         VnSpace = 4,
         IsRule = 8,
         HasRule = 16,
+        Overridden = 32,
     };
 
     // A converted document packed into two flat arrays, so the bindings create two JS objects instead of
     // several per token (building those dominated convert()). `ints` holds the paragraph count, then per
-    // paragraph its token count and per token: id, flags, then the lengths of cn, sv, vn and, with HasRule,
-    // of the rule's four strings. `chars` holds those strings back to back in the same order.
+    // paragraph its token count and per token: id, offset, flags, then the lengths of cn, sv, vn and, with
+    // HasRule, of the rule's four strings. `chars` holds those strings back to back in the same order.
     std::vector<uint32_t> packed_ints;
     std::u16string packed_chars;
 
@@ -82,9 +83,10 @@ namespace {
                 const auto &token = paragraph.tokens[t];
                 const Rule *rule = token.rule;
                 packed_ints.push_back(static_cast<uint32_t>(token.id));
+                packed_ints.push_back(token.offset);
                 packed_ints.push_back((cn_spaces[t] ? CnSpace : 0) | (sv_spaces[t] ? SvSpace : 0) |
                                       (vn_spaces[t] ? VnSpace : 0) | (token.is_rule() ? IsRule : 0) |
-                                      (rule ? HasRule : 0));
+                                      (rule ? HasRule : 0) | (token.overridden ? Overridden : 0));
                 pack_string(token.cn);
                 pack_string(token.sv);
                 pack_string(token.vn);
@@ -102,7 +104,28 @@ namespace {
         result.set("ints", val(emscripten::typed_memory_view(packed_ints.size(), packed_ints.data())));
         result.set("chars", val(emscripten::typed_memory_view(packed_chars.size(),
                                                               reinterpret_cast<const uint16_t *>(packed_chars.data()))));
+        val stale = val::array();
+        for (const size_t index: document.stale_overrides) {
+            stale.call<void>("push", static_cast<double>(index));
+        }
+        result.set("stale", stale);
         return result;
+    }
+
+    // Overrides from JS: an array of {offset, cn, vn}.
+    std::vector<TokenOverride> overrides_from(const val &js_overrides) {
+        std::vector<TokenOverride> overrides;
+        const auto length = js_overrides["length"].as<unsigned>();
+        overrides.reserve(length);
+        for (unsigned i = 0; i < length; ++i) {
+            const val entry = js_overrides[i];
+            overrides.push_back(TokenOverride{
+                .offset = static_cast<size_t>(entry["offset"].as<double>()),
+                .cn = entry["cn"].as<std::u16string>(),
+                .vn = entry["vn"].as<std::u16string>(),
+            });
+        }
+        return overrides;
     }
 
     // embind marshals std::u16string to and from JS strings (both UTF-16) but not string views.
@@ -110,12 +133,16 @@ namespace {
         return normalize_text(text);
     }
 
-    val convert_document(const std::u16string &text) {
-        return pack_document(*convert(text));
+    // text_offset: where text (a page) starts in the full text the overrides' offsets refer to.
+    val convert_document(const std::u16string &text, const val &js_overrides, const double text_offset) {
+        const auto overrides = overrides_from(js_overrides);
+        return pack_document(*convert(text, nullptr,
+                                      {.entries = overrides, .text_offset = static_cast<size_t>(text_offset)}));
     }
 
-    std::u16string convert_plain_text(const std::u16string &text) {
-        return convert_plain(text);
+    std::u16string convert_plain_text(const std::u16string &text, const val &js_overrides) {
+        const auto overrides = overrides_from(js_overrides);
+        return convert_plain(text, nullptr, {.entries = overrides});
     }
 
     val list_name_sets() {
