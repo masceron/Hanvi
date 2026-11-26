@@ -14,6 +14,7 @@ import { PasteDialog } from './components/PasteDialog'
 import { RulePopup } from './components/RulePopup'
 import { Workspace } from './components/Workspace'
 import { convert, core } from './core/client'
+import { countChineseChars } from './core/chinese'
 import { paginate } from './core/paginate'
 import type { DocumentState, NameSet, Rule, Token, TokenOverride } from './core/types'
 import { readClipboard, writeClipboard } from './clipboard'
@@ -149,15 +150,18 @@ export default function App() {
       if (id !== conversionId.current) return
       setDoc((d) => ({ ...d, currentPage: pageIdx, document: paragraphs }))
       setProgressPercent(100)
+      const cnChars = countChineseChars(text)
+      const countSuffix =
+        cnChars === 1 ? ' (1 character)' : ` (${cnChars} characters)`
       if (stale.length > 0) {
         overrides.current = overrides.current.filter((o) => !stale.includes(o))
         setStatusMessage(
           stale.length === 1
-            ? 'Conversion completed. A translation picked for one occurrence no longer fits the text and was dropped.'
-            : `Conversion completed. ${stale.length} translations picked for single occurrences no longer fit the text and were dropped.`,
+            ? `Conversion completed${countSuffix}. A translation picked for one occurrence no longer fits the text and was dropped.`
+            : `Conversion completed${countSuffix}. ${stale.length} translations picked for single occurrences no longer fit the text and were dropped.`,
         )
       } else {
-        setStatusMessage('Conversion completed.')
+        setStatusMessage(`Conversion completed${countSuffix}.`)
       }
     } catch (err) {
       setStatusMessage(`Conversion error: ${err}`)

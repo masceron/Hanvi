@@ -70,6 +70,44 @@ inline bool is_latin_or_digit(const char16_t c) noexcept {
     return is_digit(c) || is_latin(c);
 }
 
+/**
+ * Returns true if the Unicode code point is a Chinese (CJK) ideograph.
+ */
+inline bool is_chinese_char(const char32_t cp) noexcept {
+    return (cp >= 0x4E00 && cp <= 0x9FFF) ||   // CJK Unified Ideographs
+           (cp >= 0x3400 && cp <= 0x4DBF) ||   // CJK Unified Ideographs Extension A
+           (cp >= 0xF900 && cp <= 0xFAFF) ||   // CJK Compatibility Ideographs
+           cp == 0x3007 ||                     // Ideographic Number Zero (〇)
+           (cp >= 0x20000 && cp <= 0x2A6DF) || // Extension B
+           (cp >= 0x2A700 && cp <= 0x2B73F) || // Extension C
+           (cp >= 0x2B740 && cp <= 0x2B81F) || // Extension D
+           (cp >= 0x2B820 && cp <= 0x2CEAF) || // Extension E
+           (cp >= 0x2CEB0 && cp <= 0x2EBEF) || // Extension F
+           (cp >= 0x2EBF0 && cp <= 0x2EE5F) || // Extension I
+           (cp >= 0x2F800 && cp <= 0x2FA1F) || // CJK Compatibility Ideographs Supplement
+           (cp >= 0x30000 && cp <= 0x3134F) || // Extension G
+           (cp >= 0x31350 && cp <= 0x323AF);   // Extension H
+}
+
+/**
+ * Counts the number of Chinese (CJK ideograph) characters in a UTF-16 string,
+ * handling supplementary-plane surrogate pairs as single characters.
+ */
+inline size_t count_chinese_chars(const std::u16string_view str) noexcept {
+    size_t count = 0;
+    for (size_t i = 0; i < str.size(); ++i) {
+        char32_t cp = str[i];
+        if (is_high_surrogate(static_cast<char16_t>(cp)) && i + 1 < str.size() && is_low_surrogate(str[i + 1])) {
+            cp = to_code_point(static_cast<char16_t>(cp), str[i + 1]);
+            ++i;
+        }
+        if (is_chinese_char(cp)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 inline char16_t to_upper_char16(const char16_t c) noexcept {
     if (c >= u'a' && c <= u'z') {
         return static_cast<char16_t>(c - u'a' + u'A');

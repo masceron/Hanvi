@@ -30,6 +30,7 @@
 #include "core/converter.h"
 #include "qt_utils.h"
 #include "core/dict.h"
+#include "core/unicode_utils.h"
 #include "documents/token_canvas.h"
 #include "findbar.h"
 #include "entrieseditor.h"
@@ -99,6 +100,14 @@ namespace {
     private:
         int middle_pressed_tab = -1;
     };
+
+    QString chinese_char_count_suffix(const NovelTab *tab) {
+        if (!tab) return {};
+        const size_t count = tab->current_page_chinese_char_count();
+        return count == 1
+                   ? QStringLiteral(" (1 character)")
+                   : QStringLiteral(" (%1 characters)").arg(count);
+    }
 }
 
 void NovelTab::set_text(const QString &text) {
@@ -112,6 +121,13 @@ void NovelTab::repaginate() {
     if (current_page >= pages.size()) {
         current_page = std::max(0, static_cast<int>(pages.size()) - 1);
     }
+}
+
+size_t NovelTab::current_page_chinese_char_count() const noexcept {
+    if (current_page < 0 || current_page >= pages.size()) {
+        return 0;
+    }
+    return hanvi::count_chinese_chars(q_to_u16(pages[current_page]));
 }
 
 NovelTab *MainWindow::current_tab() noexcept {
@@ -1207,7 +1223,7 @@ void MainWindow::switch_to_tab(const int index) {
         ui->cn_input->set_scroll_value(cur->saved_scroll.cn);
         ui->sv_output->set_scroll_value(cur->saved_scroll.sv);
         ui->vn_output->set_scroll_value(cur->saved_scroll.vn);
-        ui->statusbar->showMessage("Ready.");
+        ui->statusbar->showMessage(QStringLiteral("Ready%1.").arg(chinese_char_count_suffix(cur)));
     } else if (!cur->input_text.isEmpty()) {
         session->set_document(nullptr);
         convert_and_display(false);
@@ -1368,15 +1384,19 @@ void MainWindow::update_display() {
             auto *cur = tabs[converting_tab_index].get();
             update_pagination_controls();
             ui->progress_bar->setValue(100);
+            const QString count_suffix = chinese_char_count_suffix(cur);
             if (const size_t stale = doc->stale_overrides.size(); stale == 0) {
-                ui->statusbar->showMessage("Conversion completed.");
+                ui->statusbar->showMessage(QStringLiteral("Conversion completed%1.").arg(count_suffix));
             } else if (stale == 1) {
                 ui->statusbar->showMessage(
-                    "Conversion completed. A translation picked for one occurrence no longer fits the text and was dropped.");
+                    QStringLiteral("Conversion completed%1. A translation picked for one occurrence no longer fits the text and was dropped.")
+                        .arg(count_suffix));
             } else {
                 ui->statusbar->showMessage(
-                    QString("Conversion completed. %1 translations picked for single occurrences no longer fit the text "
-                            "and were dropped.").arg(stale));
+                    QStringLiteral("Conversion completed%1. %2 translations picked for single occurrences no longer fit the text "
+                                   "and were dropped.")
+                        .arg(count_suffix)
+                        .arg(stale));
             }
 
             session->set_document(doc);

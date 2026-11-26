@@ -58,6 +58,8 @@ struct NovelTab {
     void set_text(const QString &text);
 
     void repaginate();
+
+    [[nodiscard]] size_t current_page_chinese_char_count() const noexcept;
 };
 
 class MainWindow : public QMainWindow {

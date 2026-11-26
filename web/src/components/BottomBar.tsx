@@ -24,7 +24,9 @@ export function BottomBar({
             style={{ width: `${Math.min(100, Math.max(0, progressPercent))}%` }}
           />
         </div>
-        <span className="bottom-status-text">{statusMessage}</span>
+        <span className="bottom-status-text" title={statusMessage}>
+          {statusMessage}
+        </span>
       </div>
 
       <div className="bottom-right">
