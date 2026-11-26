@@ -174,7 +174,7 @@ void DocumentSession::trigger_context_menu(const uint32_t clicked_token_id)
         }
         else if (!tok->cn.empty())
         {
-            emit request_dict_popup(QString::fromUtf16(tok->cn.data(), static_cast<qsizetype>(tok->cn.size())));
+            emit request_dict_popup(QString::fromUtf16(tok->cn.data(), static_cast<qsizetype>(tok->cn.size())), tok->id);
         }
 
 

@@ -47,7 +47,8 @@ signals:
     void active_token_changed(uint32_t token_id);
     void hovered_token_changed(uint32_t token_id);
     void selection_changed(const DocumentSelection& selection);
-    void request_dict_popup(const QString& chinese_text);
+    // token_id is the word the popup is about when it is exactly one token, else 0 (a selection).
+    void request_dict_popup(const QString& chinese_text, uint32_t token_id = 0);
     void request_rule_popup(const Rule* rule);
     void scroll_to_token_requested(uint32_t token_id);
 

@@ -103,6 +103,7 @@ namespace {
 
 void NovelTab::set_text(const QString &text) {
     input_text = to_qstring(normalize_text(q_to_u16(text)));
+    overrides.clear();
     repaginate();
 }
 
@@ -1303,6 +1304,9 @@ void MainWindow::convert_and_display(const bool scroll_back) {
         } else cur->saved_scroll = {.cn = 0, .sv = 0, .vn = 0};
 
         converting_tab_index = active_tab_index;
+        converting_overrides = cur->overrides;
+        // Pages are views into input_text, which the overrides' offsets refer to.
+        const auto page_start = static_cast<size_t>(cur->pages[cur->current_page].data() - cur->input_text.constData());
 
         auto reporter = [this](int progress) {
             QMetaObject::invokeMethod(this, [this, progress] {
@@ -1316,8 +1320,9 @@ void MainWindow::convert_and_display(const bool scroll_back) {
         };
 
         const QFuture<std::shared_ptr<AlignedDocument> > future = QtConcurrent::run(
-            [page = std::u16string(q_to_u16(cur->pages[cur->current_page])), reporter]() {
-                return convert(page, reporter);
+            [page = std::u16string(q_to_u16(cur->pages[cur->current_page])), reporter,
+                overrides = cur->overrides, page_start]() {
+                return convert(page, reporter, {.entries = overrides, .text_offset = page_start});
             });
         watcher.setFuture(future);
     }
@@ -1339,8 +1344,8 @@ void MainWindow::convert_to_file() {
     };
 
     const QFuture<QString> future = QtConcurrent::run(
-        [text = cur->input_text.toStdU16String(), reporter]() {
-            return to_qstring(convert_plain(text, reporter));
+        [text = cur->input_text.toStdU16String(), reporter, overrides = cur->overrides]() {
+            return to_qstring(convert_plain(text, reporter, {.entries = overrides}));
         });
     plain_watcher.setFuture(future);
 }
@@ -1351,11 +1356,28 @@ void MainWindow::update_display() {
     if (converting_tab_index >= 0 && converting_tab_index < static_cast<int>(tabs.size())) {
         tabs[converting_tab_index]->current_doc = doc;
 
+        auto &overrides = tabs[converting_tab_index]->overrides;
+        for (const size_t index: doc->stale_overrides) {
+            const auto &stale = converting_overrides[index];
+            std::erase_if(overrides, [&](const TokenOverride &o) {
+                return o.offset == stale.offset && o.cn == stale.cn && o.vn == stale.vn;
+            });
+        }
+
         if (converting_tab_index == active_tab_index) {
             auto *cur = tabs[converting_tab_index].get();
             update_pagination_controls();
             ui->progress_bar->setValue(100);
-            ui->statusbar->showMessage("Conversion completed.");
+            if (const size_t stale = doc->stale_overrides.size(); stale == 0) {
+                ui->statusbar->showMessage("Conversion completed.");
+            } else if (stale == 1) {
+                ui->statusbar->showMessage(
+                    "Conversion completed. A translation picked for one occurrence no longer fits the text and was dropped.");
+            } else {
+                ui->statusbar->showMessage(
+                    QString("Conversion completed. %1 translations picked for single occurrences no longer fit the text "
+                            "and were dropped.").arg(stale));
+            }
 
             session->set_document(doc);
 
@@ -1382,7 +1404,7 @@ void MainWindow::update_display() {
     converting_tab_index = -1;
 }
 
-void MainWindow::on_request_dict_popup(const QString &chinese_text) {
+void MainWindow::on_request_dict_popup(const QString &chinese_text, const uint32_t token_id) {
     if (chinese_text.isEmpty()) return;
 
     auto *cur = current_tab();
@@ -1390,6 +1412,19 @@ void MainWindow::on_request_dict_popup(const QString &chinese_text) {
 
     auto *popup = new DictPopup(this);
     popup->load_data(chinese_text);
+
+    // On exactly one word, the popup can also pick that occurrence's translation.
+    const auto doc = session->document();
+    if (const Token *tok = doc && token_id != 0 ? doc->find_token(token_id) : nullptr; tok && !tok->is_rule()) {
+        const size_t offset = tok->offset;
+        const auto it = std::ranges::find(cur->overrides, offset, &TokenOverride::offset);
+        popup->set_occurrence(it != cur->overrides.end() ? std::optional(to_qstring(it->vn)) : std::nullopt);
+        connect(popup, &DictPopup::occurrence_picked, this,
+                [cur, offset, cn = tok->cn](const std::optional<QString> &vn) {
+                    std::erase_if(cur->overrides, [&](const TokenOverride &o) { return o.offset == offset; });
+                    if (vn) cur->overrides.push_back({.offset = offset, .cn = cn, .vn = vn->toStdU16String()});
+                });
+    }
     popup->setAttribute(Qt::WA_DeleteOnClose);
     if (popup->exec()) {
         cur->saved_token_cn = chinese_text;

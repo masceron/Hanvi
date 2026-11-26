@@ -10,6 +10,10 @@ class ChipDelegate : public QStyledItemDelegate {
 public:
     using QStyledItemDelegate::QStyledItemDelegate;
     mutable QLineEdit *current_editor = nullptr;
+    // In pick mode chips have no delete button and a click picks one (request_pick); the chip whose
+    // text is `picked` is highlighted.
+    bool pick_mode = false;
+    QString picked;
     QLineEdit *get_current_editor() const { return current_editor; }
     bool editing() const { return current_editor != nullptr; }
 
@@ -33,7 +37,8 @@ public:
 
         const QRect rect = option.rect.adjusted(2, 4, -2, -4);
 
-        const auto bg_color = QColor(0x313131);
+        const bool is_picked = pick_mode && !picked.isNull() && index.data().toString() == picked;
+        const auto bg_color = is_picked ? QColor(0x6164f6) : QColor(0x313131);
         painter->setBrush(bg_color);
         painter->setPen(Qt::NoPen);
         painter->drawRoundedRect(rect, 14, 14);
@@ -49,9 +54,14 @@ public:
 
         painter->setPen(Qt::white);
 
-        const QRect text_rect = rect.adjusted(12, 0, -32, 0);
+        const QRect text_rect = rect.adjusted(12, 0, pick_mode ? -12 : -32, 0);
 
         painter->drawText(text_rect, Qt::AlignVCenter | Qt::AlignLeft, index.data().toString());
+
+        if (pick_mode) {
+            painter->restore();
+            return;
+        }
 
         QPen xPen(QColor(0xdddddd));
         xPen.setWidth(2);
@@ -107,6 +117,10 @@ public:
 
     bool editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option,
                      const QModelIndex &index) override {
+        if (pick_mode && event->type() == QEvent::MouseButtonRelease && !index.data().toString().isEmpty()) {
+            emit request_pick(index);
+            return true;
+        }
         if (event->type() == QEvent::MouseButtonRelease) {
             const QMouseEvent *me = dynamic_cast<QMouseEvent *>(event);
             const QRect rect = option.rect.adjusted(2, 4, -2, -4);
@@ -125,4 +139,6 @@ signals:
     void editing_finished();
 
     void request_delete(const QModelIndex &index);
+
+    void request_pick(const QModelIndex &index);
 };

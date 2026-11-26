@@ -247,6 +247,7 @@ void TokenCanvas::rebuild_paragraph_data()
                 span.start_char = static_cast<int>(pl.text.length());
                 span.length = static_cast<int>(tok_str.length());
                 span.token_index = t;
+                span.overridden = tok.overridden;
 
                 pl.text += tok_str;
                 if (tok.has_trailing_space)
@@ -287,6 +288,7 @@ void TokenCanvas::rebuild_paragraph_data()
                 span.start_char = static_cast<int>(pl.text.length());
                 span.length = static_cast<int>(tok_str.length());
                 span.token_index = t;
+                span.overridden = tok.overridden;
 
                 pl.text += tok_str;
 
@@ -543,6 +545,25 @@ void TokenCanvas::paintEvent(QPaintEvent* event)
                 fr.format.setBackground(QColor(0x21, 0x42, 0x83));
                 fr.format.setForeground(Qt::white);
                 format_ranges.append(fr);
+            }
+        }
+
+        // Words translated by a pick for that occurrence: a dotted underline, in the Chinese pane too,
+        // where a word still shows when its pick leaves it empty.
+        if (role_ != LanguageRole::SinoVietnamese)
+        {
+            for (const auto& span : spans)
+            {
+                if (span.length > 0 && span.overridden)
+                {
+                    QTextLayout::FormatRange fr;
+                    fr.start = span.start_char;
+                    fr.length = span.length;
+                    fr.format.setFontUnderline(true);
+                    fr.format.setUnderlineStyle(QTextCharFormat::DotLine);
+                    fr.format.setUnderlineColor(QColor(0x72, 0x75, 0xfb));
+                    format_ranges.append(fr);
+                }
             }
         }
 
@@ -839,7 +860,8 @@ void TokenCanvas::contextMenuEvent(QContextMenuEvent* event)
                     session_->request_rule_popup(tok->rule);
                     return;
                 }
-                session_->request_dict_popup(QString::fromUtf16(tok->cn.data(), static_cast<qsizetype>(tok->cn.size())));
+                session_->request_dict_popup(QString::fromUtf16(tok->cn.data(), static_cast<qsizetype>(tok->cn.size())),
+                                             tok->id);
                 return;
             }
         }

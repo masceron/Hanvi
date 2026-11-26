@@ -19,12 +19,22 @@ DictPopup::DictPopup(QWidget *parent) : QDialog(parent), ui(new Ui::DictPopup) {
     });
 
     connect(ui->delete_name, &QPushButton::clicked, this, [this] {
+        if (only_here()) {
+            pick(std::nullopt);
+            accept();
+            return;
+        }
         io_remove(ui->use_current_nameset->isChecked() ? current_name_set_id : -1, q_to_u16(ui->original->text()),
                   NAME);
         accept();
     });
 
     connect(ui->delete_node_phrase, &QPushButton::clicked, this, [this] {
+        if (only_here()) {
+            pick(std::nullopt);
+            accept();
+            return;
+        }
         io_remove(-1, q_to_u16(ui->original->text()), PHRASE);
         accept();
     });
@@ -36,6 +46,9 @@ DictPopup::DictPopup(QWidget *parent) : QDialog(parent), ui(new Ui::DictPopup) {
         io_remove_meaning(q_to_u16(ui->original->text()), q_to_u16(item->text()));
         delete item;
         changed = true;
+    });
+    connect(phrase_chip_delegate, &ChipDelegate::request_pick, this, [this](const QModelIndex &index) {
+        if (only_here() && !phrase_chip_delegate->editing()) pick(index.data().toString());
     });
 
     connect(ui->add_phrase, &QPushButton::clicked, this, &DictPopup::add_new_phrase);
@@ -118,7 +131,7 @@ DictPopup::DictPopup(QWidget *parent) : QDialog(parent), ui(new Ui::DictPopup) {
         ui->list_phrases->setDragEnabled(false);
     });
     connect(phrase_chip_delegate, &ChipDelegate::editing_finished, this, [this] {
-        ui->list_phrases->setDragEnabled(true);
+        ui->list_phrases->setDragEnabled(!only_here());
     });
 
     connect(ui->list_phrases, &ChipList::order_changed, this, [this] {
@@ -132,9 +145,55 @@ DictPopup::DictPopup(QWidget *parent) : QDialog(parent), ui(new Ui::DictPopup) {
         }
     });
 
-    if (current_name_set_id != -1) {
-        ui->use_current_nameset->setEnabled(true);
-    }
+    // Enabled by set_occurrence, when the popup is about one word.
+    ui->only_here->setEnabled(false);
+    connect(ui->only_here, &QCheckBox::toggled, this, [this] { update_only_here(); });
+    update_only_here();
+}
+
+void DictPopup::set_occurrence(const std::optional<QString> &current_pick) {
+    picked = current_pick;
+    ui->only_here->setEnabled(true);
+    ui->only_here->setChecked(picked.has_value());
+    update_only_here();
+}
+
+bool DictPopup::only_here() const {
+    return ui->only_here->isEnabled() && ui->only_here->isChecked();
+}
+
+void DictPopup::pick(const std::optional<QString> &vn) {
+    picked = vn;
+    changed = true;
+    emit occurrence_picked(vn);
+    update_only_here();
+}
+
+void DictPopup::update_only_here() const {
+    const bool on = only_here();
+
+    ui->only_here->setToolTip(
+        !ui->only_here->isEnabled()
+            ? "Open this on a single word to change only that occurrence"
+            : picked
+                  ? QString("Picked here: %1").arg(*picked)
+                  : "Edits pick this occurrence's translation, leaving the dictionary alone");
+
+    ui->use_current_nameset->setEnabled(!on && current_name_set_id != -1);
+    ui->list_phrases->setDragEnabled(!on && !phrase_chip_delegate->editing());
+    phrase_chip_delegate->pick_mode = on;
+    phrase_chip_delegate->picked = picked.value_or(QString());
+    ui->list_phrases->viewport()->update();
+
+    // Removing the pick is all the delete buttons do here. "Reset" fits the button's share of the row,
+    // so the row keeps its layout as the box is ticked.
+    const QString remove_pick = "Remove the pick: this occurrence follows the dictionary again";
+    ui->delete_name->setText(on ? "Reset" : "Delete");
+    ui->delete_node_phrase->setText(on ? "Reset" : "Delete");
+    ui->delete_name->setEnabled(!on || picked.has_value());
+    ui->delete_name->setToolTip(on ? remove_pick : QString());
+    ui->delete_node_phrase->setEnabled(!on || picked.has_value());
+    ui->delete_node_phrase->setToolTip(on ? remove_pick : QString());
 }
 
 void DictPopup::add_new_phrase() const {
@@ -158,6 +217,8 @@ void DictPopup::edit_finished_name() {
 
     if (const QString new_text = ui->current_name->text().trimmed(); new_text.isEmpty()) {
         ui->current_name->setText(original_name);
+    } else if (only_here()) {
+        pick(new_text);
     } else {
         io_insert(ui->use_current_nameset->isChecked() ? current_name_set_id : -1, q_to_u16(ui->original->text()),
                   q_to_u16(new_text),
@@ -176,6 +237,13 @@ void DictPopup::edit_finished_phrase() {
 
     if (item->text().trimmed().isEmpty()) {
         delete ui->list_phrases->takeItem(0);
+        return;
+    }
+    if (only_here()) {
+        // Picked for the occurrence only, so it does not join the dictionary's meanings.
+        const QString meaning = item->text().trimmed();
+        delete ui->list_phrases->takeItem(0);
+        pick(meaning);
         return;
     }
     item->setFlags(item->flags() & ~Qt::ItemIsEditable);

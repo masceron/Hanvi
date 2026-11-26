@@ -12,10 +12,12 @@
 namespace hanvi {
     class AlignedDocument;
     struct Rule;
+    struct TokenOverride;
 }
 
 using hanvi::AlignedDocument;
 using hanvi::Rule;
+using hanvi::TokenOverride;
 class DocumentSession;
 class QTabBar;
 class QPushButton;
@@ -44,6 +46,10 @@ struct NovelTab {
     int current_page = 0;
     int page_length = 5000;
     int name_set_id = -1;
+
+    // Translations picked for single occurrences in input_text, kept until the text is replaced.
+    // Every conversion applies them; one whose word a dictionary edit re-segmented is dropped.
+    std::vector<TokenOverride> overrides;
 
     std::shared_ptr<AlignedDocument> current_doc = nullptr;
     SavedScroll saved_scroll;
@@ -81,7 +87,7 @@ protected:
 private slots:
     void update_display();
 
-    void on_request_dict_popup(const QString &chinese_text);
+    void on_request_dict_popup(const QString &chinese_text, uint32_t token_id);
 
     void on_request_rule_popup(const Rule *rule);
 
@@ -97,6 +103,8 @@ private:
     std::vector<std::unique_ptr<NovelTab> > tabs;
     int active_tab_index = -1;
     int converting_tab_index = -1;
+    // The overrides the running conversion was given, which its stale_overrides index.
+    std::vector<TokenOverride> converting_overrides;
 
     [[nodiscard]] NovelTab *current_tab() noexcept;
 

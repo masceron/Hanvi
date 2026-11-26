@@ -101,6 +101,7 @@ private:
         int start_char = 0;
         int length = 0;
         size_t token_index = 0;
+        bool overridden = false; // translated by a pick for this occurrence
     };
 
     struct ParagraphLayout {
