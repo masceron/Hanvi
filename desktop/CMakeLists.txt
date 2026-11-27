@@ -9,6 +9,7 @@ add_executable(Hanvi WIN32
         app/desktop_io.h
         components/appearancedialog.cpp
         components/appearancedialog.h
+        components/appearancedialog.ui
         components/mainwindow.cpp
         components/mainwindow.h
         components/mainwindow.ui
