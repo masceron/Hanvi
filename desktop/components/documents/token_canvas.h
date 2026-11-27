@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include <optional>
+#include "app/appearance.h"
 #include "core/aligned_document.h"
 #include "document_session.h"
 
@@ -50,6 +51,7 @@ public:
 
     void set_line_height_percent(int percent);
     void set_font(const QFont& font);
+    void set_theme(const ThemeColors& theme);
     void zoom(int steps);
     void reset_zoom();
     [[nodiscard]] int font_pixel_size() const noexcept;
@@ -117,6 +119,7 @@ private:
     LanguageRole role_ = LanguageRole::Chinese;
     int line_height_percent_ = 100;
     QFont font_;
+    ThemeColors theme_;
     int default_pixel_size_ = 0;
     qreal margin_ = 8.0;
     int last_layout_width_ = 0;

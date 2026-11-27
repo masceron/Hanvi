@@ -11,6 +11,9 @@
 #include <QIcon>
 #include <QMouseEvent>
 #include <QKeyEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
 #include <QWindow>
 #include <QMenu>
 
@@ -35,6 +38,7 @@
 #include "findbar.h"
 #include "entrieseditor.h"
 #include "historydialog.h"
+#include "appearancedialog.h"
 
 namespace {
     class HanviTabBar : public QTabBar {
@@ -147,6 +151,7 @@ const NovelTab *MainWindow::current_tab() const noexcept {
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow),
                                           session(new DocumentSession(this)) {
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
+    setAcceptDrops(true);
     ui->setupUi(this);
     setWindowTitle("Hanvi");
 
@@ -175,9 +180,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     tab_layout->setContentsMargins(8, 0, 0, 0);
     tab_layout->setSpacing(2);
 
-    auto *hamburger_btn = new QPushButton(tab_container);
+    hamburger_btn = new QPushButton(tab_container);
     hamburger_btn->setObjectName("hamburger_btn");
-    hamburger_btn->setIcon(QIcon(":/resources/hamburger.svg"));
     hamburger_btn->setIconSize(QSize(16, 16));
     hamburger_btn->setFixedSize(32, 32);
     hamburger_btn->setCursor(Qt::PointingHandCursor);
@@ -200,20 +204,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     tab_font.setWeight(QFont::Normal);
     tab_bar->setFont(tab_font);
 
-    auto *add_tab_btn = new QPushButton(tab_container);
+    add_tab_btn = new QPushButton(tab_container);
     add_tab_btn->setObjectName("add_tab_btn");
-    QIcon add_icon;
-    add_icon.addFile(":/resources/add.svg", QSize(14, 14), QIcon::Normal);
-    add_icon.addFile(":/resources/add_hover.svg", QSize(14, 14), QIcon::Active);
-    add_tab_btn->setIcon(add_icon);
     add_tab_btn->setIconSize(QSize(14, 14));
     add_tab_btn->setFixedSize(32, 32);
     add_tab_btn->setCursor(Qt::PointingHandCursor);
     add_tab_btn->setToolTip("New tab (Ctrl+T)");
 
-    auto *min_btn = new QPushButton(tab_container);
+    min_btn = new QPushButton(tab_container);
     min_btn->setObjectName("window_min_btn");
-    min_btn->setIcon(QIcon(":/resources/window_min.svg"));
     min_btn->setIconSize(QSize(16, 16));
     min_btn->setFixedSize(44, 40);
     min_btn->setToolTip("Minimize");
@@ -223,18 +222,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     max_btn->setObjectName("window_max_btn");
     max_btn->setIconSize(QSize(16, 16));
     max_btn->setFixedSize(44, 40);
-    update_max_restore_button();
     connect(max_btn, &QPushButton::clicked, this, [this] {
         if (isMaximized()) showNormal();
         else showMaximized();
     });
 
-    auto *close_win_btn = new QPushButton(tab_container);
+    close_win_btn = new QPushButton(tab_container);
     close_win_btn->setObjectName("window_close_btn");
-    QIcon win_close_icon;
-    win_close_icon.addFile(":/resources/window_close.svg", QSize(16, 16), QIcon::Normal);
-    win_close_icon.addFile(":/resources/window_close_hover.svg", QSize(16, 16), QIcon::Active);
-    close_win_btn->setIcon(win_close_icon);
     close_win_btn->setIconSize(QSize(16, 16));
     close_win_btn->setFixedSize(44, 40);
     close_win_btn->setToolTip("Close");
@@ -283,29 +277,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     ui->cn_input->set_session(session);
     ui->cn_input->set_role(LanguageRole::Chinese);
-    QFont cn_font("Noto Sans SC");
-    cn_font.setStyleHint(QFont::SansSerif);
-    cn_font.setPixelSize(18);
-    ui->cn_input->set_font(cn_font);
-    ui->cn_input->set_line_height_percent(100);
 
     ui->sv_output->set_session(session);
     ui->sv_output->set_role(LanguageRole::SinoVietnamese);
-    QFont sv_font("Noto Sans");
-    sv_font.setFamilies({"Noto Sans", "Noto Sans SC"});
-    sv_font.setStyleHint(QFont::SansSerif);
-    sv_font.setPixelSize(16);
-    ui->sv_output->set_font(sv_font);
-    ui->sv_output->set_line_height_percent(110);
 
     ui->vn_output->set_session(session);
     ui->vn_output->set_role(LanguageRole::Vietnamese);
-    QFont vn_font("Noto Sans");
-    vn_font.setFamilies({"Noto Sans", "Noto Sans SC"});
-    vn_font.setStyleHint(QFont::SansSerif);
-    vn_font.setPixelSize(16);
-    ui->vn_output->set_font(vn_font);
-    ui->vn_output->set_line_height_percent(125);
+
+    // init_style() already applied the initial stylesheet before MainWindow was constructed.
+    apply_appearance(load_appearance(), false);
 
     find_bar = new findbar(ui->vn_output->viewport());
     find_bar->hide();
@@ -354,36 +334,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
         static QString prev_dir = "/";
         const auto name = QFileDialog::getOpenFileName(this, "Open file", prev_dir, "Text files (*.txt)");
         if (name.isEmpty()) return;
-
-        if (const auto input = load_from_file(name); input.has_value()) {
-            const QFileInfo fi(name);
-            const QString title = fi.fileName();
-            //Remember the directory.
-            prev_dir = fi.absolutePath();
-
-            if (auto *cur = current_tab(); cur && cur->input_text.isEmpty()) {
-                cur->title = title;
-                cur->file_name = name;
-                cur->current_page = 0;
-                cur->current_doc = nullptr;
-                cur->set_text(input.value());
-                tab_bar->setTabText(active_tab_index, title);
-                tab_bar->setTabToolTip(active_tab_index, name);
-                tab_bar->updateGeometry();
-                setWindowTitle(title + " - Hanvi");
-                convert_and_display(false);
-            } else {
-                create_new_tab(title, input.value(), name);
-            }
-        } else if (input.error() == io_error::file_not_readable) {
-            QMessageBox msgBox;
-            msgBox.setText("Cannot open file.");
-            msgBox.exec();
-        } else {
-            QMessageBox msgBox;
-            msgBox.setText("Cannot read text. Make sure the file is a text file.");
-            msgBox.exec();
-        }
+        prev_dir = QFileInfo(name).absolutePath();
+        open_file_path(name);
     });
 
     connect(&watcher, &QFutureWatcher<std::shared_ptr<AlignedDocument> >::finished, this,
@@ -693,6 +645,17 @@ void MainWindow::setup_hamburger_menu(QPushButton *btn) {
         dialog->exec();
     });
 
+    auto *appearance_action = menu->addAction("Appearance...");
+    connect(appearance_action, &QAction::triggered, this, [this] {
+        auto *dialog = new AppearanceDialog(appearance_, this);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        connect(dialog, &AppearanceDialog::settings_changed, this, [this](const AppearanceSettings &settings) {
+            apply_appearance(settings);
+            save_appearance(settings);
+        });
+        dialog->exec();
+    });
+
     auto *reconvert_action = menu->addAction("Re-convert");
     reconvert_action->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
     reconvert_action->setShortcutContext(Qt::WindowShortcut);
@@ -755,16 +718,154 @@ void MainWindow::setup_hamburger_menu(QPushButton *btn) {
 
 void MainWindow::update_max_restore_button() const {
     if (!max_btn) return;
-    QIcon icon;
+    const QString color = theme_colors_for(appearance_.theme).icon_color;
     if (isMaximized()) {
-        icon.addFile(":/resources/window_restore.svg");
+        max_btn->setIcon(themed_svg_icon(QStringLiteral(":/resources/window_restore.svg"), color));
         max_btn->setToolTip("Restore Down");
     } else {
-        icon.addFile(":/resources/window_max.svg");
+        max_btn->setIcon(themed_svg_icon(QStringLiteral(":/resources/window_max.svg"), color));
         max_btn->setToolTip("Maximize");
     }
-    max_btn->setIcon(icon);
     max_btn->setIconSize(QSize(16, 16));
+}
+
+void MainWindow::update_chrome_icons() const {
+    const QString color = theme_colors_for(appearance_.theme).icon_color;
+    const QString hover_color = appearance_.theme == ThemeId::Dark ? QStringLiteral("#ffffff") : color;
+
+    if (hamburger_btn) {
+        hamburger_btn->setIcon(themed_svg_icon(QStringLiteral(":/resources/hamburger.svg"), color));
+    }
+    if (add_tab_btn) {
+        add_tab_btn->setIcon(themed_svg_icon(
+            QStringLiteral(":/resources/add.svg"), color, QStringLiteral(":/resources/add_hover.svg"), hover_color));
+    }
+    if (min_btn) {
+        min_btn->setIcon(themed_svg_icon(QStringLiteral(":/resources/window_min.svg"), color));
+    }
+    update_max_restore_button();
+    if (close_win_btn) {
+        close_win_btn->setIcon(themed_svg_icon(QStringLiteral(":/resources/window_close.svg"), color,
+                                               QStringLiteral(":/resources/window_close_hover.svg"),
+                                               QStringLiteral("#ffffff")));
+    }
+
+    if (tab_bar) {
+        const QIcon tab_close = themed_svg_icon(QStringLiteral(":/resources/close.svg"), color,
+                                                QStringLiteral(":/resources/close_hover.svg"), hover_color);
+        for (int i = 0; i < tab_bar->count(); ++i) {
+            if (auto *btn = qobject_cast<QToolButton *>(tab_bar->tabButton(i, QTabBar::RightSide))) {
+                btn->setIcon(tab_close);
+            }
+        }
+    }
+}
+
+void MainWindow::apply_appearance(const AppearanceSettings &settings, const bool apply_stylesheet) {
+    appearance_ = settings;
+    if (apply_stylesheet) {
+        qApp->setStyleSheet(build_stylesheet(settings.theme));
+    }
+
+    const ThemeColors colors = theme_colors_for(settings.theme);
+    ui->cn_input->set_theme(colors);
+    ui->sv_output->set_theme(colors);
+    ui->vn_output->set_theme(colors);
+
+    ui->cn_input->set_font(reader_font_cn(settings));
+    ui->sv_output->set_font(reader_font_sv(settings));
+    ui->vn_output->set_font(reader_font_vn(settings));
+
+    ui->cn_input->set_line_height_percent(std::max(100, settings.line_height_percent - 25));
+    ui->sv_output->set_line_height_percent(std::max(100, settings.line_height_percent - 15));
+    ui->vn_output->set_line_height_percent(settings.line_height_percent);
+
+    update_chrome_icons();
+}
+
+void MainWindow::open_file_path(const QString &name) {
+    if (const auto input = load_from_file(name); input.has_value()) {
+        const QFileInfo fi(name);
+        const QString title = fi.fileName();
+
+        if (auto *cur = current_tab(); cur && cur->input_text.isEmpty()) {
+            cur->title = title;
+            cur->file_name = name;
+            cur->current_page = 0;
+            cur->current_doc = nullptr;
+            cur->set_text(input.value());
+            tab_bar->setTabText(active_tab_index, title);
+            tab_bar->setTabToolTip(active_tab_index, name);
+            tab_bar->updateGeometry();
+            setWindowTitle(title + " - Hanvi");
+            convert_and_display(false);
+        } else {
+            create_new_tab(title, input.value(), name);
+        }
+    } else if (input.error() == io_error::file_not_readable) {
+        QMessageBox msgBox;
+        msgBox.setText("Cannot open file.");
+        msgBox.exec();
+    } else {
+        QMessageBox msgBox;
+        msgBox.setText("Cannot read text. Make sure the file is a text file.");
+        msgBox.exec();
+    }
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent *event) {
+    const QMimeData *mime = event->mimeData();
+    if (mime->hasUrls()) {
+        for (const QUrl &url : mime->urls()) {
+            if (url.isLocalFile()) {
+                event->acceptProposedAction();
+                return;
+            }
+        }
+    }
+    if (mime->hasText() && !mime->text().trimmed().isEmpty()) {
+        event->acceptProposedAction();
+    }
+}
+
+// The drop's work is deferred to the event loop: opening a file may show a modal message box,
+// and running one inside the drop handler keeps the drag source (e.g. Explorer) blocked.
+void MainWindow::dropEvent(QDropEvent *event) {
+    const QMimeData *mime = event->mimeData();
+    if (mime->hasUrls()) {
+        QStringList paths;
+        for (const QUrl &url : mime->urls()) {
+            if (url.isLocalFile()) paths.append(url.toLocalFile());
+        }
+        if (!paths.isEmpty()) {
+            event->acceptProposedAction();
+            QTimer::singleShot(0, this, [this, paths] {
+                for (const QString &path : paths) open_file_path(path);
+            });
+            return;
+        }
+    }
+    if (mime->hasText() && !mime->text().trimmed().isEmpty()) {
+        event->acceptProposedAction();
+        QTimer::singleShot(0, this, [this, text = mime->text()] { open_dropped_text(text); });
+    }
+}
+
+void MainWindow::open_dropped_text(const QString &text) {
+    if (auto *cur = current_tab(); cur && cur->input_text.isEmpty()) {
+        cur->title = QStringLiteral("Dropped");
+        cur->file_name.clear();
+        cur->current_page = 0;
+        cur->current_doc = nullptr;
+        cur->set_text(text);
+        tab_bar->setTabText(active_tab_index, cur->title);
+        tab_bar->setTabToolTip(active_tab_index, QString());
+        tab_bar->updateGeometry();
+        setWindowTitle(cur->title + " - Hanvi");
+        convert_and_display(false);
+    } else {
+        create_new_tab(QStringLiteral("Dropped"), text, QString());
+    }
 }
 
 #ifdef Q_OS_WIN
@@ -1106,10 +1207,10 @@ void MainWindow::setup_tab_close_button(const int index) {
     close_btn->setObjectName("tab_close_btn");
     close_btn->setFixedSize(20, 20);
 
-    QIcon close_icon;
-    close_icon.addFile(":/resources/close.svg", QSize(12, 12), QIcon::Normal);
-    close_icon.addFile(":/resources/close_hover.svg", QSize(12, 12), QIcon::Active);
-    close_btn->setIcon(close_icon);
+    const QString color = theme_colors_for(appearance_.theme).icon_color;
+    const QString hover_color = appearance_.theme == ThemeId::Dark ? QStringLiteral("#ffffff") : color;
+    close_btn->setIcon(themed_svg_icon(QStringLiteral(":/resources/close.svg"), color,
+                                       QStringLiteral(":/resources/close_hover.svg"), hover_color));
     close_btn->setIconSize(QSize(12, 12));
 
     close_btn->setCursor(Qt::PointingHandCursor);

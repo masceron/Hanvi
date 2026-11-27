@@ -4,6 +4,7 @@
 #include <QFile>
 
 #include "app.h"
+#include "appearance.h"
 
 QString dict_db_path() {
     const QString path = QCoreApplication::applicationDirPath() + "/dict.db";
@@ -30,9 +31,7 @@ void init_style(QApplication &app) {
     app_font.setStyleHint(QFont::SansSerif);
     QApplication::setFont(app_font);
 
-    const QString css =
-#include "global.qcss"
-    ;
+    const QString css = build_stylesheet(load_appearance().theme);
 
     app.setStyleSheet(css);
 }

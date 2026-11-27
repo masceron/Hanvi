@@ -3,8 +3,12 @@ add_executable(Hanvi WIN32
         resources.qrc
         app/app.cpp
         app/app.h
+        app/appearance.cpp
+        app/appearance.h
         app/desktop_io.cpp
         app/desktop_io.h
+        components/appearancedialog.cpp
+        components/appearancedialog.h
         components/mainwindow.cpp
         components/mainwindow.h
         components/mainwindow.ui

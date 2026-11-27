@@ -1,6 +1,13 @@
 import * as Comlink from 'comlink'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
+import {
+  applyAppearance,
+  loadAppearance,
+  saveAppearance,
+  type AppearanceSettings,
+} from './appearance'
+import { AppearanceDialog } from './components/AppearanceDialog'
 import { BottomBar } from './components/BottomBar'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { DictPopup } from './components/DictPopup'
@@ -33,8 +40,44 @@ type Dialog =
   | { kind: 'entries'; source: EntriesSource }
   | { kind: 'namesets' }
   | { kind: 'history' }
+  | { kind: 'appearance' }
   | { kind: 'import'; file: File }
   | { kind: 'reset' }
+
+const SHARE_CACHE = 'hanvi-share-target'
+const SHARE_KEY = '/shared-payload'
+
+async function consumeShareTarget(): Promise<{ title: string; text: string } | null> {
+  const params = new URLSearchParams(window.location.search)
+  const hasShareFlag = params.has('share')
+  const paramTitle = params.get('title')?.trim() ?? ''
+  const paramText = params.get('text') ?? ''
+  const paramUrl = params.get('url') ?? ''
+
+  if (hasShareFlag || paramText || paramUrl) {
+    window.history.replaceState({}, '', window.location.pathname)
+  }
+
+  if (hasShareFlag && 'caches' in window) {
+    try {
+      const cache = await caches.open(SHARE_CACHE)
+      const res = await cache.match(SHARE_KEY)
+      await cache.delete(SHARE_KEY)
+      if (res) {
+        const data = (await res.json()) as { title?: string; text?: string }
+        if (typeof data.text === 'string' && data.text.trim()) {
+          return { title: typeof data.title === 'string' ? data.title : '', text: data.text }
+        }
+      }
+    } catch {
+      // ignore cache errors
+    }
+  }
+
+  const combined = [paramText, paramUrl].filter((part) => part.trim()).join('\n')
+  if (combined) return { title: paramTitle, text: combined }
+  return null
+}
 
 const INITIAL_DOCUMENT: DocumentState = {
   title: '',
@@ -86,6 +129,10 @@ export default function App() {
 
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isNamesetChooserOpen, setIsNamesetChooserOpen] = useState(false)
+  const [appearance, setAppearance] = useState<AppearanceSettings>(loadAppearance)
+  const [dragKind, setDragKind] = useState<'file' | 'text' | null>(null)
+  const dragDepth = useRef(0)
+  const internalDrag = useRef(false)
   const [isBusy, setIsBusy] = useState(false)
   const [progressPercent, setProgressPercent] = useState(30)
   const [statusMessage, setStatusMessage] = useState('Loading dictionaries into memory…')
@@ -104,9 +151,15 @@ export default function App() {
     document.title = doc.title ? `${doc.title} – Hanvi` : 'Hanvi'
   }, [doc.title])
 
+  useEffect(() => {
+    applyAppearance(appearance)
+    saveAppearance(appearance)
+  }, [appearance])
+
   // Initialize Core and WASM
   useEffect(() => {
     const started = performance.now()
+    const sharePromise = consumeShareTarget()
 
     core
       .init()
@@ -121,6 +174,10 @@ export default function App() {
             ? `Dictionaries ready in ${(ms / 1000).toFixed(1)}s`
             : 'Dictionaries ready, but this browser cannot store them: edits last until the tab is closed.',
         )
+        const shared = await sharePromise
+        if (shared) {
+          await actionsRef.current.loadText(shared.text, shared.title)
+        }
       })
       .catch((error: unknown) => {
         const msg = String(error)
@@ -517,6 +574,7 @@ export default function App() {
 
   // Ref holding actions for global shortcut listener
   const actionsRef = useRef({
+    loadText,
     handleOpenFile,
     handleReadClipboard,
     handleSaveToFile,
@@ -535,6 +593,7 @@ export default function App() {
 
   useEffect(() => {
     actionsRef.current = {
+      loadText,
       handleOpenFile,
       handleReadClipboard,
       handleSaveToFile,
@@ -683,8 +742,87 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // Drags that start inside the page (e.g. a selection in a pane) must not replace the document.
+  useEffect(() => {
+    const onStart = () => (internalDrag.current = true)
+    const onEnd = () => (internalDrag.current = false)
+    window.addEventListener('dragstart', onStart)
+    window.addEventListener('dragend', onEnd)
+    return () => {
+      window.removeEventListener('dragstart', onStart)
+      window.removeEventListener('dragend', onEnd)
+    }
+  }, [])
+
+  function droppedKind(e: React.DragEvent): 'file' | 'text' | null {
+    if (dialog || isPasteDialogOpen || internalDrag.current) return null
+    const types = Array.from(e.dataTransfer.types)
+    if (types.includes('Files')) return 'file'
+    if (types.includes('text/plain')) return 'text'
+    return null
+  }
+
+  function handleDragEnter(e: React.DragEvent) {
+    const kind = droppedKind(e)
+    if (!kind) return
+    e.preventDefault()
+    dragDepth.current += 1
+    setDragKind(kind)
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    const kind = droppedKind(e)
+    if (!kind) return
+    // Text dropped on a text field is inserted there by the browser, as usual.
+    if (kind === 'text' && (e.target as HTMLElement | null)?.closest('input, textarea')) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+
+  function handleDragLeave() {
+    if (!dragKind) return
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) setDragKind(null)
+  }
+
+  async function handleDrop(e: React.DragEvent) {
+    dragDepth.current = 0
+    setDragKind(null)
+    if (dialog || isPasteDialogOpen || internalDrag.current) return
+
+    const file = e.dataTransfer.files[0]
+    if (file) {
+      e.preventDefault()
+      if (file.name.toLowerCase().endsWith('.db')) {
+        setDialog({ kind: 'import', file })
+        return
+      }
+      const content = await file.text()
+      if (content.trim()) {
+        await loadText(content, file.name)
+      } else {
+        setStatusMessage(`“${file.name}” is empty.`)
+      }
+      return
+    }
+
+    const target = e.target as HTMLElement | null
+    if (target?.closest('input, textarea, .modal-backdrop')) return
+    const droppedText = e.dataTransfer.getData('text/plain')
+    if (droppedText.trim()) {
+      e.preventDefault()
+      await loadText(droppedText, '')
+    }
+  }
+
   return (
-    <div className="hanvi-app">
+    <div
+      className="hanvi-app"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={(e) => void handleDrop(e)}
+    >
       <input
         ref={fileInputRef}
         type="file"
@@ -721,6 +859,7 @@ export default function App() {
         onOpenPhrases={() => setDialog({ kind: 'entries', source: { kind: 'phrases' } })}
         onOpenNames={() => setDialog({ kind: 'entries', source: { kind: 'names' } })}
         onOpenHistory={() => setDialog({ kind: 'history' })}
+        onOpenAppearance={() => setDialog({ kind: 'appearance' })}
         onReconvert={handleReconvert}
         onReloadDict={handleReloadDict}
         onExportDict={handleExportDict}
@@ -772,6 +911,13 @@ export default function App() {
       )}
       {dialog?.kind === 'namesets' && <NamesetsManager activeNameSet={activeNameset} onClose={dialogClosed} />}
       {dialog?.kind === 'history' && <HistoryDialog nameSets={nameSets} onClose={dialogClosed} />}
+      {dialog?.kind === 'appearance' && (
+        <AppearanceDialog
+          settings={appearance}
+          onChange={setAppearance}
+          onClose={() => setDialog(null)}
+        />
+      )}
       {dialog?.kind === 'import' && (
         <ConfirmDialog
           title="Import dictionary"
@@ -812,6 +958,21 @@ export default function App() {
         onSelect={handleSelectNameset}
         onClose={() => setIsNamesetChooserOpen(false)}
       />
+
+      {dragKind && (
+        <div className="drop-overlay" aria-hidden="true">
+          <div className="drop-overlay-card">
+            {dragKind === 'file' ? (
+              <>
+                <span className="drop-overlay-title">Drop file to open</span>
+                <span className="drop-overlay-subtitle">Supports .txt text files and .db dictionaries</span>
+              </>
+            ) : (
+              <span className="drop-overlay-title">Drop text to convert</span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

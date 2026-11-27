@@ -73,11 +73,14 @@ void TokenCanvas::set_line_height_percent(const int percent)
 void TokenCanvas::set_font(const QFont& font)
 {
     font_ = font;
-    if (default_pixel_size_ == 0)
-    {
-        default_pixel_size_ = font.pixelSize() > 0 ? font.pixelSize() : 16;
-    }
+    default_pixel_size_ = font.pixelSize() > 0 ? font.pixelSize() : 16;
     layout_all();
+}
+
+void TokenCanvas::set_theme(const ThemeColors& theme)
+{
+    theme_ = theme;
+    if (viewport()) viewport()->update();
 }
 
 void TokenCanvas::zoom(const int steps)
@@ -472,7 +475,7 @@ const TokenCanvas::TokenSpan* TokenCanvas::token_at_char(const size_t p_idx, con
 void TokenCanvas::paintEvent(QPaintEvent* event)
 {
     QPainter painter(viewport());
-    painter.fillRect(event->rect(), QColor(0x2d, 0x2d, 0x2d));
+    painter.fillRect(event->rect(), theme_.pane_bg);
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.setRenderHint(QPainter::TextAntialiasing, true);
 
@@ -511,14 +514,14 @@ void TokenCanvas::paintEvent(QPaintEvent* event)
                     fr.length = m.length;
                     if (static_cast<int>(m_idx) == current_search_idx_)
                     {
-                        fr.format.setBackground(QColor(255, 150, 0));
-                        fr.format.setForeground(Qt::black);
+                        fr.format.setBackground(theme_.search_active_bg);
+                        fr.format.setForeground(theme_.search_active_text);
                         fr.format.setFontWeight(QFont::Bold);
                     }
                     else
                     {
-                        fr.format.setBackground(QColor(160, 110, 20, 180));
-                        fr.format.setForeground(Qt::white);
+                        fr.format.setBackground(theme_.search_bg);
+                        fr.format.setForeground(theme_.search_text);
                     }
                     format_ranges.append(fr);
                 }
@@ -542,8 +545,8 @@ void TokenCanvas::paintEvent(QPaintEvent* event)
                 QTextLayout::FormatRange fr;
                 fr.start = start_c;
                 fr.length = end_c - start_c;
-                fr.format.setBackground(QColor(0x21, 0x42, 0x83));
-                fr.format.setForeground(Qt::white);
+                fr.format.setBackground(theme_.selection_bg);
+                fr.format.setForeground(theme_.selection_text);
                 format_ranges.append(fr);
             }
         }
@@ -561,7 +564,7 @@ void TokenCanvas::paintEvent(QPaintEvent* event)
                     fr.length = span.length;
                     fr.format.setFontUnderline(true);
                     fr.format.setUnderlineStyle(QTextCharFormat::DotLine);
-                    fr.format.setUnderlineColor(QColor(0x72, 0x75, 0xfb));
+                    fr.format.setUnderlineColor(theme_.override_underline);
                     format_ranges.append(fr);
                 }
             }
@@ -577,14 +580,14 @@ void TokenCanvas::paintEvent(QPaintEvent* event)
                     QTextLayout::FormatRange fr;
                     fr.start = span.start_char;
                     fr.length = span.length;
-                    fr.format.setForeground(QColor(255, 68, 68));
+                    fr.format.setForeground(theme_.token_highlight);
                     fr.format.setFontWeight(QFont::Bold);
                     format_ranges.append(fr);
                 }
             }
         }
 
-        painter.setPen(Qt::white);
+        painter.setPen(theme_.text);
         text_layout->draw(&painter, QPointF(margin_, draw_y), format_ranges);
     }
 }

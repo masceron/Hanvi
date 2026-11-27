@@ -4,6 +4,7 @@
 #include <QFutureWatcher>
 #include <memory>
 #include <vector>
+#include "app/appearance.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -19,6 +20,8 @@ using hanvi::AlignedDocument;
 using hanvi::Rule;
 using hanvi::TokenOverride;
 class DocumentSession;
+class QDragEnterEvent;
+class QDropEvent;
 class QTabBar;
 class QPushButton;
 class findbar;
@@ -81,6 +84,10 @@ public:
 protected:
     void changeEvent(QEvent *event) override;
 
+    void dragEnterEvent(QDragEnterEvent *event) override;
+
+    void dropEvent(QDropEvent *event) override;
+
     bool eventFilter(QObject *obj, QEvent *event) override;
 #ifdef Q_OS_WIN
     bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
@@ -97,7 +104,12 @@ private:
     Ui::MainWindow *ui;
     QTabBar *tab_bar = nullptr;
     QWidget *tab_container = nullptr;
+    QPushButton *hamburger_btn = nullptr;
+    QPushButton *add_tab_btn = nullptr;
+    QPushButton *min_btn = nullptr;
     QPushButton *max_btn = nullptr;
+    QPushButton *close_win_btn = nullptr;
+    AppearanceSettings appearance_;
     DocumentSession *session = nullptr;
     QFutureWatcher<std::shared_ptr<AlignedDocument> > watcher;
     QFutureWatcher<QString> plain_watcher;
@@ -125,6 +137,14 @@ private:
     void setup_hamburger_menu(QPushButton *btn);
 
     void update_max_restore_button() const;
+
+    void apply_appearance(const AppearanceSettings &settings, bool apply_stylesheet = true);
+
+    void update_chrome_icons() const;
+
+    void open_file_path(const QString &name);
+
+    void open_dropped_text(const QString &text);
 
 #ifdef Q_OS_WIN
     void triggerDpiRecovery();

@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'sw-share.js'],
       manifest: {
         name: 'Hanvi',
         short_name: 'Hanvi',
@@ -18,6 +18,22 @@ export default defineConfig({
         display: 'standalone',
         scope: '/',
         start_url: '/',
+        share_target: {
+          action: '/share-target',
+          method: 'POST',
+          enctype: 'multipart/form-data',
+          params: {
+            title: 'title',
+            text: 'text',
+            url: 'url',
+            files: [
+              {
+                name: 'file',
+                accept: ['text/plain', '.txt'],
+              },
+            ],
+          },
+        },
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -32,6 +48,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        importScripts: ['sw-share.js'],
         globPatterns: ['**/*.{js,css,html,wasm,json,ocd2,gz}'],
         // dict.db.gz (~14 MB) exceeds Workbox's 2 MiB default; match Cloudflare Pages' 25 MiB asset limit.
         maximumFileSizeToCacheInBytes: 25 * 1024 * 1024,

@@ -15,6 +15,7 @@ interface HamburgerMenuProps {
   onOpenPhrases: () => void
   onOpenNames: () => void
   onOpenHistory: () => void
+  onOpenAppearance: () => void
   onReconvert: () => void
   onReloadDict: () => void
   onExportDict: () => void
@@ -37,6 +38,7 @@ export function HamburgerMenu({
   onOpenPhrases,
   onOpenNames,
   onOpenHistory,
+  onOpenAppearance,
   onReconvert,
   onReloadDict,
   onExportDict,
@@ -181,6 +183,16 @@ export function HamburgerMenu({
           >
             <span>Recent Changes…</span>
             <span className="shortcut">Ctrl+H</span>
+          </button>
+
+          <button
+            className="menu-item"
+            onClick={() => {
+              onOpenAppearance()
+              onClose()
+            }}
+          >
+            <span>Appearance…</span>
           </button>
 
           <div className="menu-separator" />

@@ -9,6 +9,17 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Hanvi</title>
+    <script>
+      // Applies the saved theme before first paint (appearance.ts does the rest once React loads).
+      try {
+        var theme = JSON.parse(localStorage.getItem('hanvi.appearance') || 'null')?.theme
+        var meta = { sepia: '#e6d8be', light: '#f1f2f6' }[theme]
+        if (meta) {
+          document.documentElement.dataset.theme = theme
+          document.querySelector('meta[name="theme-color"]').content = meta
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

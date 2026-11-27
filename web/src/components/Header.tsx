@@ -19,6 +19,7 @@ interface HeaderProps {
   onOpenPhrases: () => void
   onOpenNames: () => void
   onOpenHistory: () => void
+  onOpenAppearance: () => void
   onReconvert: () => void
   onReloadDict: () => void
   onExportDict: () => void
@@ -48,6 +49,7 @@ export function Header({
   onOpenPhrases,
   onOpenNames,
   onOpenHistory,
+  onOpenAppearance,
   onReconvert,
   onReloadDict,
   onExportDict,
@@ -71,6 +73,7 @@ export function Header({
         onOpenPhrases={onOpenPhrases}
         onOpenNames={onOpenNames}
         onOpenHistory={onOpenHistory}
+        onOpenAppearance={onOpenAppearance}
         onReconvert={onReconvert}
         onReloadDict={onReloadDict}
         onExportDict={onExportDict}
