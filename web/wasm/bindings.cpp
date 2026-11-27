@@ -179,6 +179,11 @@ namespace {
         reload_dict();
     }
 
+    // Conversions segment by word frequency when on and the dictionary has segment weights.
+    void set_frequency_segmentation(const bool enabled) {
+        hanvi::segmentation = enabled ? hanvi::Segmentation::Frequency : hanvi::Segmentation::Greedy;
+    }
+
     val optional_string(const ArenaText text) {
         return text.isNull() ? val::null() : val(text.str());
     }
@@ -379,6 +384,8 @@ EMSCRIPTEN_BINDINGS (hanvi) {
     emscripten::function("loadDict", &load_dictionaries);
     emscripten::function("reopenDict", &reopen_dictionaries);
     emscripten::function("reloadDict", &reload_dictionaries);
+    emscripten::function("setFrequencySegmentation", &set_frequency_segmentation);
+    emscripten::function("frequencySegmentationAvailable", &hanvi::frequency_segmentation_available);
     emscripten::function("closeDb", &hanvi::close_db);
     emscripten::function("saveDbCopy", &hanvi::save_db_copy);
     emscripten::function("exportDb", &hanvi::export_db);

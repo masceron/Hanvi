@@ -90,6 +90,14 @@ inline bool is_chinese_char(const char32_t cp) noexcept {
 }
 
 /**
+ * For counting characters by UTF-16 unit: true for a BMP ideograph and for any high surrogate (the
+ * first unit of a character beyond the BMP, which is nearly always an ideograph in Chinese text).
+ */
+inline bool is_han_unit(const char16_t c) noexcept {
+    return is_chinese_char(c) || is_high_surrogate(c);
+}
+
+/**
  * Counts the number of Chinese (CJK ideograph) characters in a UTF-16 string,
  * handling supplementary-plane surrogate pairs as single characters.
  */

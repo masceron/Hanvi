@@ -17,6 +17,8 @@ int main(int argc, char *argv[]) {
     Loader loading_screen;
     loading_screen.show();
 
+    // Before the window is built: its menu shows the setting.
+    hanvi::segmentation = load_frequency_segmentation() ? Segmentation::Frequency : Segmentation::Greedy;
     MainWindow w;
 
     load_dict(dict_db_path().toStdString(), [&] {

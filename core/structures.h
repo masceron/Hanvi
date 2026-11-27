@@ -11,6 +11,15 @@
 namespace hanvi {
     enum Priority { NONE, PHRASE, NAME };
 
+    // How likely an entry is as a word, for segmenting: 100 × the natural log of its probability.
+    // Words with a known frequency get it from segment_weights; Dictionary::compose_weights() gives
+    // the other entries the weight of their likeliest cut into those words.
+    inline constexpr int16_t UNWEIGHTED = INT16_MIN;
+    // A character no weighted word covers weighs as much as the rarest word of the frequency list the
+    // weights come from, which the importer stores in segment_settings. This default, about jieba's,
+    // is for dictionaries that do not say.
+    inline constexpr int16_t DEFAULT_UNSEEN_WEIGHT = -1800;
+
     struct Rule {
         std::u16string original_start;
         std::u16string original_end;
@@ -149,6 +158,8 @@ namespace hanvi {
         TrieNode *first_child = nullptr;
         char16_t single_child_char = 0;
         uint16_t child_count = 0;
+        // Only meaningful on nodes with a value. Free on 64-bit targets, where it fills padding.
+        int16_t weight = UNWEIGHTED;
 
         TrieNode() = default;
 
@@ -172,6 +183,8 @@ namespace hanvi {
         [[nodiscard]] ArenaText get_full_phrase() const;
 
         [[nodiscard]] std::vector<Rule> *get_rules() const;
+
+        [[nodiscard]] bool has_value() const;
 
         void set_name_ptr(const char *ptr, NodePool &pool);
 
@@ -219,6 +232,34 @@ namespace hanvi {
 
         [[nodiscard]] Match find(std::u16string_view text, int startPos) const;
 
+        // Calls on_match(length, node) for every entry (name or phrase) that text has at startPos,
+        // shortest first.
+        template<typename F>
+        void for_each_match(std::u16string_view text, size_t startPos, F &&on_match) const {
+            const TrieNode *node = root;
+            for (size_t i = startPos; i < text.length(); ++i) {
+                node = node == root ? root_child(text[i]) : node->find_child(text[i]);
+                if (!node) return;
+                if (node->has_value()) on_match(static_cast<int>(i - startPos + 1), *node);
+            }
+        }
+
+        // Weighs an existing entry; false when the dictionary has no entry for key.
+        bool set_weight(std::u16string_view key, int16_t weight);
+
+        // Gives every entry still unweighted the weight of its likeliest cut into weighted entries,
+        // a character no such entry covers weighing unseen_weight() (non-Han characters nothing).
+        // Does nothing in a dictionary without weights.
+        void compose_weights();
+
+        // Whether any entry has a weight from segment_weights.
+        [[nodiscard]] bool has_weights() const noexcept { return weighted; }
+
+        // The weight of a character no weighted entry covers; set before compose_weights().
+        [[nodiscard]] int16_t unseen_weight() const noexcept { return unseen; }
+
+        void set_unseen_weight(const int16_t weight) noexcept { unseen = weight; }
+
         [[nodiscard]] ExactResult find_exact(std::u16string_view key) const;
 
         void insert(std::u16string_view key, std::u16string_view value, Priority priority);
@@ -248,8 +289,13 @@ namespace hanvi {
         std::unique_ptr<TrieNode *[]> root_index;
         NodePool pool;
         TextArena text_arena;
+        bool weighted = false;
+        int16_t unseen = DEFAULT_UNSEEN_WEIGHT;
 
         [[nodiscard]] TrieNode *root_child(char16_t ch) const;
+
+        // The weight compose_weights() would give key.
+        [[nodiscard]] int16_t composed_weight(std::u16string_view key) const;
 
         [[nodiscard]] TrieNode *walk_node(std::u16string_view key) const;
 

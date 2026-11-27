@@ -178,6 +178,21 @@ namespace hanvi {
             }
         }
         {
+            // Optional: a dictionary from before segment_weights converts with greedy segmentation.
+            // segment_settings says what the weights were computed with; without it, jieba's.
+            if (SqliteStmt setting(db, "SELECT value FROM segment_settings WHERE name = 'unseen_weight'");
+                setting.is_valid() && setting.step()) {
+                dictionary.set_unseen_weight(static_cast<int16_t>(setting.column_int(0)));
+            }
+            SqliteStmt stmt(db, "SELECT original, weight FROM segment_weights");
+            if (stmt.is_valid()) {
+                while (stmt.step()) {
+                    dictionary.set_weight(stmt.column_text16(0), static_cast<int16_t>(stmt.column_int(1)));
+                }
+            }
+            dictionary.compose_weights();
+        }
+        {
             SqliteStmt stmt(
                 db, "SELECT original_start, original_end, translated_start, translated_end FROM grammar_rules");
             while (stmt.step()) {

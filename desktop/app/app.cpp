@@ -2,6 +2,11 @@
 #include <QIcon>
 #include <QFontDatabase>
 #include <QFile>
+#include <QDir>
+#include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QStandardPaths>
 
 #include "app.h"
 #include "appearance.h"
@@ -9,6 +14,34 @@
 QString dict_db_path() {
     const QString path = QCoreApplication::applicationDirPath() + "/dict.db";
     return QFile::exists(path) ? path : "dict.db";
+}
+
+namespace {
+    // Conversion settings, beside appearance.json.
+    QString settings_file_path() {
+        const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+        return dir.isEmpty() ? QStringLiteral("settings.json") : dir + QStringLiteral("/settings.json");
+    }
+
+    QJsonObject read_settings() {
+        QFile file(settings_file_path());
+        if (!file.open(QIODevice::ReadOnly)) return {};
+        return QJsonDocument::fromJson(file.readAll()).object();
+    }
+}
+
+bool load_frequency_segmentation() {
+    return read_settings().value(QStringLiteral("segmentation")).toString() == QStringLiteral("frequency");
+}
+
+void save_frequency_segmentation(const bool enabled) {
+    QJsonObject settings = read_settings();
+    settings.insert(QStringLiteral("segmentation"), enabled ? QStringLiteral("frequency") : QStringLiteral("greedy"));
+    const QString path = settings_file_path();
+    QDir().mkpath(QFileInfo(path).absolutePath());
+    if (QFile file(path); file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        file.write(QJsonDocument(settings).toJson(QJsonDocument::Compact));
+    }
 }
 
 void init_style(QApplication &app) {

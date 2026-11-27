@@ -310,6 +310,10 @@ namespace hanvi {
         return nullptr;
     }
 
+    bool TrieNode::has_value() const {
+        return data != TAG_NULL && (!get_name().isNull() || !get_first_phrase().isNull());
+    }
+
     void TrieNode::ensure_complex(NodePool &pool) {
         const uintptr_t tag = data & TAG_MASK;
         if (tag == TAG_COMPLEX) return;
@@ -377,8 +381,9 @@ namespace hanvi {
 
     Dictionary::Dictionary(Dictionary &&other) noexcept
         : root(other.root), root_index(std::move(other.root_index)), pool(std::move(other.pool)),
-          text_arena(std::move(other.text_arena)) {
+          text_arena(std::move(other.text_arena)), weighted(other.weighted), unseen(other.unseen) {
         other.root = nullptr;
+        other.weighted = false;
     }
 
     Dictionary &Dictionary::operator=(Dictionary &&other) noexcept {
@@ -387,8 +392,11 @@ namespace hanvi {
             text_arena = std::move(other.text_arena);
             root_index = std::move(other.root_index);
             root = other.root;
+            weighted = other.weighted;
+            unseen = other.unseen;
 
             other.root = nullptr;
+            other.weighted = false;
         }
         return *this;
     }
@@ -416,6 +424,9 @@ namespace hanvi {
                 node->set_phrase_ptr(text_arena.allocate(combined), pool);
             }
         }
+        // A new entry weighs as its parts would. Entries whose weights it was composed from keep
+        // theirs until the next load.
+        if (weighted && node->weight == UNWEIGHTED) node->weight = composed_weight(key);
     }
 
     TrieNode *Dictionary::make_path(TrieNode *node, const std::u16string_view key) {
@@ -602,6 +613,105 @@ namespace hanvi {
         }
 
         return {.length = best_len_found, .priority = priority, .rules = rules, .translation = translated};
+    }
+
+    bool Dictionary::set_weight(const std::u16string_view key, const int16_t weight) {
+        TrieNode *node = walk_node(key);
+        if (!node || !node->has_value()) return false;
+        node->weight = weight;
+        weighted = true;
+        return true;
+    }
+
+    int16_t Dictionary::composed_weight(const std::u16string_view key) const {
+        // best[p]: the likeliest cut of key from p on. Composed weights of other entries are cuts
+        // into weighted words themselves, so using them gives the same result.
+        thread_local std::vector<int32_t> best;
+        best.assign(key.size() + 1, 0);
+        for (size_t p = key.size(); p-- > 0;) {
+            best[p] = best[p + 1] + (is_han_unit(key[p]) ? unseen : 0);
+            for_each_match(key, p, [&](const int length, const TrieNode &node) {
+                if (node.weight != UNWEIGHTED) best[p] = std::max(best[p], node.weight + best[p + length]);
+            });
+        }
+        return static_cast<int16_t>(std::max<int32_t>(best[0], INT16_MIN + 1));
+    }
+
+    // Calls f(key, node) for every node below root, in key order.
+    template<typename F>
+    static void walk_keys(TrieNode *root, F &&f) {
+        std::u16string key;
+        const auto visit = [&](auto &self, TrieNode *node) -> void {
+            const auto each_child = [&](const char16_t ch, TrieNode *child) {
+                key.push_back(ch);
+                f(std::u16string_view(key), child);
+                self(self, child);
+                key.pop_back();
+            };
+            if (node->child_count == 1) {
+                each_child(node->single_child_char, node->first_child);
+            } else if (node->child_count > 1) {
+                const auto *chars = child_chars(node->first_child);
+                auto *const *nodes = child_nodes(node->first_child, node->child_count);
+                for (uint16_t k = 0; k < node->child_count; ++k) each_child(chars[k], nodes[k]);
+            }
+        };
+        visit(visit, root);
+    }
+
+    void Dictionary::compose_weights() {
+        if (!weighted) return;
+        // The weighted entries alone, in a trie of their own: the cursors below die within a few
+        // characters there, where most would live on in this dictionary's long phrases.
+        Dictionary words;
+        std::vector<std::pair<std::u16string, int16_t> > weights;
+        walk_keys(root, [&](const std::u16string_view key, const TrieNode *node) {
+            if (node->weight != UNWEIGHTED && node->has_value()) weights.emplace_back(key, node->weight);
+        });
+        {
+            DictionaryLoader loader(words);
+            for (const auto &[key, weight]: weights) loader.add(to_utf8(key), PHRASE, {});
+        }
+        for (const auto &[key, weight]: weights) words.walk_node(key)->weight = weight;
+        weights = {};
+
+        // composed_weight() for every key, sharing the work between keys with a common prefix. Depth
+        // first, for the key of the node at depth n: best[d] is the likeliest cut of its first d
+        // characters, and cursors[n] holds, for each j < n with one, the node of words for key[j, n).
+        // So the cut of key[0, n) ends in an unseen character or in a weighted entry key[j, n) after
+        // best[j]. Cuts read words only, so weights set on the way do not change later cuts.
+        std::vector<int32_t> best{0};
+        std::vector<std::vector<std::pair<int, const TrieNode *> > > cursors(1);
+        const auto visit = [&](auto &self, TrieNode *node, const size_t n) -> void {
+            if (n > 0 && node->weight == UNWEIGHTED && node->has_value()) {
+                node->weight = static_cast<int16_t>(std::max<int32_t>(best[n], INT16_MIN + 1));
+            }
+            const auto each_child = [&](const char16_t ch, TrieNode *child) {
+                if (cursors.size() <= n + 1) cursors.resize(n + 2);
+                auto &next = cursors[n + 1];
+                next.clear();
+                for (const auto &[j, cursor]: cursors[n]) {
+                    if (const TrieNode *advanced = cursor->find_child(ch)) next.emplace_back(j, advanced);
+                }
+                if (const TrieNode *first = words.root_child(ch)) next.emplace_back(static_cast<int>(n), first);
+
+                int32_t b = best[n] + (is_han_unit(ch) ? unseen : 0);
+                for (const auto &[j, cursor]: next) {
+                    if (cursor->weight != UNWEIGHTED && cursor->has_value()) b = std::max(b, best[j] + cursor->weight);
+                }
+                best.push_back(b);
+                self(self, child, n + 1);
+                best.pop_back();
+            };
+            if (node->child_count == 1) {
+                each_child(node->single_child_char, node->first_child);
+            } else if (node->child_count > 1) {
+                const auto *chars = child_chars(node->first_child);
+                auto *const *nodes = child_nodes(node->first_child, node->child_count);
+                for (uint16_t k = 0; k < node->child_count; ++k) each_child(chars[k], nodes[k]);
+            }
+        };
+        visit(visit, root, 0);
     }
 
     void Dictionary::insert_rule(const std::u16string_view start, const std::u16string_view end,

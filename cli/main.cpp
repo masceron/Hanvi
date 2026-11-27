@@ -42,6 +42,11 @@ int main(int argc, char *argv[]) {
                                         "Number of conversion jobs, default 0 (all).", "jobs", "0");
     parser.addOption(job_number);
 
+    const QCommandLineOption segmentation_option(QStringList() << "s" << "segmentation",
+                                                 "Word segmentation: greedy (default) or frequency.", "mode",
+                                                 "greedy");
+    parser.addOption(segmentation_option);
+
     if (!parser.parse(QCoreApplication::arguments())) {
         std::println(stderr, "Error: {}", parser.errorText().toStdString());
         return 1;
@@ -59,6 +64,12 @@ int main(int argc, char *argv[]) {
 
     if (!parser.isSet(input_option_folder) || !parser.isSet(output_option_folder)) {
         std::println(stderr, "Error: Both -i and -o must be specified.");
+        return 1;
+    }
+
+    const QString segmentation_mode = parser.value(segmentation_option).toLower();
+    if (segmentation_mode != "greedy" && segmentation_mode != "frequency") {
+        std::println(stderr, "Error: --segmentation must be greedy or frequency.");
         return 1;
     }
 
@@ -90,6 +101,14 @@ int main(int argc, char *argv[]) {
 
     std::println(" {}s.", static_cast<double>(timer_dict.elapsed()) / 1000);
     std::fflush(stdout);
+
+    if (segmentation_mode == "frequency") {
+        if (frequency_segmentation_available()) {
+            hanvi::segmentation = Segmentation::Frequency;
+        } else {
+            std::println(stderr, "This dictionary has no segment weights; segmenting greedily.");
+        }
+    }
 
     if (const int jobs = parser.value(job_number).toInt(); jobs > 0) {
         QThreadPool::globalInstance()->setMaxThreadCount(jobs);

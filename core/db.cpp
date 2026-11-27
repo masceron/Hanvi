@@ -196,6 +196,18 @@ namespace hanvi {
         return std::u16string(q.column_text16(0));
     }
 
+    std::optional<int> db_segment_weight(const std::u16string_view key) {
+        sqlite3 *db = get_db_handle();
+        if (!db) return std::nullopt;
+
+        // Absent in dictionaries from before segment_weights: preparing the query fails.
+        SqliteStmt q(db, "SELECT weight FROM segment_weights WHERE original = ?");
+        if (!q.is_valid()) return std::nullopt;
+        q.bind_text16(1, key);
+        if (!q.step()) return std::nullopt;
+        return q.column_int(0);
+    }
+
     void nameset_db_insert(const int set_id, const std::u16string_view key, const std::u16string_view value) {
         sqlite3 *db = get_db_handle();
         if (!db) return;

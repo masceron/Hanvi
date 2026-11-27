@@ -21,6 +21,9 @@ interface HeaderProps {
   onOpenHistory: () => void
   onOpenAppearance: () => void
   onReconvert: () => void
+  frequencySegmentation: boolean
+  segmentationAvailable: boolean
+  onToggleSegmentation: () => void
   onReloadDict: () => void
   onExportDict: () => void
   onImportDict: () => void
@@ -51,6 +54,9 @@ export function Header({
   onOpenHistory,
   onOpenAppearance,
   onReconvert,
+  frequencySegmentation,
+  segmentationAvailable,
+  onToggleSegmentation,
   onReloadDict,
   onExportDict,
   onImportDict,
@@ -75,6 +81,9 @@ export function Header({
         onOpenHistory={onOpenHistory}
         onOpenAppearance={onOpenAppearance}
         onReconvert={onReconvert}
+        frequencySegmentation={frequencySegmentation}
+        segmentationAvailable={segmentationAvailable}
+        onToggleSegmentation={onToggleSegmentation}
         onReloadDict={onReloadDict}
         onExportDict={onExportDict}
         onImportDict={onImportDict}

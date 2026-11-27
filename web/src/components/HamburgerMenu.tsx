@@ -17,6 +17,10 @@ interface HamburgerMenuProps {
   onOpenHistory: () => void
   onOpenAppearance: () => void
   onReconvert: () => void
+  frequencySegmentation: boolean
+  // False when the dictionary has no segment weights: the item is disabled.
+  segmentationAvailable: boolean
+  onToggleSegmentation: () => void
   onReloadDict: () => void
   onExportDict: () => void
   onImportDict: () => void
@@ -40,6 +44,9 @@ export function HamburgerMenu({
   onOpenHistory,
   onOpenAppearance,
   onReconvert,
+  frequencySegmentation,
+  segmentationAvailable,
+  onToggleSegmentation,
   onReloadDict,
   onExportDict,
   onImportDict,
@@ -206,6 +213,21 @@ export function HamburgerMenu({
           >
             <span>Re-convert</span>
             <span className="shortcut">Ctrl+R</span>
+          </button>
+
+          <button
+            className="menu-item"
+            role="menuitemcheckbox"
+            aria-checked={frequencySegmentation}
+            disabled={!segmentationAvailable}
+            title={segmentationAvailable ? undefined : 'This dictionary has no segment weights.'}
+            onClick={() => {
+              onToggleSegmentation()
+              onClose()
+            }}
+          >
+            <span>Segment by Word Frequency</span>
+            <span className="shortcut">{frequencySegmentation ? '✓' : ''}</span>
           </button>
 
           <button

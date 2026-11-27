@@ -338,6 +338,15 @@ body {
   background-color: var(--bg-selected);
 }
 
+.menu-item:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.menu-item:disabled:hover {
+  background-color: transparent;
+}
+
 .menu-item .shortcut {
   font-size: 11px;
   color: var(--text-muted);

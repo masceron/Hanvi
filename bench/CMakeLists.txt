@@ -12,6 +12,12 @@ if (WIN32)
     target_link_libraries(HanviBench PRIVATE psapi)
 endif ()
 
+# Greedy vs Ranked segmentation on a text; see segdiff.cpp.
+add_executable(HanviSegDiff segdiff.cpp)
+set_target_properties(HanviSegDiff PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+target_link_libraries(HanviSegDiff PRIVATE CoreLogic hanvi_flags)
+add_dependencies(HanviSegDiff HanviBench)
+
 add_custom_command(TARGET HanviBench POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:HanviBench>/opencc"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different ${OPENCC_DATA_FILES} "$<TARGET_FILE_DIR:HanviBench>/opencc"

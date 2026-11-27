@@ -27,6 +27,7 @@ import type { DocumentState, NameSet, Rule, Token, TokenOverride } from './core/
 import { readClipboard, writeClipboard } from './clipboard'
 import { download } from './download'
 import { useIsMobileBrowser, type FlatToken, type TokenSelection } from './mobile'
+import { loadFrequencySegmentation, saveFrequencySegmentation } from './segmentation'
 import { describeStorage, requestPersistence } from './storage'
 
 type CoreStatus =
@@ -130,6 +131,9 @@ export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isNamesetChooserOpen, setIsNamesetChooserOpen] = useState(false)
   const [appearance, setAppearance] = useState<AppearanceSettings>(loadAppearance)
+  const [frequencySegmentation, setFrequencySegmentation] = useState(loadFrequencySegmentation)
+  // Whether the loaded dictionary has the segment weights frequency segmentation needs.
+  const [segmentationAvailable, setSegmentationAvailable] = useState(false)
   const [dragKind, setDragKind] = useState<'file' | 'text' | null>(null)
   const dragDepth = useRef(0)
   const internalDrag = useRef(false)
@@ -166,6 +170,7 @@ export default function App() {
       .then(async () => {
         const sets = await core.nameSets()
         setNameSets(sets)
+        setSegmentationAvailable(await core.frequencySegmentationAvailable())
         const ms = performance.now() - started
         setCoreStatus({ state: 'ready', ms })
         setProgressPercent(100)
@@ -343,11 +348,24 @@ export default function App() {
   // After the dictionary changed (here or in another tab): refresh namesets, follow the core if
   // it dropped a deleted active nameset, and re-convert the page.
   const handleDictionaryChanged = useCallback(async () => {
-    const [sets, active] = await Promise.all([core.nameSets(), core.activeNameSet()])
+    const [sets, active, available] = await Promise.all([
+      core.nameSets(),
+      core.activeNameSet(),
+      core.frequencySegmentationAvailable(),
+    ])
     setNameSets(sets)
     setDoc((d) => ({ ...d, nameSetId: active }))
+    setSegmentationAvailable(available)
     await handleReconvert()
   }, [handleReconvert])
+
+  const handleToggleSegmentation = useCallback(async () => {
+    const enabled = !frequencySegmentation
+    setFrequencySegmentation(enabled)
+    saveFrequencySegmentation(enabled)
+    await core.setFrequencySegmentation(enabled)
+    await handleReconvert()
+  }, [frequencySegmentation, handleReconvert])
 
   // Reload dictionaries
   const handleReloadDict = useCallback(async () => {
@@ -861,6 +879,9 @@ export default function App() {
         onOpenHistory={() => setDialog({ kind: 'history' })}
         onOpenAppearance={() => setDialog({ kind: 'appearance' })}
         onReconvert={handleReconvert}
+        frequencySegmentation={frequencySegmentation}
+        segmentationAvailable={segmentationAvailable}
+        onToggleSegmentation={() => void handleToggleSegmentation()}
         onReloadDict={handleReloadDict}
         onExportDict={handleExportDict}
         onImportDict={() => dbInputRef.current?.click()}

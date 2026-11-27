@@ -22,6 +22,9 @@ namespace hanvi {
 
     std::optional<std::u16string> db_get_translation(std::u16string_view key, Priority priority);
 
+    // The key's weight in segment_weights (a word frequency, whether or not the key is an entry).
+    std::optional<int> db_segment_weight(std::u16string_view key);
+
     void nameset_db_insert(int set_id, std::u16string_view key, std::u16string_view value);
 
     void nameset_db_remove(int set_id, std::u16string_view key);
@@ -48,6 +51,7 @@ using hanvi::db_remove_meaning;
 using hanvi::db_list_entries;
 using hanvi::db_count_entries;
 using hanvi::db_get_translation;
+using hanvi::db_segment_weight;
 using hanvi::nameset_db_insert;
 using hanvi::nameset_db_remove;
 using hanvi::nameset_db_entry_counts;

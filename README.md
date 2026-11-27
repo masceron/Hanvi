@@ -3,7 +3,7 @@ A Chinese-Vietnamese conversion tool inspired by QuickTranslator, designed to fu
 
 ## Components
 * **Hanvi**: The desktop application (Qt 6). The UI mimics QuickTranslator with integrated tools for editing phrases and names.
-* **HanviCLI**: A command-line tool optimized for parallel batch conversions.
+* **HanviCLI**: A command-line tool optimized for parallel batch conversions (`-s frequency` segments by word frequency).
 * **Hanvi Web**: Installable offline-capable PWA running the C++ core via WebAssembly in a Web Worker, paired with a React UI. See https://hanvi-app.pages.dev/
 
 ## Compiling
@@ -32,3 +32,6 @@ See [web/README.md](web/README.md) for architecture and deployment details.
 Put UTF-8 `.txt` files in `train/` (ignored by git, any folder depth) and Clang Release builds optimize for them. Configuring builds an instrumented benchmark in `<build>/pgo`, converts the texts once and compiles everything with the resulting profile; without texts in `train/` the build is the usual one.
 
 Configuring trains again when the texts or `dict.db` change, which rebuilds everything. Code changes keep the old profile; delete `<build>/pgo` to retrain after changing the core. `-DHANVI_PGO=OFF` turns it off.
+
+## Data sources
+`dict.db`'s `segment_weights` table, used by the optional *Segment by Word Frequency* mode, is derived from the word frequencies in [jieba](https://github.com/fxsjy/jieba)'s `dict.txt` (MIT License, Copyright (c) 2013 Sun Junyi) by `tools/import_segment_weights.py`.

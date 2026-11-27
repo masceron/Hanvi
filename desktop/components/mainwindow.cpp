@@ -23,6 +23,7 @@
 #endif
 
 #include "ui_mainwindow.h"
+#include "app/app.h"
 #include "app/desktop_io.h"
 #include "core/io.h"
 #include "mainwindow.h"
@@ -531,6 +532,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 void MainWindow::setup_hamburger_menu(QPushButton *btn) {
     auto *menu = new QMenu(this);
     menu->setObjectName("hamburger_menu");
+    menu->setToolTipsVisible(true);
 
     auto *open_action = menu->addAction("Open File...");
     open_action->setShortcut(QKeySequence::Open);
@@ -661,6 +663,25 @@ void MainWindow::setup_hamburger_menu(QPushButton *btn) {
     reconvert_action->setShortcutContext(Qt::WindowShortcut);
     this->addAction(reconvert_action);
     connect(reconvert_action, &QAction::triggered, this, [this] {
+        if (auto *cur = current_tab(); cur && !cur->input_text.isEmpty()) {
+            cur->current_doc = nullptr;
+            convert_and_display(true);
+        }
+    });
+
+    // Off: the longest entry from the left. On: the likeliest cut of each line, which needs the
+    // dictionary's segment weights; without them the item is greyed out and conversion stays greedy.
+    auto *segmentation_action = menu->addAction("Segment by Word Frequency");
+    segmentation_action->setCheckable(true);
+    segmentation_action->setChecked(hanvi::segmentation == Segmentation::Frequency);
+    connect(menu, &QMenu::aboutToShow, segmentation_action, [segmentation_action] {
+        const bool available = frequency_segmentation_available();
+        segmentation_action->setEnabled(available);
+        segmentation_action->setToolTip(available ? QString() : "This dictionary has no segment weights.");
+    });
+    connect(segmentation_action, &QAction::toggled, this, [this](const bool enabled) {
+        hanvi::segmentation = enabled ? Segmentation::Frequency : Segmentation::Greedy;
+        save_frequency_segmentation(enabled);
         if (auto *cur = current_tab(); cur && !cur->input_text.isEmpty()) {
             cur->current_doc = nullptr;
             convert_and_display(true);

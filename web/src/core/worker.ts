@@ -277,6 +277,10 @@ const api = {
   convertPlain: (text: string, overrides: TokenOverride[]) =>
     read((): string => hanvi.convertPlain(text, overrides)),
   reloadDict: () => read(() => hanvi.reloadDict()),
+  // Takes effect from the next conversion; without segment weights in the dictionary, conversions
+  // stay greedy (see frequencySegmentationAvailable).
+  setFrequencySegmentation: (enabled: boolean) => read(() => hanvi.setFrequencySegmentation(enabled)),
+  frequencySegmentationAvailable: () => read((): boolean => hanvi.frequencySegmentationAvailable()),
 
   nameSets: () => read((): NameSet[] => hanvi.nameSets()),
   activeNameSet: () => read(() => hanvi.activeNameSet()),

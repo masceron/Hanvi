@@ -272,6 +272,104 @@ namespace hanvi {
     }
 
     namespace {
+        // Frequency segmentation scores a cut by its words' weights (log probabilities), minus this
+        // for each word. Each entry's translation was chosen for the whole of it, so a cut into more
+        // words must be much likelier to win: measured on a novel, a smaller penalty split units
+        // like 这人 (người này) and 自是, and a larger one changed nothing more.
+        constexpr int WORD_PENALTY = 1000;
+        // A name set entry outscores any cut that leaves its characters to other words.
+        constexpr int64_t NAME_SET_SCORE_PER_CHAR = 1'000'000;
+
+        // The Frequency segmentation of one line at a time, computed backward: best_[p] is the best
+        // score of the line from p on. So whatever the converter does at a position (a rule, a Latin
+        // run), the word it reads next is still the best from there. Ties go to the longer first
+        // word, as greedy matching would, which the dictionary's entries were made for.
+        class Segmenter {
+        public:
+            // The entry length to take at i, or 0 for a character no chosen entry starts at.
+            int length_at(const std::u16string_view input, const size_t i) {
+                if (i < line_start_ || i >= line_end_ || input.data() != input_) plan(input, i);
+                return choice_[i - line_start_];
+            }
+
+        private:
+            void plan(const std::u16string_view input, const size_t i) {
+                input_ = input.data();
+                line_start_ = i;
+                while (line_start_ > 0 && input[line_start_ - 1] != u'\n') --line_start_;
+                line_end_ = input.find(u'\n', i);
+                if (line_end_ == std::u16string_view::npos) line_end_ = input.size();
+
+                const size_t n = line_end_ - line_start_;
+                const std::u16string_view line = input.substr(line_start_, n);
+                choice_.assign(n, 0);
+                best_.assign(n + 1, 0);
+                const int64_t unseen = dictionary.unseen_weight();
+                for (size_t p = n; p-- > 0;) {
+                    int64_t best = best_[p + 1] + (is_han_unit(line[p]) ? unseen - WORD_PENALTY : 0);
+                    int chosen = 0;
+                    // Shortest first, so >= hands ties to the longer word.
+                    const auto consider = [&](const int length, const int64_t score) {
+                        if (const int64_t total = score + best_[p + length]; total >= best) {
+                            best = total;
+                            chosen = length;
+                        }
+                    };
+                    dictionary.for_each_match(line, p, [&](const int length, const TrieNode &node) {
+                        consider(length, (node.weight == UNWEIGHTED ? unseen : node.weight) - WORD_PENALTY);
+                    });
+                    if (current_name_set_id != -1) {
+                        name_set_dictionary.for_each_match(line, p, [&](const int length, const TrieNode &) {
+                            consider(length, NAME_SET_SCORE_PER_CHAR * length);
+                        });
+                    }
+                    best_[p] = best;
+                    choice_[p] = static_cast<uint16_t>(chosen);
+                }
+            }
+
+            const char16_t *input_ = nullptr;
+            size_t line_start_ = 0;
+            size_t line_end_ = 0;
+            std::vector<uint16_t> choice_;
+            std::vector<int64_t> best_;
+        };
+
+        // Whether this conversion segments by frequency: asked for, and the dictionary has weights.
+        bool by_frequency() {
+            return segmentation.load(std::memory_order_relaxed) == Segmentation::Frequency && dictionary.has_weights();
+        }
+
+        // The Frequency segmentation's word at i, as Dictionary::find would report it. A name set entry
+        // comes first, then a name, then a phrase; rules are those starting at i either way.
+        Match planned_match(Segmenter &segmenter, const std::u16string_view input, const size_t i) {
+            Match match = dictionary.find(input, static_cast<int>(i));
+            const int length = segmenter.length_at(input, i);
+            match.length = length;
+            match.priority = NONE;
+            match.translation = {};
+            if (length == 0) return match;
+
+            const std::u16string_view word = input.substr(i, length);
+            if (current_name_set_id != -1) {
+                if (const auto res = name_set_dictionary.find_exact(word); !res.name.isNull()) {
+                    match.priority = NAME;
+                    match.translation = res.name;
+                    return match;
+                }
+            }
+            if (const auto res = dictionary.find_exact(word); !res.name.isNull()) {
+                match.priority = NAME;
+                match.translation = res.name;
+            } else if (!res.phrase.isNull()) {
+                match.priority = PHRASE;
+                match.translation = res.phrase;
+            } else {
+                match.length = 0;
+            }
+            return match;
+        }
+
         struct RuleMatch {
             const Rule *rule;
             int abs_start_of_end_token;
@@ -367,7 +465,9 @@ namespace hanvi {
 
     static void convert_recursive_aligned(const std::u16string_view &input, int start_offset, uint32_t &token_counter,
                                           bool &cap_next, bool &in_quote,
-                                          Progress &progress, OverrideLookup &overrides, AlignedDocument &doc) {
+                                          Progress &progress, OverrideLookup &overrides, AlignedDocument &doc,
+                                          const bool planned) {
+        Segmenter segmenter;
         size_t i = 0;
 
         while (i < input.length()) {
@@ -393,7 +493,7 @@ namespace hanvi {
             const bool cap_before = cap_next;
             const size_t pos = static_cast<size_t>(start_offset) + i;
 
-            if (current_name_set_id != -1) {
+            if (!planned && current_name_set_id != -1) {
                 if (Match match = name_set_dictionary.find(input, static_cast<int>(i));
                     match.length > 0 && match.priority == NAME) {
                     std::u16string sv = get_sv(input.substr(i, match.length));
@@ -417,7 +517,9 @@ namespace hanvi {
                 }
             }
 
-            auto [length, priority, rules, translation] = dictionary.find(input, static_cast<int>(i));
+            auto [length, priority, rules, translation] = planned
+                                                               ? planned_match(segmenter, input, i)
+                                                               : dictionary.find(input, static_cast<int>(i));
 
             if (length > 0 && priority == NAME) {
                 std::u16string sv = get_sv(input.substr(i, length));
@@ -475,7 +577,7 @@ namespace hanvi {
                         convert_recursive_aligned(input.substr(inner_start_idx, inner_len),
                                                   start_offset + inner_start_idx,
                                                   token_counter,
-                                                  cap_next, in_quote, progress, overrides, doc);
+                                                  cap_next, in_quote, progress, overrides, doc, planned);
 
                         progress.update(rule_end_len);
 
@@ -497,7 +599,8 @@ namespace hanvi {
             }
 
             if (length > 0 && priority == PHRASE) {
-                if (int conflict_start = is_optimal_phrase(input, static_cast<int>(i), length); conflict_start != -1) {
+                if (int conflict_start = planned ? -1 : is_optimal_phrase(input, static_cast<int>(i), length);
+                    conflict_start != -1) {
                     int max_allowed_len = conflict_start - static_cast<int>(i);
 
                     length = 0;
@@ -683,6 +786,10 @@ namespace hanvi {
         }
     }
 
+    bool frequency_segmentation_available() {
+        return dictionary.has_weights();
+    }
+
     std::shared_ptr<AlignedDocument> convert(const std::u16string_view input,
                                              const std::function<void(int)> &progress_callback,
                                              const OverrideSet &overrides) {
@@ -696,7 +803,7 @@ namespace hanvi {
         Progress progress(progress_callback);
         OverrideLookup lookup(overrides, input.length());
 
-        convert_recursive_aligned(input, 0, token_counter, cap_next, in_quote, progress, lookup, *doc);
+        convert_recursive_aligned(input, 0, token_counter, cap_next, in_quote, progress, lookup, *doc, by_frequency());
 
         if (doc->paragraphs.size() > 1 && doc->paragraphs.back().empty()) {
             doc->paragraphs.pop_back();
@@ -716,8 +823,9 @@ namespace hanvi {
 
     static PlainResult convert_recursive_plain(const std::u16string_view &input, const size_t start_offset,
                                                bool &cap_next, Progress &progress, OverrideLookup &overrides,
-                                               bool &in_quote, bool &in_single_quote) {
+                                               bool &in_quote, bool &in_single_quote, const bool planned) {
         PlainResult out;
+        Segmenter segmenter;
         size_t i = 0;
 
         while (i < input.length()) {
@@ -746,7 +854,7 @@ namespace hanvi {
             const bool cap_before = cap_next;
             const size_t pos = start_offset + i;
 
-            if (current_name_set_id != -1) {
+            if (!planned && current_name_set_id != -1) {
                 if (Match match = name_set_dictionary.find(input, static_cast<int>(i));
                     match.length > 0 && match.priority == NAME) {
                     std::u16string trans = match.translation.str();
@@ -771,7 +879,9 @@ namespace hanvi {
                 }
             }
 
-            auto [length, priority, rules, translation] = dictionary.find(input, static_cast<int>(i));
+            auto [length, priority, rules, translation] = planned
+                                                               ? planned_match(segmenter, input, i)
+                                                               : dictionary.find(input, static_cast<int>(i));
 
             if (length > 0 && priority == NAME) {
                 std::u16string trans = translation.str();
@@ -816,7 +926,7 @@ namespace hanvi {
 
                         auto [text, _] = convert_recursive_plain(input.substr(inner_start_idx, inner_len),
                                                                  start_offset + inner_start_idx, cap_next,
-                                                                 progress, overrides, in_quote, in_single_quote);
+                                                                 progress, overrides, in_quote, in_single_quote, planned);
 
                         progress.update(end_len);
 
@@ -844,7 +954,8 @@ namespace hanvi {
             }
 
             if (length > 0 && priority == PHRASE) {
-                if (int conflict_start = is_optimal_phrase(input, static_cast<int>(i), length); conflict_start != -1) {
+                if (int conflict_start = planned ? -1 : is_optimal_phrase(input, static_cast<int>(i), length);
+                    conflict_start != -1) {
                     int max_allowed_len = conflict_start - static_cast<int>(i);
 
                     length = 0;
@@ -1051,7 +1162,8 @@ namespace hanvi {
         bool in_single_quote = false;
         Progress progress(progress_callback);
         OverrideLookup lookup(overrides, input.length());
-        auto [text, _] = convert_recursive_plain(input, 0, cap_next, progress, lookup, in_quote, in_single_quote);
+        auto [text, _] = convert_recursive_plain(input, 0, cap_next, progress, lookup, in_quote, in_single_quote,
+                                                 by_frequency());
 
         size_t start = 0;
         while (start < text.size() && (text[start] == u' ' || text[start] == u'\t' || text[start] == u'\r' || text[

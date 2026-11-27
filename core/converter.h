@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <span>
@@ -8,6 +9,20 @@
 #include "aligned_document.h"
 
 namespace hanvi {
+    // How a line is cut into words.
+    // - Greedy takes the longest entry from the left, with a one-word lookahead for names and longer
+    //   overlapping entries.
+    // - Frequency picks the likeliest cut of the whole line, from each entry's segment weight, with
+    //   fewer words preferred; name set entries always win. A dictionary without segment_weights
+    //   converts with Greedy (see frequency_segmentation_available()).
+    // Each conversion reads it once, when it starts.
+    enum class Segmentation { Greedy, Frequency };
+
+    inline std::atomic<Segmentation> segmentation{Segmentation::Greedy};
+
+    // Whether the loaded dictionary has the segment weights Frequency segmentation needs.
+    bool frequency_segmentation_available();
+
     void init_opencc(const std::string &config_path);
 
     // Overrides to apply during a conversion. `entries` need not be sorted; offsets are into the full
@@ -42,6 +57,8 @@ namespace hanvi {
     std::string normalize_text_utf8(std::string_view input);
 } // namespace hanvi
 
+using hanvi::Segmentation;
+using hanvi::frequency_segmentation_available;
 using hanvi::OverrideSet;
 using hanvi::init_opencc;
 using hanvi::convert;

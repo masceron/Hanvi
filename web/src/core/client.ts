@@ -1,4 +1,5 @@
 import * as Comlink from 'comlink'
+import { loadFrequencySegmentation } from '../segmentation'
 import { decodeDocument } from './packed'
 import type { Paragraph, TokenOverride } from './types'
 import type { CoreApi } from './worker'
@@ -8,6 +9,8 @@ export type { DocumentState, NameSet, Paragraph, Token, TokenOverride } from './
 export const core = Comlink.wrap<CoreApi>(
   new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' }),
 )
+// Sent first, so the worker has it before the first conversion it is asked for.
+void core.setFrequencySegmentation(loadFrequencySegmentation())
 
 export interface Converted {
   paragraphs: Paragraph[]

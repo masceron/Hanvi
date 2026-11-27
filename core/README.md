@@ -39,7 +39,7 @@ target_link_libraries(YourTarget PRIVATE CoreLogic)
 Any application running `CoreLogic` must provide access to two asset groups:
 
 1. **`dict.db`**:
-   The SQLite database operates with `PRAGMA foreign_keys = ON; PRAGMA journal_mode = DELETE;` (WAL needs shared memory that not every target, such as browsers, provides; opening a WAL-mode file converts it) and contains 7 core tables:
+   The SQLite database operates with `PRAGMA foreign_keys = ON; PRAGMA journal_mode = DELETE;` (WAL needs shared memory that not every target, such as browsers, provides; opening a WAL-mode file converts it) and contains these tables:
    - `phrases`: `(original TEXT PRIMARY KEY, translated TEXT) WITHOUT ROWID` — Multi-word dictionary definitions (`\x1F` / ASCII Unit Separator `0x1F` separated for multiple ordered meanings, where the first meaning is the default).
    - `names`: `(original TEXT PRIMARY KEY, translated TEXT) WITHOUT ROWID` — Proper noun dictionary definitions.
    - `sv_readings`: `(original CHAR(1) PRIMARY KEY, translated TEXT) WITHOUT ROWID` — Character-by-character Sino-Vietnamese readings (Hán Việt). Loaded in memory by `char32_t` code points (supporting BMP and surrogate pairs).
@@ -48,6 +48,8 @@ Any application running `CoreLogic` must provide access to two asset groups:
    - `name_sets`: `(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT UNIQUE NOT NULL COLLATE NOCASE)` — User-defined per-novel character name sets.
    - `name_set_entries`: `(original TEXT NOT NULL, translated TEXT NOT NULL, set_id INTEGER, PRIMARY KEY(set_id, original), FOREIGN KEY(set_id) REFERENCES name_sets(id) ON DELETE CASCADE) WITHOUT ROWID` — Book-specific name translations associated with a `name_sets.id`.
    - `variants`: `(original TEXT PRIMARY KEY, canonical TEXT NOT NULL) WITHOUT ROWID` — Mapping variant, archaic, or non-standard Chinese characters to canonical Simplified equivalents. Used during text normalization and as a fallback lookup for Sino-Vietnamese readings.
+   - `segment_weights` (optional): `(original TEXT PRIMARY KEY, weight INTEGER NOT NULL) WITHOUT ROWID` — How likely each common word is: `round(100 × ln(p))`, from [jieba](https://github.com/fxsjy/jieba)'s word frequencies (MIT). It holds all of jieba's words, not only the entries, so a word added later gets its weight too.
+   - `segment_settings` (optional): `(name TEXT PRIMARY KEY, value INTEGER NOT NULL) WITHOUT ROWID` — Written with `segment_weights`. `unseen_weight` is what a character no weighted word covers weighs: as much as the list's rarest word, so it suits whichever frequency list the weights came from (−1800, about jieba's, when absent). To switch to another list, run `tools/import_segment_weights.py <list> dict.db` again with the app closed: it backs the database up, refuses lists that cover far fewer entries than the current one, and touches nothing else. Filled by `tools/import_segment_weights.py`; see [Word segmentation](#g-word-segmentation-coreconverterh). A dictionary without it still loads and converts greedily.
 
 2. **OpenCC Assets** (`t2s.json` and `*.ocd2` dictionaries):
    - `t2s.json` (OpenCC configuration file)
@@ -313,6 +315,25 @@ bool is_quote_closer  = hanvi::is_closer_char(u'”');
 char16_t upper = hanvi::to_upper_char16(u'đ'); // Returns u'Đ'
 bool is_lower  = hanvi::is_lower_char16(u'â'); // Returns true
 ```
+
+---
+
+### G. Word Segmentation (`core/converter.h`)
+
+How a line is cut into dictionary entries before translating:
+
+- **Greedy** (default): the longest entry from the left, with a one-word lookahead for names and longer overlapping entries.
+- **Frequency**: the likeliest cut of the whole line. Each entry scores its segment weight, minus a fixed penalty per word, so fewer and longer entries win unless the word frequencies say otherwise: an entry's translation was chosen for the whole of it. Name set entries always win. Ties go the greedy way.
+
+```cpp
+if (hanvi::frequency_segmentation_available()) {   // the dictionary has segment_weights
+    hanvi::segmentation = hanvi::Segmentation::Frequency;
+}
+```
+
+Each conversion reads `segmentation` once, when it starts. Only common words carry a weight in `segment_weights`. When it loads, the core gives every other entry the weight of its likeliest cut into weighted words (`Dictionary::compose_weights`). An entry added later (`io_insert`, or undoing a removal) takes its word's weight from the table when it has one, and is composed the same way otherwise. So `手紧握` weighs as `手` + `紧握`, and between overlapping cuts made of the same words, the greedy one stays.
+
+`bench/segdiff.cpp` (`HanviSegDiff`, built with `-DHANVI_BUILD_BENCH=ON`) converts a text both ways and lists every place they differ, most frequent first.
 
 ---
 

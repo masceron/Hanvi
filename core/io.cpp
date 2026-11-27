@@ -53,6 +53,16 @@ namespace hanvi {
         db_remove_variant(original);
     }
 
+    // Adds or replaces a global entry. A word with a known frequency gets it as its segment weight,
+    // which beats the one Dictionary::insert composes from its parts (usually far lower).
+    static void insert_global(const std::u16string_view key, const std::u16string_view value, const Priority priority) {
+        dictionary.insert(key, value, priority);
+        db_insert(key, value, priority);
+        if (dictionary.has_weights()) {
+            if (const auto weight = db_segment_weight(key)) dictionary.set_weight(key, static_cast<int16_t>(*weight));
+        }
+    }
+
     // Makes the key hold exactly `value` (nullopt: absent), in memory and in the database.
     static void restore(const HistoryKind kind, const int set_id, const std::u16string_view key,
                         const std::optional<std::u16string> &value) {
@@ -60,8 +70,7 @@ namespace hanvi {
             case HistoryKind::Name:
                 if (set_id == -1) {
                     if (value) {
-                        dictionary.insert(key, *value, NAME);
-                        db_insert(key, *value, NAME);
+                        insert_global(key, *value, NAME);
                     } else {
                         dictionary.remove(key, NAME);
                         db_remove(key, NAME);
@@ -81,8 +90,7 @@ namespace hanvi {
                 dictionary.remove(key, PHRASE);
                 db_remove(key, PHRASE);
                 if (value) {
-                    dictionary.insert(key, *value, PHRASE);
-                    db_insert(key, *value, PHRASE);
+                    insert_global(key, *value, PHRASE);
                 }
                 break;
             case HistoryKind::Variant:
@@ -100,8 +108,7 @@ namespace hanvi {
         if (priority == NONE) return;
         HistoryRecord record(kind_of(id, priority), id, key);
         if (id == -1) {
-            dictionary.insert(key, value, priority);
-            db_insert(key, value, priority);
+            insert_global(key, value, priority);
         } else {
             if (id == current_name_set_id) name_set_dictionary.insert(key, value, priority);
             nameset_db_insert(id, key, value);
